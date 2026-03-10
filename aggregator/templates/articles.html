@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>News Aggregator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        .search-bar { margin-bottom: 30px; }
+        .search-bar input { padding: 8px; width: 300px; font-size: 16px; }
+        .search-bar button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
+        .hint { font-size: 13px; color: #888; margin-top: 6px; }
+    </style>
+</head>
+<body>
+
+    <h1>News Aggregator</h1>
+
+    <div class="search-bar">
+        <form method="POST" action="/fetch">
+            <input type="text" name="query" placeholder="e.g. climate, AI, Ukraine ...">
+            <button type="submit">Fetch Articles</button>
+        </form>
+        <p class="hint">Leave blank and click Fetch to load US Top Headlines</p>
+    </div>
+
+    {% if stories %}
+        {% for story in stories %}
+            <h2>{{ story.title }}</h2>
+            <ul>
+                {% for article in story.articles %}
+                <li>
+                    <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
+                    ({{ article.outlet.name }})
+                </li>
+                {% endfor %}
+            </ul>
+            <hr>
+        {% endfor %}
+    {% else %}
+        <p>No articles yet. Click <strong>Fetch Articles</strong> above to load stories.</p>
+    {% endif %}
+
+</body>
+</html>
