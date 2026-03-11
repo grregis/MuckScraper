@@ -22,7 +22,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: 04f2970c4af04f7ea6b33cfaa91af43b
-      OLLAMA_HOST: "http://192.168.3.9:11434"
+      OLLAMA_HOST: ${OLLAMA_HOST}
 
   scheduler:
     build:
@@ -38,7 +38,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: 04f2970c4af04f7ea6b33cfaa91af43b
-      OLLAMA_HOST: "http://192.168.3.9:11434"
+      OLLAMA_HOST: ${OLLAMA_HOST}
     restart: unless-stopped
 
   app:
@@ -55,7 +55,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: 04f2970c4af04f7ea6b33cfaa91af43b
-      OLLAMA_HOST: "http://192.168.3.9:11434"
+      OLLAMA_HOST: ${OLLAMA_HOST}
     volumes:
       - .:/app
 
