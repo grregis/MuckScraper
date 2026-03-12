@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>News Aggregator</title>
+    <title>Muckscraper: All the muck that's fit to scrape</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -269,13 +269,15 @@
         <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
             <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
             <form method="POST" action="/fetch" style="display:inline;">
-                <input type="hidden" name="mode"     value="{{ topic.mode }}">
-                <input type="hidden" name="query"    value="{{ topic.query or '' }}">
-                <input type="hidden" name="country"  value="{{ topic.country or '' }}">
-                <input type="hidden" name="category" value="{{ topic.category or '' }}">
-                <input type="hidden" name="label"    value="{{ topic.label }}">
-                <button type="submit" class="fetch-btn">↻</button>
-            </form>
+                <input type="hidden" name="mode"           value="{{ topic.mode }}">
+                <input type="hidden" name="query"          value="{{ topic.query or '' }}">
+                <input type="hidden" name="country"        value="{{ topic.country or '' }}">
+                <input type="hidden" name="category"       value="{{ topic.category or '' }}">
+                <input type="hidden" name="label"          value="{{ topic.label }}">
+                <input type="hidden" name="gnews_query"    value="{{ topic.gnews_query or '' }}">
+                <input type="hidden" name="gnews_category" value="{{ topic.gnews_category or '' }}">
+    <button type="submit" class="fetch-btn">↻</button>
+</form>
         </div>
         <hr class="sidebar-divider">
         {% endfor %}
@@ -288,7 +290,7 @@
 
     <!-- Main -->
     <div class="main">
-        <h1>News Aggregator</h1>
+        <h1>Muckscraper: All the muck that's fit to scrape</h1>
 
         {% if active_label %}
             <p class="active-topic-label">Showing: {{ active_label }}</p>

@@ -7,28 +7,24 @@ import requests
 db = SQLAlchemy()
 
 TOPICS = [
-    {"label": "US Headlines",    "mode": "top",   "query": None,                               "country": "us",  "category": None},
-    {"label": "World Headlines", "mode": "top",   "query": None,                               "country": None,  "category": None},
-    {"label": "US Politics",     "mode": "query", "query": "US politics congress white house", "country": None,  "category": None},
-    {"label": "Technology",      "mode": "top",   "query": None,                               "country": "us",  "category": "technology"},
-    {"label": "Gaming",          "mode": "top",   "query": None,                               "country": "us",  "category": "entertainment"},
-    {"label": "Linux",           "mode": "query", "query": "linux open source",                "country": None,  "category": None},
+    {"label": "US Headlines",    "mode": "top",   "query": None,                               "country": "us",  "category": None,         "gnews_query": None,           "gnews_category": "general"},
+    {"label": "World Headlines", "mode": "top",   "query": None,                               "country": None,  "category": None,         "gnews_query": None,           "gnews_category": "world"},
+    {"label": "US Politics",     "mode": "query", "query": "US politics congress white house", "country": None,  "category": None,         "gnews_query": "US politics",  "gnews_category": None},
+    {"label": "Technology",      "mode": "top",   "query": None,                               "country": "us",  "category": "technology", "gnews_query": None,           "gnews_category": "technology"},
+    {"label": "Gaming",          "mode": "top",   "query": None,                               "country": "us",  "category": "entertainment", "gnews_query": "gaming video games", "gnews_category": None},
 ]
 
 
 def create_app():
     app = Flask(__name__)
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL",
-        ""
-    )
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
 
     db.init_app(app)
 
-    from .models import Article, Story, Outlet
+    from .models import Article, Story, Topic
 
     @app.route("/")
     def index():
@@ -39,23 +35,18 @@ def create_app():
         active_label = request.args.get("topic", None)
 
         if active_label:
-            active_topic = next(
-                (t for t in TOPICS if t["label"] == active_label), None
-            )
-            if active_topic and active_topic["mode"] == "query":
-                keywords = active_topic["query"].split()[:3]
-                query_filter = Article.title.ilike(f"%{keywords[0]}%")
+            # Filter stories that are tagged with this topic
+            topic = Topic.query.filter_by(name=active_label).first()
+            if topic:
                 stories = (
                     Story.query
-                    .join(Story.articles)
-                    .filter(query_filter)
+                    .filter(Story.topics.contains(topic))
                     .order_by(Story.created_at.desc())
-                    .distinct()
                     .limit(50)
                     .all()
                 )
             else:
-                stories = Story.query.order_by(Story.created_at.desc()).limit(50).all()
+                stories = []
         else:
             stories = Story.query.order_by(Story.created_at.desc()).limit(50).all()
 
@@ -68,19 +59,24 @@ def create_app():
 
     @app.route("/fetch", methods=["POST"])
     def fetch_articles():
-        mode     = request.form.get("mode", "top").strip()
-        query    = request.form.get("query", "").strip() or None
-        country  = request.form.get("country", "").strip() or None
-        category = request.form.get("category", "").strip() or None
-        label    = request.form.get("label", "").strip() or None
+        mode          = request.form.get("mode", "top").strip()
+        query         = request.form.get("query", "").strip() or None
+        country       = request.form.get("country", "").strip() or None
+        category      = request.form.get("category", "").strip() or None
+        label         = request.form.get("label", "").strip() or None
+        gnews_query   = request.form.get("gnews_query", "").strip() or None
+        gnews_category = request.form.get("gnews_category", "").strip() or None
 
         try:
             from news_fetcher.fetch_and_store_articles import fetch_and_store_articles
             fetch_and_store_articles(
+                topic_name=label or "Custom",
                 mode=mode,
                 query=query,
                 country=country,
-                category=category
+                category=category,
+                gnews_query=gnews_query,
+                gnews_category=gnews_category,
             )
         except Exception as e:
             print(f"Fetch error: {e}")
@@ -97,7 +93,7 @@ def create_app():
         try:
             from news_fetcher.summarizer import summarize_story, check_ollama_status
             if not check_ollama_status():
-                print("Ollama is not reachable for manual summarization.")
+                print("Ollama is not reachable.")
             else:
                 summary = summarize_story(story)
                 if summary:
@@ -112,7 +108,7 @@ def create_app():
 
     @app.route("/rerank-outlet/<int:outlet_id>", methods=["POST"])
     def rerank_outlet(outlet_id):
-        """Re-score an outlet's bias via Ollama."""
+        from .models import Outlet
         outlet = Outlet.query.get_or_404(outlet_id)
         label  = request.form.get("label", "")
 
@@ -121,14 +117,9 @@ def create_app():
             bias_score = get_outlet_bias_from_llm(outlet.name)
             if bias_score is not None:
                 outlet.bias_score = bias_score
-                # Update all articles from this outlet too
-                Article.query.filter_by(outlet_id=outlet.id).update(
-                    {"bias_score": bias_score}
-                )
+                for article in outlet.articles:
+                    article.bias_score = bias_score
                 db.session.commit()
-                print(f"Re-ranked outlet '{outlet.name}' to {bias_score}")
-            else:
-                print(f"Ollama could not re-rank outlet '{outlet.name}'")
         except Exception as e:
             print(f"Re-rank error: {e}")
 
@@ -138,7 +129,6 @@ def create_app():
 
     @app.route("/rate-article/<int:article_id>", methods=["POST"])
     def rate_article(article_id):
-        """Score an individual article's bias via Ollama."""
         article = Article.query.get_or_404(article_id)
         label   = request.form.get("label", "")
 
@@ -148,9 +138,6 @@ def create_app():
             if bias_score is not None:
                 article.bias_score = bias_score
                 db.session.commit()
-                print(f"Rated article '{article.title[:60]}' to {bias_score}")
-            else:
-                print(f"Ollama could not rate article '{article.title[:60]}'")
         except Exception as e:
             print(f"Article rating error: {e}")
 
@@ -160,7 +147,7 @@ def create_app():
 
     @app.route("/ollama-status")
     def ollama_status():
-        ollama_host = os.environ.get("OLLAMA_HOST", "http://192.168.3.9:11434")
+        ollama_host = os.environ.get("OLLAMA_HOST", "")
         try:
             response = requests.get(f"{ollama_host}/api/tags", timeout=5)
             online = response.status_code == 200

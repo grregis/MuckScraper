@@ -13,14 +13,53 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Define all the fetches to run every hour
+# Each entry fetches from both NewsAPI and GNews
 SCHEDULED_FETCHES = [
-    {"label": "US Top Headlines",       "mode": "top",      "country": "us",  "category": None},
-    {"label": "World Top Headlines",    "mode": "top",      "country": None,  "category": None},
-    {"label": "US Politics",            "mode": "query",    "query": "US politics congress white house"},
-    {"label": "Technology Headlines",   "mode": "category", "category": "technology"},
-    {"label": "Gaming Headlines",       "mode": "query",    "query": "gaming video games"},
-    {"label": "Linux Headlines",        "mode": "query",    "query": "linux open source"},
+    {
+        "label":          "US Headlines",
+        "mode":           "top",
+        "country":        "us",
+        "category":       None,
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "general",
+    },
+    {
+        "label":          "World Headlines",
+        "mode":           "top",
+        "country":        None,
+        "category":       None,
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "world",
+    },
+    {
+        "label":          "US Politics",
+        "mode":           "query",
+        "country":        None,
+        "category":       None,
+        "query":          "US politics congress white house",
+        "gnews_query":    "US politics",
+        "gnews_category": None,
+    },
+    {
+        "label":          "Technology",
+        "mode":           "top",
+        "country":        "us",
+        "category":       "technology",
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "technology",
+    },
+    {
+        "label":          "Gaming",
+        "mode":           "top",
+        "country":        "us",
+        "category":       "entertainment",
+        "query":          None,
+        "gnews_query":    "gaming video games",
+        "gnews_category": None,
+    },
 ]
 
 app = create_app()
@@ -32,22 +71,15 @@ def run_all_fetches():
         for fetch in SCHEDULED_FETCHES:
             logging.info(f"--- Fetching: {fetch['label']} ---")
             try:
-                if fetch["mode"] == "top":
-                    fetch_and_store_articles(
-                        mode="top",
-                        country=fetch.get("country"),
-                        category=fetch.get("category")
-                    )
-                elif fetch["mode"] == "category":
-                    fetch_and_store_articles(
-                        mode="top",
-                        category=fetch.get("category")
-                    )
-                elif fetch["mode"] == "query":
-                    fetch_and_store_articles(
-                        mode="query",
-                        query=fetch.get("query")
-                    )
+                fetch_and_store_articles(
+                    topic_name=fetch["label"],
+                    mode=fetch["mode"],
+                    query=fetch.get("query"),
+                    country=fetch.get("country"),
+                    category=fetch.get("category"),
+                    gnews_query=fetch.get("gnews_query"),
+                    gnews_category=fetch.get("gnews_category"),
+                )
             except Exception as e:
                 logging.error(f"Error fetching {fetch['label']}: {e}")
 
@@ -57,18 +89,21 @@ def run_all_fetches():
 if __name__ == "__main__":
     logging.info("Scheduler starting up...")
 
+    with app.app_context():
+        db.create_all()
+
     # Run once immediately on startup
     run_all_fetches()
 
-    # Then schedule to run every hour
+    # Schedule every 3 hours
     scheduler = BlockingScheduler()
     scheduler.add_job(
         run_all_fetches,
-        trigger=IntervalTrigger(hours=1),
-        id="hourly_fetch",
-        name="Hourly news fetch",
+        trigger=IntervalTrigger(hours=3),
+        id="fetch_job",
+        name="3-hourly news fetch",
         replace_existing=True
     )
 
-    logging.info("Scheduler running. Next fetch in 1 hour.")
+    logging.info("Scheduler running. Next fetch in 3 hours.")
     scheduler.start()

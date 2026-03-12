@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:14
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -23,6 +25,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: ${NEWS_API_KEY}
       OLLAMA_HOST: ${OLLAMA_HOST}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
 
   scheduler:
     build:
@@ -39,6 +42,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: ${NEWS_API_KEY}
       OLLAMA_HOST: ${OLLAMA_HOST}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
     restart: unless-stopped
 
   app:
@@ -56,6 +60,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       NEWS_API_KEY: ${NEWS_API_KEY}
       OLLAMA_HOST: ${OLLAMA_HOST}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
     volumes:
       - .:/app
 

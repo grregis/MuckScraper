@@ -26,7 +26,7 @@ MuckScraper pulls news from a news API of your choice across multiple topic cate
 ## Current Features
 
 ### News Fetching
-- Hourly scheduled fetching across configurable topic categories (defaults: US Headlines, World Headlines, US Politics, Technology, Gaming, Linux)
+- Hourly scheduled fetching across configurable topic categories (defaults: US Headlines, World Headlines, US Politics, Technology, Gaming)
 - On-demand fetch via the web interface — either by topic or custom search query
 - Duplicate article detection to avoid re-storing the same articles
 - Source blocklist to filter out unwanted domains and title patterns (e.g. package release announcements, repository updates)

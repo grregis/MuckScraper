@@ -6,3 +6,4 @@ newsapi-python
 beautifulsoup4
 requests
 apscheduler
+python-dotenv
