@@ -23,6 +23,21 @@ MuckScraper pulls news from a news API of your choice across multiple topic cate
 
 ---
 
+## ⚠️ Security Warning
+
+MuckScraper has **no built-in authentication**. Any user who can reach the app on your network can trigger fetches, generate summaries, and read all stored articles.
+
+**Do not expose MuckScraper directly to the internet.**
+
+Recommended safe deployment options:
+- Run on a local network only (default)
+- Put it behind a VPN (e.g. WireGuard, Tailscale)
+- Use a reverse proxy with authentication (e.g. Nginx + Authelia, Caddy + basic auth)
+
+Authentication is planned for a future release.
+
+---
+
 ## Current Features
 
 ### News Fetching
