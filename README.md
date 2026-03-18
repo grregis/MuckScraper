@@ -118,7 +118,6 @@ Authentication is planned for a future release.
 ### Infrastructure
 - Raw API payload storage with 30-day auto-cleanup
 - Database indexes on key columns for query performance
-- `destroy.sh` — nuclear option, wipes everything including database
 - `restart.sh` — soft rebuild that preserves the database
 
 ---
@@ -145,7 +144,6 @@ muckscraper/
 ├── Dockerfile
 ├── news_fetcher/Dockerfile
 ├── requirements.txt
-├── destroy.sh
 ├── restart.sh
 └── README.md
 ```
@@ -171,7 +169,7 @@ muckscraper/
 
 2. Copy the environment template and fill in your values:
    ```bash
-   cp .env.example .env
+   cp .env.sample .env
    ```
 
 3. Generate a secret key:
