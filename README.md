@@ -139,7 +139,7 @@ muckscraper/
 │   ├── scraper.py                    # Article scraping (BS4, Playwright, archive.ph)
 │   ├── story_grouper.py              # LLM story clustering
 │   ├── summarizer.py                 # LLM summarization
-│   └── outlet_bias_llm.py           # LLM bias scoring
+│   └── outlet_bias_llm.py            # LLM bias scoring
 ├── docker-compose.yml
 ├── Dockerfile
 ├── news_fetcher/Dockerfile
