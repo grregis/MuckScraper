@@ -140,6 +140,7 @@ Then open `http://localhost:5000` in your browser.
 - Googlebot user agent fallback for soft-paywalled sites
 - archive.ph fallback as last resort
 - Per-article [scrape] button and global ↻ Scrape Missing button
+![Full Article Reader](screenshots/article_reader.png)
 
 ### Topic Classification
 - LLM-powered topic classification — articles are classified by content, not by which API fetched them
@@ -153,6 +154,7 @@ Then open `http://localhost:5000` in your browser.
 - Retry mechanism for outlets that failed while LLM was offline
 - Manual re-rank button to re-score any outlet on demand
 - Per-article bias rating separate from outlet score
+![Bias scoring example](screenshots/bias_tags.png)
 
 ### Story Grouping
 - Vector embedding-based story clustering using pgvector and nomic-embed-text
@@ -182,7 +184,7 @@ Then open `http://localhost:5000` in your browser.
 - Color-coded bias tags (blue = left, red = right, grey = center)
 - Full article reader showing scraped HTML content
 
-![Bias scoring example](screenshots/bias_tags.png)
+
 
 - Published and fetched timestamps per article in local timezone
 - Ollama online/offline status indicator
