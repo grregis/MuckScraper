@@ -97,6 +97,17 @@ def get_or_create_topic(topic_name):
     return topic
 
 
+def normalize_url(url):
+    """Strip query parameters from URL to detect duplicates."""
+    try:
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(url)
+        # Keep only scheme, netloc, and path
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    except Exception:
+        return url
+
+
 def store_articles(articles_data, topic_name):
     """
     Store a list of normalized article dicts into the database,
@@ -114,12 +125,14 @@ def store_articles(articles_data, topic_name):
     for article in articles_data:
         title        = article.get("title")
         content      = article.get("content") or ""
-        url          = article.get("url")
+        raw_url      = article.get("url")
         source_name  = article.get("source_name", "Unknown")
         published_at = article.get("published_at", datetime.utcnow())
 
-        if not title or not url:
+        if not title or not raw_url:
             continue
+            
+        url = normalize_url(raw_url)
 
         if any(blocked in url.lower() for blocked in BLOCKED_SOURCES):
             logger.debug(f"Skipping blocked source: {url}")
@@ -129,16 +142,23 @@ def store_articles(articles_data, topic_name):
             logger.debug(f"Skipping blocked title: {title}")
             continue
 
+        # Check for URL duplicate (normalized)
         existing = Article.query.filter_by(url=url).first()
         if existing:
-            logger.debug(f"Skipping duplicate: {title}")
-            continue
-            logger.debug(f"Skipping duplicate: {title}")
+            logger.debug(f"Skipping duplicate URL: {title}")
             continue
 
+        # Check for Title + Source duplicate (catch same article, different URL)
+        # First get/create outlet to have the ID
+        outlet = Outlet.query.filter_by(name=source_name).first()
+        if outlet:
+            existing_title = Article.query.filter_by(title=title, outlet_id=outlet.id).first()
+            if existing_title:
+                logger.debug(f"Skipping duplicate Title+Outlet: {title}")
+                continue
+        
         logger.info(f"Processing: {title}")
 
-        outlet = Outlet.query.filter_by(name=source_name).first()
         if not outlet:
             logger.info(f"  New outlet found: {source_name}, asking Ollama for bias score...")
             bias_score = get_outlet_bias_from_llm(source_name)
@@ -152,7 +172,10 @@ def store_articles(articles_data, topic_name):
             db.session.flush()
 
         # Generate embedding for this article
-        article_embedding = get_embedding(title)
+        # Use title + first 500 chars of content for better semantic matching
+        text_for_embedding = f"{title} {content[:500]}"
+        article_embedding = get_embedding(text_for_embedding)
+        
         story = find_or_create_story(title, db, Story, recent_stories,
                                      article_embedding=article_embedding)
 
@@ -184,22 +207,28 @@ def store_articles(articles_data, topic_name):
             story_id=story.id,
             url=url,
             date=published_at,
+            fetched_at=datetime.utcnow(),
             bias_score=outlet.bias_score,
             embedding=article_embedding
         )
+
+        db.session.add(new_article)
+        # IMPORTANT: Append to story.articles so it's visible to find_matching_story
+        # for subsequent articles in this SAME loop iteration.
+        story.articles.append(new_article)
+
         # Tag article with same topics as story
         for t in story.topics:
             if t not in new_article.topics:
                 new_article.topics.append(t)
 
-        # Generate headline if this is the second article in the story
-        if len(story.articles) == 1:
-            db.session.flush()
-            if len(story.articles) >= 2:
-                headline = generate_story_headline(story)
-                if headline:
-                    story.headline = headline
-                    
+        # Generate headline if this is a multi-article story (2+ articles)
+        if len(story.articles) >= 2:
+            db.session.flush() # Ensure article is associated for headline generator
+            headline = generate_story_headline(story)
+            if headline:
+                story.headline = headline
+                
         stored += 1
 
     db.session.commit()
@@ -354,60 +383,58 @@ def fetch_gnews(topic_name, query=None, category=None):
 def regroup_ungrouped_stories():
     """
     Find single-article stories from the last 7 days and attempt
-    to re-group them using the LLM grouper.
+    to re-group them using the vector similarity matcher.
     """
-    from news_fetcher.story_grouper import get_candidate_stories, ask_ollama_for_match
-
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping re-grouping.")
-        return
+    from news_fetcher.story_grouper import find_matching_story
 
     cutoff = datetime.utcnow() - timedelta(days=7)
 
-    ungrouped = Story.query.filter(Story.created_at >= cutoff).all()
-    ungrouped = [s for s in ungrouped if len(s.articles) == 1]
+    # Find stories that only have one article
+    all_recent = Story.query.filter(Story.created_at >= cutoff).all()
+    ungrouped_stories = [s for s in all_recent if len(s.articles) == 1]
 
-    if not ungrouped:
-        logger.info("No ungrouped stories to re-group.")
+    if not ungrouped_stories:
+        logger.info("No single-article stories to re-group.")
         return
 
-    logger.info(f"Found {len(ungrouped)} single-article stories to re-group...")
+    logger.info(f"Checking {len(ungrouped_stories)} single-article stories for potential matches...")
 
-    all_recent = Story.query.filter(Story.created_at >= cutoff).all()
+    # Potential targets for merging (stories with > 1 article)
     multi_article_stories = [s for s in all_recent if len(s.articles) > 1]
 
     merged = 0
-    for story in ungrouped:
+    for story in ungrouped_stories:
         if not story.articles:
             continue
 
         article = story.articles[0]
-
-        # Only match — never create new stories during regrouping
-        candidates = get_candidate_stories(article.title, multi_article_stories)
-        if not candidates:
+        if not article.embedding:
             continue
 
-        matched = ask_ollama_for_match(article.title, candidates)
+        # Try to match to an existing multi-article story
+        matched = find_matching_story(article.title, article.embedding, multi_article_stories)
 
         if matched and matched.id != story.id:
-            logger.info(f"  Re-grouped '{story.title}' → '{matched.title}'")
+            logger.info(f"  [Re-group] Merging '{story.title}' into '{matched.title}'")
 
             # Move article to matched story
             article.story_id = matched.id
-
-            # Flush BEFORE deleting to ensure story_id update is written first
             db.session.flush()
 
+            # Merge topic tags
             for topic in story.topics:
                 if topic not in matched.topics:
                     matched.topics.append(topic)
 
+            # Generate/Update headline for the matched story now that it has a new article
+            from news_fetcher.headline_generator import generate_story_headline
+            headline = generate_story_headline(matched)
+            if headline:
+                matched.headline = headline
+
+            # Delete the now-empty story
             db.session.delete(story)
             merged += 1
-
-            if matched not in multi_article_stories:
-                multi_article_stories.append(matched)
 
     db.session.commit()
     logger.info(f"Re-grouping complete. Merged {merged} stories.")
@@ -454,7 +481,9 @@ def generate_missing_embeddings(batch_size=50):
     logger.info(f"Generating embeddings for {len(missing)} articles...")
     count = 0
     for article in missing:
-        embedding = get_embedding(article.title)
+        # Align with store_articles and force_regroup_all: use title + content
+        text = f"{article.title} {(article.content or '')[:500]}"
+        embedding = get_embedding(text)
         if embedding:
             article.embedding = embedding
             count += 1
@@ -466,7 +495,7 @@ def generate_missing_embeddings(batch_size=50):
 def force_regroup_all():
     """
     Force re-group ALL articles using vector similarity embeddings.
-    Generates missing embeddings first, then re-assigns every article
+    Regenerates ALL embeddings first (to include content), then re-assigns every article
     to the best matching story.
     """
     from news_fetcher.story_grouper import get_embedding, find_matching_story
@@ -476,26 +505,38 @@ def force_regroup_all():
         return
 
     logger.info("=== Force re-group starting ===")
+    print("  [Force Regroup] Step 1: Regenerating embeddings...", flush=True)
 
-    # Step 1: Generate embeddings for any articles missing them
-    missing = Article.query.filter(Article.embedding == None).all()
-    if missing:
-        logger.info(f"Generating embeddings for {len(missing)} articles first...")
-        for article in missing:
-            embedding = get_embedding(article.title)
-            if embedding:
-                article.embedding = embedding
-        db.session.commit()
-        logger.info("Embeddings generated.")
+    # Step 1: Regenerate embeddings for ALL articles to ensure content is included
+    all_articles = Article.query.all()
+    logger.info(f"Regenerating embeddings for {len(all_articles)} articles (this may take a while)...")
+    
+    for i, article in enumerate(all_articles):
+        # Use title + first 500 chars of content
+        text = f"{article.title} {(article.content or '')[:500]}"
+        embedding = get_embedding(text)
+        if embedding:
+            article.embedding = embedding
+        
+        if (i + 1) % 50 == 0:
+            db.session.commit()
+            logger.info(f"  Embeddings progress: {i + 1}/{len(all_articles)}")
+            print(f"  [Force Regroup] Embeddings progress: {i + 1}/{len(all_articles)}", flush=True)
 
-    # Step 2: Get all articles with embeddings
+    db.session.commit()
+    logger.info("Embeddings regenerated.")
+    print("  [Force Regroup] Step 2: Starting re-grouping loop...", flush=True)
+
+    # Step 2: Get all articles with embeddings (should be all of them now)
+    # Re-query to be safe
     all_articles = Article.query.filter(Article.embedding != None).all()
     logger.info(f"Re-grouping {len(all_articles)} articles...")
 
     # Step 3: Delete all existing stories and re-create from scratch
-    # First detach all articles from stories
+    # First detach all articles from stories and clear topics
     for article in all_articles:
         article.story_id = None
+        article.topics = [] # Clear in-memory topics to avoid IntegrityError on flush/commit
     db.session.flush()
 
     # Clear junction tables first to avoid foreign key violations
@@ -506,6 +547,10 @@ def force_regroup_all():
     # Delete all stories
     Story.query.delete()
     db.session.flush()
+    
+    # CRITICAL: Expire all objects after bulk deletes so the identity map 
+    # doesn't contain references to the deleted Story objects.
+    db.session.expire_all()
 
     # Step 4: Re-group articles one by one and re-attach topics
     from news_fetcher.story_grouper import clean_story_title
@@ -513,43 +558,62 @@ def force_regroup_all():
     from aggregator.models import Topic as TopicModel
 
     new_stories = []
-    for i, article in enumerate(all_articles):
-        matched = find_matching_story(
-            article.title, article.embedding, new_stories
-        )
+    try:
+        for i, article in enumerate(all_articles):
+            matched = find_matching_story(
+                article.title, article.embedding, new_stories
+            )
 
-        if matched:
-            story = matched
-            article.story_id = story.id
-            if story not in new_stories:
-                new_stories.append(story)
-        else:
-            new_title = clean_story_title(article.title)
-            story = Story(title=new_title, summary=None)
-            db.session.add(story)
-            db.session.flush()
-            article.story_id = story.id
-            new_stories.append(story)
-
-        # Re-attach topic tags
-        topic_names = classify_article(article.title, article.content or "")
-        for topic_name in topic_names:
-            topic = TopicModel.query.filter_by(name=topic_name).first()
-            if not topic:
-                topic = TopicModel(name=topic_name)
-                db.session.add(topic)
+            if matched:
+                story = matched
+            else:
+                new_title = clean_story_title(article.title)
+                story = Story(title=new_title, summary=None)
+                db.session.add(story)
                 db.session.flush()
-            if topic not in article.topics:
-                article.topics.append(topic)
-            if topic not in story.topics:
-                story.topics.append(topic)
+                new_stories.append(story)
+            
+            # Re-attach article to story
+            article.story = story
+            # Maintain in-memory list so find_matching_story can see it
+            if article not in story.articles:
+                story.articles.append(article)
 
-        # Commit in batches of 50
-        if (i + 1) % 50 == 0:
-            db.session.commit()
-            logger.info(f"  Progress: {i + 1}/{len(all_articles)}")
+            # Re-attach topic tags
+            topic_names = classify_article(article.title, article.content or "")
+            for topic_name in topic_names:
+                topic = TopicModel.query.filter_by(name=topic_name).first()
+                if not topic:
+                    topic = TopicModel(name=topic_name)
+                    db.session.add(topic)
+                    db.session.flush()
+                
+                # Since we cleared article.topics = [] above, this is safe
+                if topic not in article.topics:
+                    article.topics.append(topic)
+                if topic not in story.topics:
+                    story.topics.append(topic)
+
+            # Commit in batches of 50
+            if (i + 1) % 50 == 0:
+                db.session.commit()
+                logger.info(f"  Grouping progress: {i + 1}/{len(all_articles)}")
+                print(f"  [Force Regroup] Grouping progress: {i + 1}/{len(all_articles)}", flush=True)
+
+    except Exception as e:
+        logger.error(f"  [Force Regroup] CRITICAL ERROR: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        db.session.rollback()
+        raise
 
     db.session.commit()
+
+    # Step 5: Generate headlines for all multi-article stories
+    logger.info("Generating AI headlines for regrouped stories...")
+    print("  [Force Regroup] Step 3: Generating AI headlines...", flush=True)
+    generate_missing_headlines()
+
     logger.info(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
 
 
@@ -569,6 +633,7 @@ def reclassify_all_articles(batch_size=50):
     db.session.execute(db.text("DELETE FROM article_topics"))
     db.session.execute(db.text("DELETE FROM story_topics"))
     db.session.flush()
+    db.session.expire_all() # Ensure stale collections are cleared
     logger.info("Cleared existing topic assignments.")
 
     all_articles = Article.query.all()
@@ -576,6 +641,9 @@ def reclassify_all_articles(batch_size=50):
     logger.info(f"Reclassifying {total} articles...")
 
     for i, article in enumerate(all_articles):
+        # Clear in-memory topics for this article to be safe
+        article.topics = []
+        
         topic_names = classify_article(article.title, article.content or "")
 
         for topic_name in topic_names:
@@ -584,10 +652,13 @@ def reclassify_all_articles(batch_size=50):
                 topic = TopicModel(name=topic_name)
                 db.session.add(topic)
                 db.session.flush()
+            
             if topic not in article.topics:
                 article.topics.append(topic)
-            if article.story and topic not in article.story.topics:
-                article.story.topics.append(topic)
+            
+            if article.story:
+                if topic not in article.story.topics:
+                    article.story.topics.append(topic)
 
         # Commit in batches
         if (i + 1) % batch_size == 0:

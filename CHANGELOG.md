@@ -1,3 +1,28 @@
+## [0.2.2] - 2026-03-21
+
+### Added
+- **Collapsible sidebar** — toggle to icon-only mode, state saved in localStorage
+- **Grouped Stories view** — dedicated `/multi-stories` page showing only stories with 2+ articles, paginated at 50
+- **All Stories view** — explicit link in sidebar to view unfiltered stories
+- **Sticky header** with hamburger menu (☰) — maintenance buttons moved from sidebar into a cleaner dropdown
+- **Aggregator deduplication** — Yahoo News, Google News, MSN, AOL articles hidden per story when original source content exists
+- **Local timezone conversion** — article dates displayed in user's local timezone via JavaScript
+- **Published and fetched timestamps** — both the original publish date and MuckScraper fetch date shown per article
+- **`fetched_at` column** added to Article model
+- **Single linkage story matching** — new articles now compared against every article in a story for best similarity match, not just the first
+- **Story ordering** by most recent article date instead of story creation date
+- **`cleanup_duplicates.py`** — maintenance script for deduplicating articles (work in progress)
+
+### Changed
+- Maintenance buttons moved from sidebar footer to hamburger menu in header
+- Sidebar now shows "All Stories" and "Grouped Stories" navigation links
+- Story display uses `display_articles` filtered list to hide aggregator duplicates
+
+### Fixed
+- Story ordering now reflects latest news rather than when the story was first created
+
+---
+
 ## [0.2.1] - 2026-03-20
 
 ### Added

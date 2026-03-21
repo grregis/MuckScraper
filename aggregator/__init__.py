@@ -33,33 +33,89 @@ def create_app():
     def index():
         return redirect(url_for("list_articles"))
 
+    @app.route("/multi-stories")
+    def multi_article_stories():
+        # Dedicated view for multi-article stories, paginated at 50
+        return list_articles(per_page=50, force_multi=True)
+
     @app.route("/articles")
-    def list_articles():
+    def list_articles(per_page=25, force_multi=False):
         active_label = request.args.get("topic", None)
         page = request.args.get("page", 1, type=int)
-        per_page = 25
+        show_single = request.args.get("show_single", "false") == "true"
+        
+        # If force_multi is True (from /multi-stories), override show_single
+        if force_multi:
+            show_single = False
+
+        # Always join with Article and group by Story.id to allow sorting by max(article.date)
+        from sqlalchemy import func
+        query = Story.query.join(Article).group_by(Story.id)
+
+        if not show_single:
+            query = query.having(func.count(Article.id) > 1)
 
         if active_label:
             topic = Topic.query.filter_by(name=active_label).first()
             if topic:
-                pagination = (
-                    Story.query
-                    .filter(Story.topics.contains(topic))
-                    .order_by(Story.created_at.desc())
-                    .paginate(page=page, per_page=per_page, error_out=False)
-                )
+                query = query.filter(Story.topics.contains(topic))
             else:
-                pagination = None
-        else:
-            pagination = (
-                Story.query
-                .order_by(Story.created_at.desc())
-                .paginate(page=page, per_page=per_page, error_out=False)
-            )
+                # If topic doesn't exist, we'll get no results
+                query = query.filter(False)
+
+        # Order by the NEWEST article publish date in the group
+        pagination = query.order_by(func.max(Article.date).desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
 
         stories = pagination.items if pagination else []
         total_pages = pagination.pages if pagination else 0
-        show_single = request.args.get("show_single", "false") == "true"
+
+        # Filter out aggregator duplicates if original content exists
+        from datetime import datetime
+        AGGREGATORS = ["Yahoo News", "Google News", "MSN", "AOL", "Startups"]
+        for story in stories:
+            originals = []
+            aggregators = []
+            has_good_original = False
+            
+            seen_articles = set()
+
+            # Sort articles by date descending initially
+            sorted_articles = sorted(story.articles, key=lambda x: x.date or datetime.min, reverse=True)
+
+            for article in sorted_articles:
+                # 1. Deduplicate by (title, outlet_id) to handle exact duplicates with different URLs
+                # normalizing title slightly to catch very close matches?
+                # keeping it simple for now: exact title match
+                key = (article.title, article.outlet_id)
+                if key in seen_articles:
+                    continue
+                seen_articles.add(key)
+
+                # 2. Check outlet name safely
+                outlet_name = article.outlet.name if article.outlet else ""
+                is_aggregator = any(agg in outlet_name for agg in AGGREGATORS)
+                
+                if is_aggregator:
+                    aggregators.append(article)
+                else:
+                    originals.append(article)
+                    # Check if original has substantial content
+                    if article.content and len(article.content) > 500:
+                        has_good_original = True
+            
+            if has_good_original:
+                # If we have a scraped original, hide the aggregator versions
+                story.display_articles = originals
+            else:
+                # Otherwise show everything (fallback to aggregator)
+                # Combine originals + aggregators, preserving sort order?
+                # Actually, we iterated sorted_articles, so just append them in order
+                # Re-sorting might be safer or just reconstructing the list
+                story.display_articles = originals + aggregators
+                # Resort to be safe since we split them
+                story.display_articles.sort(key=lambda x: x.date or datetime.min, reverse=True)
 
         return render_template(
             "articles.html",
@@ -69,6 +125,7 @@ def create_app():
             page=page,
             total_pages=total_pages,
             show_single=show_single,
+            is_multi_view=force_multi
         )
 
     @app.route("/fetch", methods=["POST"])
@@ -264,14 +321,14 @@ def create_app():
     def force_regroup():
         label = request.form.get("label", "")
         try:
-            print("[Force Regroup] Starting...")
+            print("[Force Regroup] Starting...", flush=True)
             from news_fetcher.fetch_and_store_articles import force_regroup_all
-            print("[Force Regroup] Imported successfully")
+            print("[Force Regroup] Imported successfully", flush=True)
             force_regroup_all()
-            print("[Force Regroup] Done!")
+            print("[Force Regroup] Done!", flush=True)
         except Exception as e:
             import traceback
-            print(f"Force regroup error: {e}")
+            print(f"Force regroup error: {e}", flush=True)
             traceback.print_exc()
         return redirect(f"/articles?topic={label}" if label else "/articles")
 
@@ -294,13 +351,13 @@ def create_app():
     def reclassify_articles():
         label = request.form.get("label", "")
         try:
-            print("[Reclassify] Starting...")
+            print("[Reclassify] Starting...", flush=True)
             from news_fetcher.fetch_and_store_articles import reclassify_all_articles
             reclassify_all_articles()
-            print("[Reclassify] Done!")
+            print("[Reclassify] Done!", flush=True)
         except Exception as e:
             import traceback
-            print(f"Reclassify error: {e}")
+            print(f"Reclassify error: {e}", flush=True)
             traceback.print_exc()
         return redirect(f"/articles?topic={label}" if label else "/articles")
         

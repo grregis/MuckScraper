@@ -13,7 +13,7 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 # Similarity threshold — articles with cosine similarity above this
 # are considered the same story. Tune this if grouping is too aggressive
 # or too conservative.
-SIMILARITY_THRESHOLD = 0.92
+SIMILARITY_THRESHOLD = 0.90
 
 
 def get_embedding(text):
@@ -56,38 +56,46 @@ def cosine_similarity(vec1, vec2):
 def find_matching_story(article_title, article_embedding, recent_stories):
     """
     Find the best matching story using vector similarity.
+    Compares against ALL articles in each story (Single Linkage).
     Returns matched Story or None.
     """
     if article_embedding is None:
         return None
 
-    best_score = 0.0
+    best_global_score = 0.0
     best_story = None
 
+    from sqlalchemy.orm.exc import ObjectDeletedError
+
     for story in recent_stories:
-        # Use the embedding of the first article in the story as representative
-        if not story.articles:
+        try:
+            articles = story.articles
+            if not articles:
+                continue
+
+            # Find the best matching article within this story
+            best_story_score = 0.0
+            for article in articles:
+                try:
+                    if article.embedding is not None:
+                        score = cosine_similarity(article_embedding, article.embedding)
+                        if score > best_story_score:
+                            best_story_score = score
+                except ObjectDeletedError:
+                    continue
+
+            # Check if this story is the best match so far
+            if best_story_score > best_global_score:
+                best_global_score = best_story_score
+                best_story = story
+        except ObjectDeletedError:
             continue
 
-        story_embedding = None
-        for article in story.articles:
-            if article.embedding is not None:
-                story_embedding = article.embedding
-                break
-
-        if story_embedding is None:
-            continue
-
-        score = cosine_similarity(article_embedding, story_embedding)
-        if score > best_score:
-            best_score = score
-            best_story = story
-
-    if best_score >= SIMILARITY_THRESHOLD and best_story:
-        logger.info(f"  [Grouper] Matched to '{best_story.title}' (similarity: {best_score:.3f})")
+    if best_global_score >= SIMILARITY_THRESHOLD and best_story:
+        logger.info(f"  [Grouper] Matched to '{best_story.title}' (similarity: {best_global_score:.3f})")
         return best_story
 
-    logger.info(f"  [Grouper] No match found (best score: {best_score:.3f}), creating new story")
+    logger.info(f"  [Grouper] No match found (best score: {best_global_score:.3f}), creating new story")
     return None
 
 
@@ -123,8 +131,8 @@ def clean_story_title(article_title):
                 break
 
     words = article_title.split()
-    if len(words) > 12:
-        return " ".join(words[:12]) + "..."
+    if len(words) > 30:
+        return " ".join(words[:30]) + "..."
 
     return article_title
 

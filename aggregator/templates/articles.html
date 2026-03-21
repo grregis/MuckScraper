@@ -25,6 +25,7 @@
             --btn-muted-bg:  #eee;
             --btn-muted-text:#555;
             --shadow:        rgba(0,0,0,0.08);
+            --menu-bg:       #ffffff;
         }
 
         [data-theme="dark"] {
@@ -44,6 +45,7 @@
             --btn-muted-bg:  #2a2a3e;
             --btn-muted-text:#aaa;
             --shadow:        rgba(0,0,0,0.3);
+            --menu-bg:       #1e1e2e;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -74,6 +76,12 @@
             overflow-y: auto;
             box-shadow: 3px 0 12px rgba(164, 60, 181, 0.25);
             z-index: 10;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+
+        .sidebar.collapsed {
+            width: 60px;
+            min-width: 60px;
         }
 
         .sidebar-inner {
@@ -81,6 +89,7 @@
             flex-direction: column;
             min-height: 100%;
             padding: 24px 0;
+            overflow-x: hidden;
         }
 
         .sidebar h2 {
@@ -91,6 +100,13 @@
             padding: 0 20px 12px 20px;
             border-bottom: 1px solid #333;
             margin-bottom: 12px;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed h2 {
+            opacity: 0;
+            pointer-events: none;
         }
 
         .topic-block {
@@ -99,6 +115,8 @@
             justify-content: space-between;
             padding: 4px 12px 4px 0;
             border-left: 3px solid transparent;
+            white-space: nowrap;
+            overflow: hidden;
         }
 
         .topic-block.active {
@@ -112,29 +130,48 @@
             color: var(--sidebar-text);
             text-decoration: none;
             font-size: 14px;
+            transition: padding 0.3s;
         }
+        
+        .sidebar.collapsed .topic-block a {
+            padding-left: 20px; /* Center simplistic icon if needed, or just text */
+            opacity: 0; /* Hide text in collapsed mode */
+        }
+        
+        /* Show first letter or icon when collapsed? For now simply hide text 
+           and let user hover or expand. Or better, keep sidebar purely for 
+           collapsing to maximize screen space. */
+        .sidebar.collapsed .topic-block {
+             justify-content: center;
+             padding: 4px 0;
+        }
+        .sidebar.collapsed .topic-block a {
+            opacity: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: 16px; 
+            /* Show first letter as icon trick */
+            width: 100%;
+            overflow: hidden;
+            text-overflow: clip;
+        }
+        
+        .sidebar.collapsed .topic-block a span.full-text { display: none; }
+        .sidebar.collapsed .topic-block a span.icon-text { display: block; font-weight: bold; color: var(--accent-light); }
+        
+        /* Normal state: hide icon text */
+        .topic-block a span.icon-text { display: none; }
+
 
         .topic-block.active a { color: var(--accent-light); font-weight: bold; }
         .topic-block a:hover  { color: var(--sidebar-hover); }
-
-        .fetch-btn {
-            background: none;
-            border: 1px solid #444;
-            color: var(--sidebar-muted);
-            font-size: 11px;
-            padding: 3px 6px;
-            border-radius: 3px;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-
-        .fetch-btn:hover { color: var(--accent-light); border-color: var(--accent-light); }
 
         .sidebar-divider {
             border: none;
             border-top: 1px solid #2a2a3a;
             margin: 4px 20px;
         }
+        .sidebar.collapsed .sidebar-divider { margin: 4px 5px; }
 
         .sidebar-footer {
             margin-top: auto;
@@ -144,6 +181,13 @@
             flex-direction: column;
             gap: 10px;
         }
+        
+        .sidebar.collapsed .sidebar-footer {
+            padding: 12px 5px;
+            align-items: center;
+        }
+        
+        .sidebar.collapsed .sidebar-footer span { display: none; } /* Hide labels */
 
         .ollama-status {
             display: flex;
@@ -151,6 +195,7 @@
             gap: 8px;
             font-size: 12px;
             color: var(--sidebar-muted);
+            white-space: nowrap;
         }
 
         .status-dot {
@@ -163,6 +208,24 @@
 
         .status-dot.online  { background: #a6e3a1; }
         .status-dot.offline { background: #f38ba8; }
+        
+        /* Toggle Button */
+        .sidebar-toggle-btn {
+            background: none;
+            border: none;
+            color: var(--sidebar-muted);
+            cursor: pointer;
+            padding: 10px;
+            align-self: flex-end;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        .sidebar-toggle-btn:hover { color: var(--sidebar-hover); }
+        .sidebar.collapsed .sidebar-toggle-btn {
+            align-self: center;
+            margin-right: 0;
+            transform: rotate(180deg);
+        }
 
         /* ── Main area ── */
         .main {
@@ -174,13 +237,26 @@
 
         .main-header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
             margin-bottom: 8px;
             gap: 12px;
+            position: sticky; /* Sticky header */
+            top: 0;
+            background: var(--bg);
+            z-index: 5;
+            padding-bottom: 10px;
+            padding-top: 10px;
+            margin-top: -10px; /* Offset padding */
         }
 
         h1 { font-size: 24px; color: var(--accent); }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
         .theme-toggle {
             background: var(--surface);
@@ -198,6 +274,63 @@
         .theme-toggle:hover {
             border-color: var(--accent);
             color: var(--accent);
+        }
+
+        /* Action Menu (Hamburger) */
+        .action-menu-container {
+            position: relative;
+        }
+
+        .icon-btn {
+            background: var(--surface);
+            border: 1px solid var(--input-border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            width: 32px;
+        }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .action-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: var(--menu-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px var(--shadow);
+            width: 200px;
+            display: none;
+            flex-direction: column;
+            padding: 8px 0;
+            z-index: 100;
+        }
+
+        .action-dropdown.show { display: flex; }
+
+        .menu-item {
+            background: none;
+            border: none;
+            color: var(--text);
+            padding: 8px 16px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 13px;
+            width: 100%;
+        }
+        .menu-item:hover { background: var(--bg); color: var(--accent); }
+        
+        .menu-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
         }
 
         .active-topic-label {
@@ -402,60 +535,82 @@
 
 <div class="layout">
 
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">«</button>
+        
         <div class="sidebar-inner">
+            <div class="topic-block {% if not active_label and not is_multi_view %}active{% endif %}">
+                <a href="/articles">
+                    <span class="full-text">All Stories</span>
+                    <span class="icon-text">ALL</span>
+                </a>
+            </div>
+            <div class="topic-block {% if is_multi_view %}active{% endif %}">
+                <a href="/multi-stories">
+                    <span class="full-text">Grouped Stories</span>
+                    <span class="icon-text">GRP</span>
+                </a>
+            </div>
+            <hr class="sidebar-divider">
+            
             <h2>Topics</h2>
 
             {% for topic in topics %}
-        <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
-            <a href="/articles?topic={{ topic.label | urlencode }}">{{ topic.label }}</a>
-        </div>
-        <hr class="sidebar-divider">
-        {% endfor %}
+            <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
+                <a href="/articles?topic={{ topic.label | urlencode }}">
+                    <span class="full-text">{{ topic.label }}</span>
+                    <!-- Simple heuristic: first letter of topic -->
+                    <span class="icon-text">{{ topic.label[0] }}</span>
+                </a>
+            </div>
+            <hr class="sidebar-divider">
+            {% endfor %}
 
             <div class="sidebar-footer">
                 <div class="ollama-status">
                     <div class="status-dot" id="ollama-dot"></div>
                     <span id="ollama-label">Checking Ollama...</span>
                 </div>
-                <form method="POST" action="/wake-ollama">
-                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
-                        ⚡ Wake Ollama
-                    </button>
-                </form>
-                <form method="POST" action="/ollama-catchup">
-                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
-                        ↻ Ollama Catchup
-                    </button>
-                </form>
-                <form method="POST" action="/scrape-all-missing">
-                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
-                        ↻ Scrape Missing
-                    </button>
-                </form>
-                <form method="POST" action="/force-regroup">
-                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
-                        ⚡ Force Re-group
-                    </button>
-                </form>
-                <form method="POST" action="/reclassify-articles">
-                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                    <button type="submit" class="fetch-btn" style="width:100%; text-align:left; padding: 4px 8px;">
-                        ↻ Reclassify Topics
-                    </button>
-                </form>
             </div>
         </div>
     </div>
 
     <div class="main">
         <div class="main-header">
-            <h1>MuckScraper: All the muck that's fit to scrape</h1>
-            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+            <h1>MuckScraper</h1>
+            
+            <div class="header-controls">
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+                
+                <div class="action-menu-container">
+                    <button class="icon-btn" onclick="toggleActionMenu()">☰</button>
+                    <div class="action-dropdown" id="action-dropdown">
+                        <form method="POST" action="/wake-ollama">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">⚡ Wake Ollama</button>
+                        </form>
+                        <form method="POST" action="/ollama-catchup">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">↻ Ollama Catchup</button>
+                        </form>
+                        <form method="POST" action="/scrape-all-missing">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">↻ Scrape Missing</button>
+                        </form>
+                        
+                        <div class="menu-divider"></div>
+                        
+                        <form method="POST" action="/force-regroup">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">⚡ Force Re-group</button>
+                        </form>
+                        <form method="POST" action="/reclassify-articles">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">↻ Reclassify Topics</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {% if active_label %}
@@ -467,8 +622,9 @@
             <input type="text" name="query" placeholder="Search a topic e.g. climate, AI ...">
             <button type="submit">Fetch Articles</button>
         </form>
-        <<p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
+        <p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
 
+        {% if not is_multi_view %}
         <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 13px; color: var(--text-muted);">Show single-article stories:</span>
             <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}show_single={{ 'false' if show_single else 'true' }}&page=1"
@@ -476,16 +632,23 @@
                 {{ '✓ On' if show_single else '✗ Off' }}
             </a>
         </div>
+        {% endif %}
 
         {% if stories %}
             {% for story in stories %}
-            {% if show_single or story.articles|length > 1 %}
             <div class="story">
 
                 <div class="story-header">
                     <h2>{{ story.headline if story.headline else story.title }}</h2>
                     {% if story.headline %}
                     <span style="font-size:11px; color:var(--text-faint); font-style:italic;">AI headline</span>
+                    {% endif %}
+                </div>
+                
+                <div style="font-size: 11px; color: var(--text-faint); margin-bottom: 12px;">
+                    {% set latest_article = story.articles|sort(attribute='date', reverse=True)|first %}
+                    {% if latest_article %}
+                        Last updated: <span class="local-date" data-utc="{{ latest_article.date.isoformat() }}Z">{{ latest_article.date.strftime('%Y-%m-%d %H:%M') }}</span>
                     {% endif %}
                 </div>
 
@@ -536,7 +699,7 @@
                 {% endif %}
 
                 <ul>
-                    {% for article in story.articles %}
+                    {% for article in story.display_articles %}
                     <li>
                         <a class="article-title" href="{{ article.url }}" target="_blank">
                             {{ article.title }}
@@ -554,6 +717,13 @@
                         {% endif %}
 
                         <span class="outlet-name">— {{ article.outlet.name }}</span>
+                        
+                        <div style="font-size: 11px; color: var(--text-faint); margin-top: 4px;">
+                            Published: <span class="local-date" data-utc="{{ article.date.isoformat() }}Z">{{ article.date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% if article.fetched_at %}
+                            | Fetched: <span class="local-date" data-utc="{{ article.fetched_at.isoformat() }}Z">{{ article.fetched_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% endif %}
+                        </div>
 
                         {% if article.outlet.bias_score == 1 %}
                             <span class="bias-tag bias-1">Outlet: Left</span>
@@ -605,7 +775,6 @@
                 </ul>
 
             </div>
-            {% endif %}
             {% endfor %}
         {% else %}
             <p class="empty">No articles found. Use the fetch bar above or wait for the next scheduled fetch.</p>
@@ -614,13 +783,13 @@
         {% if total_pages > 1 %}
         <div class="pagination">
             {% if page > 1 %}
-                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}page={{ page - 1 }}" class="page-btn">← Prev</a>
+                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}{% if not is_multi_view %}show_single={{ 'true' if show_single else 'false' }}&{% endif %}page={{ page - 1 }}" class="page-btn">← Prev</a>
             {% endif %}
 
             <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
 
             {% if page < total_pages %}
-                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}page={{ page + 1 }}" class="page-btn">Next →</a>
+                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}{% if not is_multi_view %}show_single={{ 'true' if show_single else 'false' }}&{% endif %}page={{ page + 1 }}" class="page-btn">Next →</a>
             {% endif %}
         </div>
         {% endif %}
@@ -646,6 +815,41 @@
     // Apply saved theme on load
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     applyTheme(savedTheme);
+    
+    // ── Sidebar ──
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const btn = document.getElementById('sidebar-toggle');
+        sidebar.classList.toggle('collapsed');
+        
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('muckscraper-sidebar', isCollapsed ? 'collapsed' : 'expanded');
+        btn.textContent = isCollapsed ? '»' : '«';
+    }
+    
+    const savedSidebar = localStorage.getItem('muckscraper-sidebar');
+    if (savedSidebar === 'collapsed') {
+        document.getElementById('sidebar').classList.add('collapsed');
+        document.getElementById('sidebar-toggle').textContent = '»';
+    }
+    
+    // ── Action Menu ──
+    function toggleActionMenu() {
+        document.getElementById('action-dropdown').classList.toggle('show');
+    }
+    
+    // Close menu when clicking outside
+    window.onclick = function(event) {
+        if (!event.target.matches('.icon-btn') && !event.target.matches('.menu-item')) {
+            var dropdowns = document.getElementsByClassName("action-dropdown");
+            for (var i = 0; i < dropdowns.length; i++) {
+                var openDropdown = dropdowns[i];
+                if (openDropdown.classList.contains('show')) {
+                    openDropdown.classList.remove('show');
+                }
+            }
+        }
+    }
 
     // ── Ollama status ──
     function checkOllamaStatus() {
@@ -668,7 +872,30 @@
             });
     }
 
+    // ── Local Timezone Conversion ──
+    function convertToLocalTime() {
+        const dateElements = document.querySelectorAll('.local-date');
+        dateElements.forEach(el => {
+            const utcDate = el.getAttribute('data-utc');
+            if (utcDate) {
+                const date = new Date(utcDate);
+                // Options to format like YYYY-MM-DD HH:MM
+                const options = { 
+                    year: 'numeric', 
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                };
+                // Use 'en-CA' for YYYY-MM-DD format or undefined for system locale
+                el.textContent = date.toLocaleString(undefined, options).replace(',', '');
+            }
+        });
+    }
+
     checkOllamaStatus();
+    convertToLocalTime();
     setInterval(checkOllamaStatus, 30000);
 </script>
 

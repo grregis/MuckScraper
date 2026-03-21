@@ -71,7 +71,8 @@ class Article(db.Model):
     url        = db.Column(db.String, unique=True)
     outlet_id  = db.Column(db.Integer, db.ForeignKey("outlets.id"))
     story_id   = db.Column(db.Integer, db.ForeignKey("stories.id"))
-    date       = db.Column(db.DateTime, default=datetime.utcnow)
+    date       = db.Column(db.DateTime, default=datetime.utcnow) # This is Published Date
+    fetched_at = db.Column(db.DateTime, default=datetime.utcnow) # When we actually scraped it
     bias_score = db.Column(db.Float)
     embedding  = db.Column(Vector(768))
 
