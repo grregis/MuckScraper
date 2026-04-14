@@ -1,15 +1,25 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/headline_generator.py
 # news_fetcher/headline_generator.py
 
 import logging
 import os
 import requests
+from langfuse import Langfuse
+from langfuse.decorators import observe, langfuse_context
 
 logger = logging.getLogger(__name__)
+
+langfuse = Langfuse(
+    public_key=os.environ.get("LANGFUSE_PUBLIC_KEY", ""),
+    secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+    host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
+)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL       = os.environ.get("OLLAMA_MODEL", "")
 
 
+@observe()
 def generate_story_headline(story):
     """
     Generate a news wire style headline for a multi-article story.
@@ -44,6 +54,10 @@ Rules:
 - Do not include source names or outlet names
 - Respond with ONLY the headline, nothing else"""
 
+    langfuse_context.update_current_observation(
+        input=prompt,
+        metadata={"model": MODEL}
+    )
     try:
         response = requests.post(
             f"{OLLAMA_HOST}/api/generate",
@@ -57,6 +71,9 @@ Rules:
         response.raise_for_status()
 
         headline = response.json().get("response", "").strip()
+        langfuse_context.update_current_observation(
+            output=headline
+        )
 
         # Clean up common LLM artifacts
         headline = headline.strip('"\'').strip()

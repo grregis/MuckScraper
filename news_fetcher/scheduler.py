@@ -1,7 +1,8 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/scheduler.py
 # news_fetcher/scheduler.py
 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.models import AppSetting
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, ollama_catchup
@@ -15,36 +16,42 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-FETCH_INTERVAL_HOURS = 3
+# New schedule times in Eastern Time: 12am, 7am, 12pm, 6pm
+SCHEDULE_HOURS = "0,7,12,18"
+TIMEZONE = "America/New_York"
 
 SCHEDULED_FETCHES = [
-    {
-        "label":          "US and World News",
-        "mode":           "top",
-        "country":        "us",
-        "category":       None,
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "general",
-    },
-    {
-        "label":          "World News",
-        "mode":           "top",
-        "country":        None,
-        "category":       None,
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "world",
-    },
+    # === NATIONAL / POLITICS ===
     {
         "label":          "US Politics",
         "mode":           "query",
         "country":        None,
         "category":       None,
-        "query":          "US politics congress white house senate trump",
-        "gnews_query":    "US politics congress",
+        "query":          "US politics congress white house senate supreme court",
+        "gnews_query":    "US politics congress white house",
         "gnews_category": None,
     },
+    # === BUSINESS / ECONOMY ===
+    {
+        "label":          "Business & Economy",
+        "mode":           "top",
+        "country":        "us",
+        "category":       "business",
+        "query":          None,
+        "gnews_query":    None,
+        "gnews_category": "business",
+    },
+    # === SCIENCE / HEALTH ===
+    {
+        "label":          "Science & Health",
+        "mode":           "query",
+        "country":        None,
+        "category":       None,
+        "query":          "science health medicine research climate environment",
+        "gnews_query":    "science health medicine",
+        "gnews_category": "health",
+    },
+    # === TECHNOLOGY — kept but scoped to real news, not dev releases ===
     {
         "label":          "Technology",
         "mode":           "top",
@@ -54,32 +61,15 @@ SCHEDULED_FETCHES = [
         "gnews_query":    None,
         "gnews_category": "technology",
     },
+    # === NATIONAL SECURITY / FOREIGN POLICY ===
     {
-        "label":          "Entertainment and Gaming",
+        "label":          "National Security & Foreign Policy",
         "mode":           "query",
         "country":        None,
         "category":       None,
-        "query":          "video games gaming PlayStation Xbox Nintendo Steam esports",
-        "gnews_query":    "video games gaming",
+        "query":          "military NATO foreign policy diplomacy war conflict sanctions",
+        "gnews_query":    "military NATO diplomacy conflict",
         "gnews_category": None,
-    },
-    {
-        "label":          "Sports",
-        "mode":           "top",
-        "country":        "us",
-        "category":       "sports",
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "sports",
-    },
-    {
-        "label":          "Business",
-        "mode":           "top",
-        "country":        "us",
-        "category":       "business",
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "business",
     },
 ]
 app = create_app()
@@ -109,8 +99,9 @@ def set_last_fetch_time():
 
 def should_fetch_now():
     """
-    Returns True if it's been more than FETCH_INTERVAL_HOURS since the last fetch,
-    or if no fetch has ever been recorded.
+    Returns True if it's been more than 1 hour since the last fetch,
+    or if no fetch has ever been recorded. This allows the scheduler 
+    to fetch on startup if it was offline during a scheduled window.
     """
     last_fetch = get_last_fetch_time()
     if last_fetch is None:
@@ -118,16 +109,15 @@ def should_fetch_now():
         return True
 
     elapsed = datetime.utcnow() - last_fetch
-    remaining = timedelta(hours=FETCH_INTERVAL_HOURS) - elapsed
+    threshold = timedelta(hours=1)
 
-    if elapsed >= timedelta(hours=FETCH_INTERVAL_HOURS):
+    if elapsed >= threshold:
         logging.info(f"Last fetch was {elapsed} ago, fetching now.")
         return True
     else:
-        minutes_remaining = int(remaining.total_seconds() / 60)
         logging.info(
             f"Last fetch was {int(elapsed.total_seconds() / 60)} minutes ago. "
-            f"Next fetch in {minutes_remaining} minutes, skipping startup fetch."
+            f"Skipping startup fetch."
         )
         return False
 
@@ -174,6 +164,7 @@ def run_all_fetches():
     logging.info("=== Scheduled fetch run complete ===")
 
 
+
 if __name__ == "__main__":
     logging.info("Scheduler starting up...")
 
@@ -188,11 +179,11 @@ if __name__ == "__main__":
     scheduler = BlockingScheduler()
     scheduler.add_job(
         run_all_fetches,
-        trigger=IntervalTrigger(hours=FETCH_INTERVAL_HOURS),
+        trigger=CronTrigger(hour=SCHEDULE_HOURS, minute=0, timezone=TIMEZONE),
         id="fetch_job",
-        name="3-hourly news fetch",
+        name="Scheduled news fetch (America/New_York)",
         replace_existing=True
     )
 
-    logging.info(f"Scheduler running. Fetching every {FETCH_INTERVAL_HOURS} hours.")
+    logging.info(f"Scheduler running. Fetching at {SCHEDULE_HOURS} in {TIMEZONE}.")
     scheduler.start()

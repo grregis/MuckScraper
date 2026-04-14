@@ -1,0 +1,17 @@
+.env
+postgres_data/
+__pycache__/
+*.pyc
+destroy.sh
+GEMINI.md
+printouts
+
+# Personal Headline feature files
+aggregator/templates/headlines.html
+aggregator/blueprints/personal.py
+news_fetcher/headline_ranker.py
+news_fetcher/editorial_ranker.py
+
+# Production / Setup scripts
+boot.sh
+create_admin.py

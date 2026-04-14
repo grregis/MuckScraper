@@ -1,76 +1,114 @@
-#/aggregator/templates/article.html
+<!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/article.html -->
 <!DOCTYPE html>
-<html>
+<html data-theme="light">
 <head>
     <title>{{ article.title }} — MuckScraper</title>
     <style>
+        :root {
+            --accent:        #a43cb5;
+            --accent-light:  #c06ed0;
+            --accent-dark:   #7a2d88;
+
+            /* Light mode */
+            --bg:            #f8f9fa;
+            --surface:       #ffffff;
+            --topbar-bg:     #1e1e2e;
+            --topbar-text:   #cdd6f4;
+            --text:          #1a1a1a;
+            --text-muted:    #555;
+            --text-faint:    #888;
+            --border:        #eef0f2;
+            --summary-bg:    #fdfbff;
+            --shadow:        0 10px 30px rgba(0,0,0,0.08);
+            --input-border:  #dde1e7;
+        }
+
+        [data-theme="dark"] {
+            --bg:            #0f0f17;
+            --surface:       #1a1a26;
+            --text:          #e2e8f0;
+            --text-muted:    #a0aec0;
+            --text-faint:    #718096;
+            --border:        #2d2d3f;
+            --summary-bg:    #222230;
+            --shadow:        0 15px 40px rgba(0,0,0,0.4);
+            --input-border:  #3f3f5a;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            color: #222;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.2s, color 0.2s;
+            -webkit-font-smoothing: antialiased;
         }
 
         .topbar {
-            background: #1e1e2e;
-            padding: 14px 40px;
+            background: var(--topbar-bg);
+            padding: 16px 40px;
             display: flex;
             align-items: center;
-            gap: 20px;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        .topbar a {
-            color: #89b4fa;
-            text-decoration: none;
-            font-size: 14px;
-        }
-
-        .topbar a:hover { text-decoration: underline; }
-
-        .topbar-title {
-            color: #cdd6f4;
-            font-size: 16px;
-            font-weight: bold;
-        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
 
         .container {
-            max-width: 800px;
-            margin: 40px auto;
+            max-width: 840px;
+            margin: 60px auto;
             padding: 0 20px;
         }
 
         .article-card {
-            background: white;
-            border-radius: 6px;
-            padding: 30px 36px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            background: var(--surface);
+            border-radius: 24px;
+            padding: 48px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
         }
 
         .article-meta {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 24px;
             flex-wrap: wrap;
         }
 
         .outlet-name {
-            font-size: 13px;
-            color: #888;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-muted);
         }
 
         .article-date {
-            font-size: 13px;
-            color: #aaa;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-faint);
+        }
+            color: var(--text-muted);
+        }
+
+        .article-date {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-faint);
         }
 
         .bias-tag {
             display: inline-block;
-            font-size: 10px;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .bias-1 { background-color: #1a6bb5; color: white; }
@@ -81,81 +119,163 @@
         .bias-none { background-color: #ddd; color: #666;  }
 
         h1 {
-            font-size: 22px;
-            color: #1e1e2e;
-            margin-bottom: 16px;
-            line-height: 1.4;
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 24px;
+            line-height: 1.2;
+            letter-spacing: -1px;
         }
 
         .divider {
             border: none;
-            border-top: 1px solid #eee;
-            margin: 20px 0;
+            border-top: 1px solid var(--border);
+            margin: 32px 0;
         }
 
-        .article-body {
+        .summary {
+            background: var(--summary-bg);
+            border-left: 5px solid var(--accent);
+            padding: 24px 32px;
+            margin-bottom: 40px;
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--text);
+            border-radius: 0 16px 16px 0;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--accent);
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+
+        .summary p { margin-bottom: 1em; }
+        .summary p:last-child { margin-bottom: 0; }
+
+        .summary-section-label {
+            color: var(--accent);
             font-size: 15px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-bullets {
+            margin: 8px 0 1em 1.5em;
+            list-style: disc;
+        }
+
+        .summary-bullets li {
+            margin-bottom: 0.6em;
+        }
+
+        .btn {
+            display: inline-block;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(164, 60, 181, 0.2);
+        }
+
+        .btn:hover { background: var(--accent-dark); transform: translateY(-1px); }
+
+        .article-body {
+            font-size: 18px;
             line-height: 1.8;
-            color: #333;
+            color: var(--text);
         }
 
         .article-body p {
-            margin-bottom: 1em;
+            margin-bottom: 1.5em;
         }
 
         .article-body h1, .article-body h2, .article-body h3 {
-            margin: 1.2em 0 0.4em;
-            color: #1e1e2e;
+            margin: 1.5em 0 0.5em;
+            color: var(--text);
+            font-weight: 800;
+            letter-spacing: -0.5px;
         }
 
+        .article-body h1 { font-size: 28px; }
+        .article-body h2 { font-size: 24px; }
+        .article-body h3 { font-size: 20px; }
+
         .article-body ul, .article-body ol {
-            margin: 0.5em 0 1em 1.5em;
+            margin: 0.5em 0 1.5em 1.5em;
         }
 
         .article-body li {
-            margin-bottom: 0.3em;
+            margin-bottom: 0.5em;
         }
 
         .article-body blockquote {
-            border-left: 3px solid #89b4fa;
-            margin: 1em 0;
-            padding: 8px 16px;
-            color: #555;
+            border-left: 4px solid var(--accent-light);
+            margin: 2em 0;
+            padding: 16px 32px;
+            color: var(--text-muted);
             font-style: italic;
+            background: var(--bg);
+            border-radius: 0 12px 12px 0;
         }
 
         .article-body a {
-            color: #89b4fa;
+            color: var(--accent);
+            text-decoration: underline;
+            text-underline-offset: 4px;
         }
 
         .article-body img {
             max-width: 100%;
             height: auto;
-            margin: 1em 0;
-            border-radius: 4px;
+            margin: 2em 0;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
         }
 
         .source-link {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #eee;
-            font-size: 13px;
-            color: #888;
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
         }
 
         .source-link a {
-            color: #89b4fa;
+            color: var(--accent);
             text-decoration: none;
+            font-weight: 700;
         }
 
         .source-link a:hover { text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            .article-card { padding: 24px; border-radius: 0; }
+            .container { margin: 0; padding: 0; }
+            h1 { font-size: 28px; }
+            .topbar { padding: 16px 20px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="topbar">
-    <span class="topbar-title">MuckScraper</span>
-    <a href="/articles">← Back to Articles</a>
+    <div class="topbar-left">
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('public.view_story', story_id=article.story_id) if article.story_id else url_for('admin.list_articles') }}">← Back to Story</a>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
 </div>
 
 <div class="container">
@@ -178,27 +298,62 @@
             {% else %}
                 <span class="bias-tag bias-none">Unrated</span>
             {% endif %}
-
-            {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
-                {% if article.bias_score == 1 %}
-                    <span class="bias-tag bias-1">Article: Left</span>
-                {% elif article.bias_score == 2 %}
-                    <span class="bias-tag bias-2">Article: Lean Left</span>
-                {% elif article.bias_score == 3 %}
-                    <span class="bias-tag bias-3">Article: Center</span>
-                {% elif article.bias_score == 4 %}
-                    <span class="bias-tag bias-4">Article: Lean Right</span>
-                {% elif article.bias_score == 5 %}
-                    <span class="bias-tag bias-5">Article: Right</span>
-                {% endif %}
-            {% endif %}
         </div>
 
-        <h1>{{ article.title }}</h1>
+        <h1><a href="{{ article.url }}" target="_blank" style="color: inherit; text-decoration: none;">{{ article.title }}</a></h1>
+
+        {% if article.image_url %}
+            <img src="{{ article.image_url }}" alt="Article Image" style="width: 100%; border-radius: 16px; margin-bottom: 32px; box-shadow: var(--shadow);">
+        {% endif %}
 
         <hr class="divider">
 
-        <div class="article-body">{{ article.content | safe }}</div>
+        <div class="summary">
+            <div class="summary-label">AI Summary</div>
+            {% if article.summary %}
+                {% set in_bullets = [] %}
+                {% for line in article.summary.split('\n') %}
+                    {% set l = line.strip() %}
+                    {% if l %}
+                        {% if l.startswith('•') %}
+                            {% if not in_bullets %}
+                                <ul class="summary-bullets">
+                                {% set _ = in_bullets.append(1) %}
+                            {% endif %}
+                            <li>{{ l[1:].strip() }}</li>
+                        {% else %}
+                            {% if in_bullets %}
+                                </ul>
+                                {% set _ = in_bullets.clear() %}
+                            {% endif %}
+                            {% if ':' in l and l.split(':')[0].strip()|length < 30 %}
+                                {% set label = l.split(':', 1)[0].strip() %}
+                                {% set rest = l.split(':', 1)[1].strip() %}
+                                <p><strong class="summary-section-label">{{ label }}:</strong> {{ rest }}</p>
+                            {% else %}
+                                <p>{{ l }}</p>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                {% if in_bullets %}</ul>{% endif %}
+            {% elif not ollama_online %}
+                <p style="font-style: italic; color: var(--text-muted);">Summary will be generated when Ollama is back online. This article has been added to the queue.</p>
+            {% else %}
+                <p style="font-style: italic; color: var(--text-muted);">Generating summary...</p>
+            {% endif %}
+        </div>
+
+        <div class="article-body">
+            {% if article.content and article.content|length > 100 %}
+                {{ article.content | safe }}
+            {% else %}
+                <div style="padding: 40px; background: var(--bg); border-radius: 16px; text-align: center; border: 1px dashed var(--border);">
+                    <p style="color: var(--text-muted); margin-bottom: 16px;">Full scrape unavailable for this article.</p>
+                    <a href="{{ article.url }}" target="_blank" class="btn">View Article at Source ↗</a>
+                </div>
+            {% endif %}
+        </div>
 
         <div class="source-link">
             Original source: <a href="{{ article.url }}" target="_blank">{{ article.url }}</a>
@@ -206,6 +361,24 @@
 
     </div>
 </div>
+
+<script>
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        const btn = document.getElementById('theme-toggle');
+        btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('muckscraper-theme', next);
+        applyTheme(next);
+    }
+
+    const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
+    applyTheme(savedTheme);
+</script>
 
 </body>
 </html>

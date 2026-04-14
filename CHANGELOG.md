@@ -1,3 +1,60 @@
+## [0.3.0] - 2026-04-14
+
+### Added
+
+- **Newspaper-style headlines front page** (`/headlines`) — Chomsky masthead, 3-column broadsheet layout, grayscale newsprint images, weather widget, dark mode, pagination. Accessible without authentication.
+- **Story detail page** (`/story/<id>`) — multi-source deep report display, source article list with bias tags, auto-generates summary and deep report on first visit if Ollama is online
+- **Deep reports** — topic-aware in-depth analytical reports with six distinct analytical frames:
+  - Politics: left/center/right framing comparison
+  - Science/Technology: findings, impact, expert commentary
+  - Gaming: coverage analysis, community reaction, industry impact
+  - Sports: recap, key performances, standings context
+  - Business/Finance: market impact, analyst commentary, economic context
+  - Default: generic multi-source analysis
+- **Headline ranking pipeline** — two-stage scoring system:
+  - `headline_ranker.py`: polls 16 RSS feeds across the political spectrum, uses LLM to match external headlines to MuckScraper stories, calculates weighted base score (67% outlet coverage, 33% article count) with time decay
+  - `editorial_ranker.py`: LLM re-ranks top 50 candidates by real-world importance, blends with base score (60/40 split)
+- **`EditorialHistory` model** — logs every ranking run per story for auditability
+- **Image capture and display** — `image_url` added to Article model, populated from NewsAPI (`urlToImage`) and GNews (`image`). Images shown in headlines front page and articles feed
+- **`backfill_images.py`** — utility to backfill image URLs from stored raw API payloads
+- **`process_headline_stories()`** — post-fetch pipeline step ensuring top 20 headline stories have summaries, deep reports, and per-article summaries
+- **Langfuse observability** — all LLM calls instrumented with tracing across summarizer, story grouper, headline generator, outlet bias, topic classifier
+- **Authentication** — Flask-Login based auth with login page, admin user creation script (`create_admin.py`), and protected admin routes
+- **Blueprint architecture** — routes split into three blueprints:
+  - `personal.py` — public-facing read-only routes: `/headlines`, `/story/<id>`, `/article/<id>`
+  - `admin.py` — all write and trigger routes requiring authentication
+  - `public.py` — shared route base
+- **`filters.py`** — Jinja2 template filters extracted from app factory and registered via `register_filters(app)`
+- **`constants.py`** — shared `TOPICS` and `AGGREGATORS` constants extracted from app factory
+- **Scrape blocklist** — automatic detection and blocking of bad scrapes:
+  - Strong indicators: login walls, captchas, bot detection, subscriber gates
+  - Weak indicators: short content with sign-in/subscribe text
+  - Duplicate detection: content near-identical to 2+ other articles from same outlet flagged as login/error page
+  - Pre-populated permanent blocklist of hard-paywalled domains (NYT, WSJ, FT, Bloomberg, etc.)
+  - `audit_existing_scrapes()` — retroactive scan of all stored content
+  - `/scrape-blocklist` admin page — view blocked domains, unblock auto-blocked entries, trigger audit
+- **`get_headline_stories()`** — shared query function used by both the headlines route and `process_headline_stories()`, eliminating duplicated logic
+- **New Alembic migrations**: `headline_score` on stories, `image_url` on articles, `editorial_history` table, `scrape_blocklist` table
+- **Gunicorn** — replaces Flask development server in production
+
+### Changed
+
+- Scheduler fetch times changed to 4 daily runs at 12am, 7am, 12pm, 6pm Eastern
+- Scheduler categories restructured: Top News, World News, US Politics, Business & Economy, Science & Health, Technology, National Security & Foreign Policy
+- `regroup_ungrouped_stories()` replaced O(n²) Python cosine loop with pgvector `<=>` nearest-neighbour SQL query
+- Force Re-group button now requires confirmation before executing
+- `create_app()` reduced to wiring only — db init, filter registration, blueprint registration
+- OLLAMA_MAC environment variable now validated against MAC address format before use
+
+### Fixed
+
+- Duplicate `summarize_article` definition in `summarizer.py` — dead first definition removed
+- `cleanup_duplicates.py` no longer imports from `fetch_and_store_articles`, avoiding double app instantiation
+- Alembic migration branch — `add_editorial_history.py` had incorrect `down_revision` creating a two-headed migration chain
+- Duplicate CSS block in `article.html`
+
+---
+
 ## [0.2.2] - 2026-03-21
 
 ### Added
@@ -41,8 +98,8 @@
 ## [0.2.0] - 2026-03-19
 
 ### Added
-- **pgvector story clustering** — replaced Ollama prompt-based grouping with vector embeddings using `nomic-embed-text`. Articles are now matched to stories using cosine similarity for faster, more accurate grouping that works across topics
-- **LLM topic classifier** — articles are now classified into topics by Ollama based on content, replacing the old API-fetch-based tagging. Topics: US Headlines, US Politics, International Headlines, Science/Technology, Gaming, Sports, Business/Finance, Other
+- **pgvector story clustering** — replaced Ollama prompt-based grouping with vector embeddings using `nomic-embed-text`
+- **LLM topic classifier** — articles classified into topics by Ollama based on content
 - **Pagination** — 25 stories per page with prev/next navigation
 - **Force Re-group button** — rebuilds all story groupings from scratch using vector similarity
 - **Reclassify Topics button** — reclassifies all existing articles into the new topic system
@@ -77,11 +134,11 @@
 
 ### Added
 - `python-readability` for smarter article content extraction
-- Googlebot user agent fallback for soft-paywalled sites (Axios, Politico, The Atlantic, and others)
+- Googlebot user agent fallback for soft-paywalled sites
 - archive.ph fallback when all other scraping strategies fail
 - Per-article `[scrape]` button for articles missing full text
 - Global ↻ Scrape Missing sidebar button to bulk re-scrape up to 20 articles at a time
-- DB indexes on `articles.url`, `articles.date`, `articles.outlet_id`, `articles.story_id`, `articles.bias_score`, and `stories.created_at`
+- DB indexes on key columns
 - Raw API payload storage with 30-day auto-cleanup
 - `restart.sh` script for soft rebuilds that preserve the database
 
@@ -89,7 +146,7 @@
 - Ollama catchup button breaking article links and summarization
 - Re-grouping creating new stories instead of only matching existing ones
 - Auto-summarization capped to 10 stories per batch to prevent timeouts
-- HTML tags being sent to Ollama in summaries — content now stripped to plain text first
+- HTML tags being sent to Ollama in summaries
 - Content snippet size increased from 500 to 1500 chars per article
 
 ---
@@ -104,15 +161,14 @@
 - Smart Brevity summary format with labeled sections and bullet points
 - Dark/light mode toggle with localStorage persistence
 - Sticky sidebar with purple accent and drop shadow
-- Ollama Catchup button — re-groups, re-rates, and re-summarizes when Ollama comes back online
+- Ollama Catchup button
 - Automatic Ollama catchup when scheduler detects Ollama came back online
-- Smart restart timer — skips fetch on startup if last fetch was less than 3 hours ago
+- Smart restart timer
 - `AppSetting` model for persisting state across container restarts
 - Many-to-many topic tagging for articles and stories
 - GNews as a second news source alongside NewsAPI
 - `destroy.sh` and `restart.sh` maintenance scripts
 - `.env` support for all credentials and configuration
-- `.env.example` template committed to repository
 
 ### Fixed
 - Race condition causing duplicate topic creation
@@ -122,7 +178,7 @@
 
 ---
 
-## [0.1.2] - 2026-03-10
+## [0.1.0] - 2026-03-10
 
 ### Added
 - Initial release

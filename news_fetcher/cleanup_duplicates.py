@@ -1,11 +1,19 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/cleanup_duplicates.py
 from aggregator import create_app, db
 from aggregator.models import Article, Story
-from news_fetcher.fetch_and_store_articles import normalize_url
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def normalize_url(url):
+    try:
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(url)
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    except Exception:
+        return url
 
 def cleanup_duplicates():
     app = create_app()

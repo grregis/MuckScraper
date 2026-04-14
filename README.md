@@ -8,29 +8,42 @@
 
 ## Screenshots
 
-### Light Mode
-![MuckScraper Light Mode](screenshots/light_mode.png)
+### Headlines Front Page
+![MuckScraper Headlines Light](screenshots/headlines_light.png)
 
 ### Dark Mode
-![MuckScraper Dark Mode](screenshots/dark_mode.png)
+![MuckScraper Headlines Dark](screenshots/headlines_dark.png)
+
+### Multi-Source Story Analysis
+![Story Analysis](screenshots/story_analysis.png)
+
+### Articles Feed
+![Articles Feed](screenshots/feed_view.png)
+
+### Article Reader
+![Article Reader](screenshots/article_reader.png)
 
 ---
 
 ## Why This Is Different
 
-Most news aggregators just show you a firehose of headlines. MuckScraper does three things no other self-hosted tool does:
+Most news aggregators just show you a firehose of headlines. MuckScraper does things no other self-hosted tool does:
+
+**Newspaper-style front page** — A proper broadsheet layout with a ranked, editorially-weighted top 20 stories. Not just a feed — a front page.
 
 **Cross-outlet story clustering** — Articles from CNN, Fox News, Reuters, and AP covering the same event are automatically grouped into a single story using vector embeddings and semantic similarity. See how different outlets cover the same story side by side.
 
-**Political bias scoring** — Every outlet is scored on a 1–5 left-to-right spectrum by your local LLM the first time it appears. Individual articles can be rated separately. No hardcoded bias lists — your LLM makes the call based on its own knowledge.
+**Political bias scoring** — Every outlet is scored on a 1–5 left-to-right spectrum by your local LLM the first time it appears. Individual articles can be rated separately. No hardcoded bias lists — your LLM makes the call.
 
-**Smart Brevity summaries** — On-demand AI summaries follow the Axios Smart Brevity format: The big picture, Why it matters, What's happening, and What's next. Tight, structured, and actually readable.
+**Topic-aware deep reports** — Multi-source stories get in-depth analytical reports tailored to their topic: political stories get left/center/right framing analysis, science stories get findings and expert commentary, sports stories get recaps and standings context, and so on.
+
+**Smart Brevity summaries** — Summaries follow the Axios Smart Brevity format: The big picture, Why it matters, What's happening, What's next.
 
 ---
 
 ## What It Does
 
-MuckScraper pulls news from multiple APIs across configurable topic categories on a 3-hour schedule. Articles are scraped for full text, classified into topics by an LLM, grouped into stories using vector similarity, scored for political bias, and displayed in a clean web interface with dark mode support. Generate AI summaries on demand, rate individual articles for bias, and read full scraped article text — all from your own server.
+MuckScraper pulls news from multiple APIs across configurable topic categories on a scheduled basis. Articles are scraped for full text, classified into topics by an LLM, grouped into stories using vector similarity, scored for political bias, ranked by a two-stage LLM pipeline, and displayed in a clean web interface with dark mode support. Generate AI summaries on demand, read full scraped article text, and get deep multi-source analysis — all from your own server.
 
 ---
 
@@ -42,59 +55,79 @@ MuckScraper pulls news from multiple APIs across configurable topic categories o
 - **LLM:** Any Ollama-compatible model, or adaptable to OpenAI/Anthropic APIs
 - **Embeddings:** nomic-embed-text via Ollama
 - **Scraping:** BeautifulSoup, Playwright, readability-lxml, archive.ph fallback
+- **Observability:** Langfuse (optional)
+- **Server:** Gunicorn
 - **Containerization:** Docker, Docker Compose
 
 ---
 
 ## Project Structure
+
 ```
 muckscraper/
 ├── aggregator/
-│   ├── __init__.py                       # Flask app factory, routes
-│   ├── app.py                            # App entry point
+│   ├── __init__.py                       # App factory — wiring only
+│   ├── app.py                            # Entry point
 │   ├── models.py                         # Database models
+│   ├── filters.py                        # Jinja2 template filters
+│   ├── constants.py                      # Shared constants (TOPICS, AGGREGATORS)
+│   └── blueprints/
+│       ├── personal.py                   # Public read-only routes (headlines, story, article)
+│       ├── admin.py                      # Authenticated write/trigger routes
+│       ├── auth.py                       # Login/logout routes
+│       └── __init__.py
 │   └── templates/
-│       ├── articles.html                 # Main UI template
-│       └── article.html                  # Full article reader
+│       ├── headlines.html                # Newspaper-style front page
+│       ├── articles.html                 # Full feed with admin controls
+│       ├── story.html                    # Multi-source story and deep report view
+│       ├── article.html                  # Full article reader
+│       ├── scrape_blocklist.html         # Blocked domains management
+│       └── login.html                    # Authentication page
 ├── news_fetcher/
 │   ├── fetch_and_store_articles.py       # Core ingestion logic
 │   ├── headline_generator.py             # AI headline generation
-│   ├── scheduler.py                      # 3-hour fetch scheduler
-│   ├── scraper.py                        # Web scraper with fallbacks
+│   ├── headline_ranker.py                # RSS-based headline scoring
+│   ├── editorial_ranker.py               # LLM editorial importance ranking
+│   ├── scheduler.py                      # Scheduled fetch runner
+│   ├── scraper.py                        # Web scraper with bad-scrape detection
 │   ├── story_grouper.py                  # Vector embedding story clustering
 │   ├── topic_classifier.py               # LLM topic classification
-│   ├── summarizer.py                     # Smart Brevity summarization
+│   ├── summarizer.py                     # Smart Brevity summarization + deep reports
 │   ├── outlet_bias_llm.py                # Political bias scoring
-│   ├── cleanup_duplicates.py             # Maintenance script (work in progress)
-│   └── Dockerfile                        # Scheduler container build
+│   ├── backfill_images.py                # One-time image URL backfill utility
+│   └── cleanup_duplicates.py             # Maintenance script
+├── migrations/                           # Alembic migration files
+├── create_admin.py                       # Admin user creation script
 ├── docker-compose.yml
-├── Dockerfile                            # App container build
+├── Dockerfile
 ├── requirements.txt
 ├── .env.sample
-├── restart.sh                            # Soft rebuild, keeps DB
+├── restart.sh
 └── README.md
 ```
 
 ---
 
-## ⚠️ Security Warning
+## Public vs. Admin Routes
 
-MuckScraper has **no built-in authentication**. Any user who can reach the app on your network can trigger fetches, generate summaries, and read all stored articles.
+MuckScraper's routes are split into blueprints:
 
-**Do not expose MuckScraper directly to the internet.**
+**Public** (`/headlines`, `/story/<id>`, `/article/<id>`) — read-only, no authentication required. Safe to expose via reverse proxy.
 
-Recommended safe deployment options:
-- Run on a local network only (default)
-- Put it behind a VPN (e.g. WireGuard, Tailscale)
-- Use a reverse proxy with authentication (e.g. Nginx + Authelia, Caddy + basic auth)
+**Admin** (`/articles`, `/fetch`, `/force-regroup`, etc.) — requires login. All write and trigger operations.
 
-Authentication is planned for a future release.
+To run a public-facing headlines site, deploy with only the personal blueprint registered and put it behind a reverse proxy.
 
 ---
 
-## ⚠️ UI Note
+## ⚠️ Security Warning
 
-The current web interface is a functional developer UI — it prioritizes access to data and controls over polish. A proper production UI is planned for a future release. Contributions welcome.
+**Do not expose admin routes to the internet.**
+
+Recommended deployment:
+- Full app on local network only (default)
+- For a public site: register only the personal blueprint, use Nginx or Caddy as a reverse proxy
+- VPN (WireGuard, Tailscale) for remote access to admin routes
 
 ---
 
@@ -106,16 +139,20 @@ The current web interface is a functional developer UI — it prioritizes access
 - Ollama running on your network with:
   - A chat model (e.g. `llama3.1`, `mistral`)
   - An embedding model (`nomic-embed-text`)
+- Langfuse instance (optional — for LLM observability)
 
 ---
 
 ## Installation
+
 ```bash
 git clone https://github.com/grregis/muckscraper.git
 cd muckscraper
 cp .env.sample .env
 # Edit .env with your API keys and Ollama host
 docker compose up --build
+# Create your admin user
+docker compose exec app python create_admin.py
 ```
 
 Then open `http://localhost:5000` in your browser.
@@ -125,11 +162,11 @@ Then open `http://localhost:5000` in your browser.
 ## Current Features
 
 ### News Fetching
-- Scheduled fetching every 3 hours across 7 topic categories
+- Scheduled fetching 4 times daily (12am, 7am, 12pm, 6pm Eastern) across 7 topic categories
 - On-demand fetch via the web interface — by topic or custom search query
 - Dual API sources — NewsAPI and GNews fetched for every topic
-- Smart restart timer — skips fetch on startup if last fetch was less than 3 hours ago
-- Duplicate article detection
+- Smart restart timer — skips fetch on startup if last fetch was recent
+- Duplicate article detection by URL and title+outlet
 - Source and title keyword blocklist
 - Aggregator deduplication — Yahoo, Google News, MSN articles hidden when original source content exists
 
@@ -139,81 +176,77 @@ Then open `http://localhost:5000` in your browser.
 - Playwright fallback for JavaScript-heavy sites
 - Googlebot user agent fallback for soft-paywalled sites
 - archive.ph fallback as last resort
-- Per-article [scrape] button and global ↻ Scrape Missing button
+- Bad scrape detection — login walls, captchas, bot detection pages, and duplicate outlet content automatically detected and cleared
+- Automatic domain blocklisting when bad scrapes are detected
+- Pre-configured permanent blocklist for hard-paywalled domains
+- Retroactive audit via admin UI
 
 ### Topic Classification
-- LLM-powered topic classification — articles are classified by content, not by which API fetched them
+- LLM-powered topic classification by content
 - Topics: US Headlines, US Politics, International Headlines, Science/Technology, Gaming, Sports, Business/Finance
 - Articles can belong to multiple topics
-- ↻ Reclassify Topics button to reclassify all articles with updated logic
 
 ### Political Bias Scoring
 - Outlet-level bias scoring via LLM on a 1–5 scale (1=Left, 5=Right)
 - Scores assigned automatically when a new outlet is first seen
-- Retry mechanism for outlets that failed while LLM was offline
-- Manual re-rank button to re-score any outlet on demand
 - Per-article bias rating separate from outlet score
 
 ### Story Grouping
 - Vector embedding-based story clustering using pgvector and nomic-embed-text
-- Single linkage matching — new articles compared against every article in a story for best match
+- pgvector nearest-neighbour SQL search for re-grouping (replaces O(n²) Python loop)
+- LLM disambiguation for borderline matches with content snippet context
 - Stories ordered by most recent article date
-- Automatic re-grouping when Ollama comes back online
-- ⚡ Force Re-group button to rebuild all story groupings from scratch
+
+### Headline Ranking
+- 16 RSS feeds polled across the political spectrum
+- LLM matches external headlines to MuckScraper stories
+- Base score: 67% outlet coverage + 33% article count, with time decay
+- Editorial re-ranking: LLM ranks top 50 candidates by real-world importance
+- Final score: 60% base, 40% editorial
+- Every ranking run logged to `editorial_history` for auditability
 
 ### AI-Generated Story Headlines
-- Wire service style headlines generated by Ollama for multi-article stories
-- Who/what/where in one line, 15 words max
+- Wire service style, 15 words max, present tense active voice
 - Generated automatically when a second article is added to a story
-- Generated during Ollama Catchup for existing grouped stories
-- Falls back to auto-generated title for single-article stories
 
 ### LLM Summarization
-- On-demand Smart Brevity summaries: The big picture, Why it matters, What's happening, What's next
+- Smart Brevity story summaries: The big picture, Why it matters, What's happening, What's next
+- Topic-aware deep reports for multi-source stories
+- Per-article summaries in the article reader
 - Auto-summarization when Ollama reconnects
-- Re-summarize button to regenerate at any time
+- Langfuse tracing on all LLM calls (optional)
 
 ### Web Interface
-- Collapsible sidebar with topic navigation and state saved in browser
-- All Stories and Grouped Stories dedicated views
-- Pagination — 25 stories per page (50 in Grouped Stories view)
-- Dark/light mode toggle with preference saved in browser
-- Sticky header with hamburger menu for maintenance actions
-- Color-coded bias tags (blue = left, red = right, grey = center)
-- Full article reader showing scraped HTML content
-
-![Bias scoring example](screenshots/bias_tags.png)
-
-- Published and fetched timestamps per article in local timezone
+- Newspaper-style headlines front page with masthead, weather widget, and broadsheet layout
+- Collapsible sidebar with topic navigation
+- Multi-source story cards with left/center/right bias breakdown
+- Full article reader with scraped HTML content
+- Dark/light mode with preference saved in browser
 - Ollama online/offline status indicator
+- Local timezone conversion for all article dates
+- Authentication with login page and protected admin routes
 
-### Maintenance Actions (hamburger menu)
-- ⚡ Wake Ollama — sends Wake on LAN magic packet
+### Maintenance (admin menu)
+- ⚡ Wake Ollama — sends Wake on LAN magic packet (MAC address validated)
 - ↻ Ollama Catchup — re-groups, re-rates, and re-summarizes missed content
 - ↻ Scrape Missing — bulk re-scrapes articles missing full text
-- ⚡ Force Re-group — rebuilds all story groupings from scratch
-- ↻ Reclassify Topics — reclassifies all articles into the new topic system
+- ⚡ Force Re-group — rebuilds all story groupings from scratch (with confirmation)
+- ↻ Reclassify Topics — reclassifies all articles
+- 🚫 Scrape Blocklist — view and manage blocked domains
+- ⚡ Audit Bad Scrapes — scan all stored content for login walls and duplicates
 
 ---
 
 ## Customization
 
 ### Topics / Categories
-Edit the `TOPICS` list in `aggregator/__init__.py` and the `SCHEDULED_FETCHES` list in `news_fetcher/scheduler.py`.
-
-### News API Provider
-The fetching logic lives in `news_fetcher/fetch_and_store_articles.py`. Swap out the API client for any provider that returns article titles, URLs, content snippets, and source names.
+Edit `TOPICS` in `aggregator/constants.py` and `SCHEDULED_FETCHES` in `news_fetcher/scheduler.py`.
 
 ### LLM Provider
-LLM calls are isolated in these files:
-- `news_fetcher/outlet_bias_llm.py` — bias scoring
-- `news_fetcher/summarizer.py` — summarization
-- `news_fetcher/topic_classifier.py` — topic classification
-- `news_fetcher/story_grouper.py` — story matching
-- `news_fetcher/headline_generator.py` — headline generation
+LLM calls are isolated in: `outlet_bias_llm.py`, `summarizer.py`, `topic_classifier.py`, `story_grouper.py`, `headline_generator.py`, `headline_ranker.py`, `editorial_ranker.py`.
 
 ### Blocked Sources
-Add domains or title keywords to `BLOCKED_SOURCES` and `BLOCKED_TITLE_KEYWORDS` in `news_fetcher/fetch_and_store_articles.py`.
+Add domains or title keywords to `BLOCKED_SOURCES` and `BLOCKED_TITLE_KEYWORDS` in `news_fetcher/fetch_and_store_articles.py`. Scraper-level domain blocking is managed via the admin UI.
 
 ---
 
@@ -222,48 +255,18 @@ Add domains or title keywords to `BLOCKED_SOURCES` and `BLOCKED_TITLE_KEYWORDS` 
 | Script | Purpose |
 |--------|---------|
 | `./restart.sh` | Soft rebuild — clears cache, rebuilds images, keeps database |
+| `create_admin.py` | Create or reset admin user credentials |
+| `cleanup_duplicates.py` | Deduplicate articles by URL and title+outlet |
+| `backfill_images.py` | Backfill image URLs from stored raw API payloads |
 
 ---
 
-## Roadmap
+## Known Limitations
 
-### Planned Features
-
-#### Infrastructure
-- User authentication (Flask-Login)
-- Production WSGI server support
-- Proper production UI
-
-#### Story & Coverage Analysis
-- Coverage frequency display per story
-- Visual bias spectrum showing which outlets covered each story
-
-#### Improved Accuracy
-- Topic classification prompt tuning
-- pgvector similarity threshold tuning
-- Periodic outlet re-scoring
-
-#### Paywall Bypass
-- RSS feed extraction for outlets that publish full text in feeds
-
-#### Admin Interface
-- Manual bias score overrides
-- Outlet management (view, edit, delete)
-- Blocked sources management via UI
-
-#### UI
-- Responsive mobile layout
-
----
-
-## ⚠️ Known Limitations
-
-- Development server only — not production hardened
-- No authentication — see Security Warning above
-- Hard-paywalled sites (NYT, Washington Post) cannot be fully scraped
+- Hard-paywalled sites (NYT, Washington Post, WSJ) cannot be fully scraped — pre-blocked
 - Topic classification accuracy depends on LLM quality
 - Story clustering quality depends on Ollama being online during fetches
-- `cleanup_duplicates.py` is a work in progress and not ready for general use
+- No mobile-responsive layout yet
 
 ---
 

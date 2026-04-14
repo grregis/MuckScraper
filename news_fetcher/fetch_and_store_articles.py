@@ -1,10 +1,11 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/fetch_and_store_articles.py
 # news_fetcher/fetch_and_store_articles.py
 
 from aggregator import create_app, db
 from aggregator.models import Article, Outlet, Story, Topic
 from newsapi import NewsApiClient
 from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
-from news_fetcher.summarizer import summarize_story, check_ollama_status
+from news_fetcher.summarizer import summarize_story, check_ollama_status, generate_deep_report, summarize_article
 from news_fetcher.scraper import scrape_article
 from datetime import datetime
 import requests
@@ -45,6 +46,13 @@ BLOCKED_TITLE_KEYWORDS = [
     "added to npm",
     "new release:",
     "changelog:",
+    "box office",
+    "box score",
+    "game recap",
+    "highlights:",
+    "traded to",
+    "signs with",
+    "scores in",
 ]
 
 
@@ -108,12 +116,62 @@ def normalize_url(url):
         return url
 
 
+def detect_duplicate_outlet_content(content, outlet_id, exclude_article_id=None):
+    """
+    Check if scraped content is near-identical to other articles from the same outlet.
+    This catches login/error pages that return the same HTML for every blocked request.
+    Returns (is_duplicate: bool, reason: str or None).
+    """
+    if not content or not outlet_id:
+        return False, None
+
+    from news_fetcher.scraper import sanitize_html
+    import re
+
+    def strip_to_text(html, max_chars=2000):
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text[:max_chars]
+
+    clean_new = strip_to_text(content)
+    if len(clean_new) < 100:
+        return False, None
+
+    from difflib import SequenceMatcher
+
+    recent = Article.query.filter(
+        Article.outlet_id == outlet_id,
+        Article.content != None,
+        Article.content != "",
+    )
+    if exclude_article_id:
+        recent = recent.filter(Article.id != exclude_article_id)
+    recent = recent.order_by(Article.id.desc()).limit(10).all()
+
+    match_count = 0
+    for article in recent:
+        if not article.content:
+            continue
+        clean_existing = strip_to_text(article.content)
+        if len(clean_existing) < 100:
+            continue
+        ratio = SequenceMatcher(None, clean_new, clean_existing).ratio()
+        if ratio > 0.85:
+            match_count += 1
+
+    if match_count >= 2:
+        reason = f"Bad scrape: content near-identical to {match_count} other articles from same outlet (login/error page)"
+        return True, reason
+
+    return False, None
+
+
 def store_articles(articles_data, topic_name):
     """
     Store a list of normalized article dicts into the database,
     tagging them with the given topic.
     articles_data: list of dicts with keys:
-        title, content, url, source_name, published_at
+        title, content, url, source_name, published_at, image_url
     """
     stored = 0
 
@@ -128,6 +186,7 @@ def store_articles(articles_data, topic_name):
         raw_url      = article.get("url")
         source_name  = article.get("source_name", "Unknown")
         published_at = article.get("published_at", datetime.utcnow())
+        image_url    = article.get("image_url")
 
         if not title or not raw_url:
             continue
@@ -173,11 +232,13 @@ def store_articles(articles_data, topic_name):
 
         # Generate embedding for this article
         # Use title + first 500 chars of content for better semantic matching
-        text_for_embedding = f"{title} {content[:500]}"
+        from news_fetcher.summarizer import strip_html
+        text_for_embedding = f"{title} {strip_html(content)[:400]}"
         article_embedding = get_embedding(text_for_embedding)
         
         story = find_or_create_story(title, db, Story, recent_stories,
-                                     article_embedding=article_embedding)
+                                     article_embedding=article_embedding,
+                                     article_content=content)
 
         # Add new story to recent_stories so subsequent articles
         # in this same batch can match against it
@@ -197,7 +258,25 @@ def store_articles(articles_data, topic_name):
                 story.topics.append(classified_topic)
 
         scraped_content = scrape_article(url)
-        final_content = scraped_content if scraped_content else content
+        if scraped_content:
+            # Check if this looks like a duplicate login/error page across the outlet
+            is_dup, dup_reason = detect_duplicate_outlet_content(scraped_content, outlet.id)
+            if is_dup:
+                logger.warning(f"  [Scraper] {dup_reason} — clearing content and blocking domain for {url[:60]}")
+                from news_fetcher.scraper import add_to_blocklist
+                add_to_blocklist(url, dup_reason)
+                scraped_content = None
+
+        if scraped_content:
+            final_content = scraped_content
+        else:
+            from news_fetcher.scraper import sanitize_html
+            final_content = sanitize_html(f"<div>{content}</div>") if content else ""
+
+        # Ensure embedding is a list, not a string
+        if isinstance(article_embedding, str):
+            import json
+            article_embedding = json.loads(article_embedding)
 
         new_article = Article(
             title=title,
@@ -209,6 +288,7 @@ def store_articles(articles_data, topic_name):
             date=published_at,
             fetched_at=datetime.utcnow(),
             bias_score=outlet.bias_score,
+            image_url=image_url,
             embedding=article_embedding
         )
 
@@ -228,6 +308,10 @@ def store_articles(articles_data, topic_name):
             headline = generate_story_headline(story)
             if headline:
                 story.headline = headline
+        else:
+            # For single-article stories, ensure story headline is cleared
+            # so the UI falls back to story.title (original article title)
+            story.headline = None
                 
         stored += 1
 
@@ -283,6 +367,7 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
                 "url":          a.get("url"),
                 "source_name":  (a.get("source") or {}).get("name", "Unknown"),
                 "published_at": published_at,
+                "image_url":    a.get("urlToImage"),
             })
 
         store_articles(normalized, topic_name)
@@ -362,6 +447,7 @@ def fetch_gnews(topic_name, query=None, category=None):
                 "url":          a.get("url"),
                 "source_name":  source.get("name", "Unknown"),
                 "published_at": published_at,
+                "image_url":    a.get("image"),
             })
 
         store_articles(normalized, topic_name)
@@ -412,7 +498,7 @@ def regroup_ungrouped_stories():
             continue
 
         # Try to match to an existing multi-article story
-        matched = find_matching_story(article.title, article.embedding, multi_article_stories)
+        matched = find_matching_story(article.title, article.embedding, multi_article_stories, article_content=article.content)
 
         if matched and matched.id != story.id:
             logger.info(f"  [Re-group] Merging '{story.title}' into '{matched.title}'")
@@ -468,6 +554,41 @@ def retry_unsummarized_stories(batch_size=10):
     logger.info("Finished summarization batch.")
 
 
+def generate_missing_deep_reports(batch_size=5):
+    """Find multi-article stories picked for headlines that don't have deep reports."""
+    if not check_ollama_status():
+        logger.info("Ollama offline, skipping deep report generation.")
+        return
+
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(days=2)
+
+    # Only target stories with a headline_score > 0 (meaning they were picked by the ranker)
+    undissected = Story.query.join(Article).group_by(Story.id).having(
+        func.count(Article.id) >= 2
+    ).filter(
+        Story.headline_score > 0,
+        Story.created_at >= cutoff,
+        (Story.deep_report == None) | (Story.deep_report == "")
+    ).order_by(Story.headline_score.desc()).limit(batch_size).all()
+
+    if not undissected:
+        logger.info("No headline stories need deep reports.")
+        return
+
+    logger.info(f"Generating deep reports for {len(undissected)} headline stories...")
+    from news_fetcher.summarizer import generate_deep_report
+    for story in undissected:
+        report = generate_deep_report(story)
+        if report:
+            story.deep_report = report
+            logger.info(f"  Generated deep report for: {story.title[:60]}")
+    
+    db.session.commit()
+    logger.info("Finished deep report batch.")
+
+
 def generate_missing_embeddings(batch_size=50):
     """Generate embeddings for articles that don't have one yet."""
     from news_fetcher.story_grouper import get_embedding
@@ -492,6 +613,130 @@ def generate_missing_embeddings(batch_size=50):
     logger.info(f"Generated {count} embeddings.")
 
 
+def audit_existing_scrapes(batch_size=200):
+    """
+    Scan all stored article content for bad scrapes — login walls, captchas,
+    bot detection pages, and outlet-level duplicate content.
+    Clears bad content and adds offending domains to the blocklist.
+    """
+    from news_fetcher.scraper import detect_bad_scrape, get_domain, add_to_blocklist
+    import re
+
+    articles = Article.query.filter(
+        Article.content != None,
+        Article.content != ""
+    ).order_by(Article.outlet_id, Article.id).all()
+
+    logger.info(f"[Audit] Scanning {len(articles)} articles for bad scrapes...")
+
+    cleared = 0
+    auto_blocked = set()
+
+    for i, article in enumerate(articles):
+        if not article.content:
+            continue
+
+        domain = get_domain(article.url)
+
+        # If domain was already flagged this run, just clear the content
+        if domain and domain in auto_blocked:
+            article.content = None
+            cleared += 1
+            continue
+
+        # Strong/weak indicator check
+        is_bad, reason = detect_bad_scrape(article.content)
+        if is_bad:
+            logger.info(f"  [Audit] Bad scrape detected: {article.title[:60]} — {reason}")
+            article.content = None
+            cleared += 1
+            if domain:
+                add_to_blocklist(article.url, reason)
+                auto_blocked.add(domain)
+            continue
+
+        # Duplicate content check
+        is_dup, dup_reason = detect_duplicate_outlet_content(
+            article.content, article.outlet_id, exclude_article_id=article.id
+        )
+        if is_dup:
+            logger.info(f"  [Audit] Duplicate scrape detected: {article.title[:60]} — {dup_reason}")
+            article.content = None
+            cleared += 1
+            if domain:
+                add_to_blocklist(article.url, dup_reason)
+                auto_blocked.add(domain)
+            continue
+
+        # Commit in batches
+        if (i + 1) % batch_size == 0:
+            db.session.commit()
+            logger.info(f"  [Audit] Progress: {i + 1}/{len(articles)}, cleared {cleared} so far")
+
+    db.session.commit()
+    logger.info(f"[Audit] Complete. Cleared {cleared} articles, auto-blocked {len(auto_blocked)} domains.")
+
+
+def force_resummarize_all(batch_size=20):
+    """
+    Force re-generate summaries and deep reports for all stories and articles
+    using the updated specialized journalist personas.
+    """
+    if not check_ollama_status():
+        logger.info("Ollama offline, skipping force re-summarization.")
+        return
+
+    logger.info("=== Force re-summarization starting ===")
+    
+    # 1. Update Story Summaries
+    stories = Story.query.all()
+    logger.info(f"Re-summarizing {len(stories)} stories...")
+    for i, story in enumerate(stories):
+        if not story.articles:
+            continue
+        summary = summarize_story(story)
+        if summary:
+            story.summary = summary
+        
+        if (i + 1) % batch_size == 0:
+            db.session.commit()
+            logger.info(f"  Progress (Stories): {i+1}/{len(stories)}")
+    
+    db.session.commit()
+
+    # 2. Update Deep Reports
+    from sqlalchemy import func
+    multi_article_stories = Story.query.join(Article).group_by(Story.id).having(
+        func.count(Article.id) >= 2
+    ).all()
+    logger.info(f"Re-analyzing {len(multi_article_stories)} multi-article stories (Deep Reports)...")
+    for i, story in enumerate(multi_article_stories):
+        report = generate_deep_report(story)
+        if report:
+            story.deep_report = report
+        
+        if (i + 1) % 5 == 0: # Deep reports are slower
+            db.session.commit()
+            logger.info(f"  Progress (Deep Reports): {i+1}/{len(multi_article_stories)}")
+            
+    db.session.commit()
+
+    # 3. Update Article Summaries
+    articles = Article.query.filter(Article.content != None).all()
+    logger.info(f"Re-summarizing {len(articles)} articles...")
+    for i, article in enumerate(articles):
+        summary = summarize_article(article)
+        if summary:
+            article.summary = summary
+        
+        if (i + 1) % batch_size == 0:
+            db.session.commit()
+            logger.info(f"  Progress (Articles): {i+1}/{len(articles)}")
+
+    db.session.commit()
+    logger.info("=== Force re-summarization complete ===")
+
+
 def force_regroup_all():
     """
     Force re-group ALL articles using vector similarity embeddings.
@@ -505,7 +750,7 @@ def force_regroup_all():
         return
 
     logger.info("=== Force re-group starting ===")
-    print("  [Force Regroup] Step 1: Regenerating embeddings...", flush=True)
+    logger.info("  [Force Regroup] Step 1: Regenerating embeddings...")
 
     # Step 1: Regenerate embeddings for ALL articles to ensure content is included
     all_articles = Article.query.all()
@@ -520,12 +765,11 @@ def force_regroup_all():
         
         if (i + 1) % 50 == 0:
             db.session.commit()
-            logger.info(f"  Embeddings progress: {i + 1}/{len(all_articles)}")
-            print(f"  [Force Regroup] Embeddings progress: {i + 1}/{len(all_articles)}", flush=True)
+            logger.info(f"  [Force Regroup] Embeddings progress: {i + 1}/{len(all_articles)}")
 
     db.session.commit()
     logger.info("Embeddings regenerated.")
-    print("  [Force Regroup] Step 2: Starting re-grouping loop...", flush=True)
+    logger.info("  [Force Regroup] Step 2: Starting re-grouping loop...")
 
     # Step 2: Get all articles with embeddings (should be all of them now)
     # Re-query to be safe
@@ -561,7 +805,7 @@ def force_regroup_all():
     try:
         for i, article in enumerate(all_articles):
             matched = find_matching_story(
-                article.title, article.embedding, new_stories
+                article.title, article.embedding, new_stories, article_content=article.content
             )
 
             if matched:
@@ -597,8 +841,7 @@ def force_regroup_all():
             # Commit in batches of 50
             if (i + 1) % 50 == 0:
                 db.session.commit()
-                logger.info(f"  Grouping progress: {i + 1}/{len(all_articles)}")
-                print(f"  [Force Regroup] Grouping progress: {i + 1}/{len(all_articles)}", flush=True)
+                logger.info(f"  [Force Regroup] Grouping progress: {i + 1}/{len(all_articles)}")
 
     except Exception as e:
         logger.error(f"  [Force Regroup] CRITICAL ERROR: {e}")
@@ -611,7 +854,7 @@ def force_regroup_all():
 
     # Step 5: Generate headlines for all multi-article stories
     logger.info("Generating AI headlines for regrouped stories...")
-    print("  [Force Regroup] Step 3: Generating AI headlines...", flush=True)
+    logger.info("  [Force Regroup] Step 3: Generating AI headlines...")
     generate_missing_headlines()
 
     logger.info(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
@@ -675,6 +918,7 @@ def ollama_catchup():
     while Ollama was offline.
     """
     logger.info("=== Ollama catchup starting ===")
+    audit_existing_scrapes()
     generate_missing_embeddings(batch_size=50)
     generate_missing_headlines()
     regroup_ungrouped_stories()
@@ -715,4 +959,4 @@ def fetch_and_store_articles(topic_name, mode="top", query=None,
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        fetch_and_store_articles("US Headlines")
+        fetch_and_store_articles("US Politics")

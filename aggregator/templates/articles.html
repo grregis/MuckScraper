@@ -1,3 +1,4 @@
+<!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -9,52 +10,53 @@
             --accent-dark:   #7a2d88;
 
             /* Light mode */
-            --bg:            #f4f4f4;
+            --bg:            #f8f9fa;
             --surface:       #ffffff;
             --sidebar-bg:    #1e1e2e;
             --sidebar-text:  #cdd6f4;
             --sidebar-muted: #888;
             --sidebar-hover: #ffffff;
             --sidebar-active-bg: #2a2a3e;
-            --text:          #222;
-            --text-muted:    #666;
-            --text-faint:    #999;
-            --border:        #f0f0f0;
-            --summary-bg:    #f8f9ff;
-            --input-border:  #ccc;
-            --btn-muted-bg:  #eee;
-            --btn-muted-text:#555;
-            --shadow:        rgba(0,0,0,0.08);
+            --text:          #1a1a1a;
+            --text-muted:    #555;
+            --text-faint:    #888;
+            --border:        #eef0f2;
+            --summary-bg:    #fdfbff;
+            --input-border:  #dde1e7;
+            --btn-muted-bg:  #f0f2f5;
+            --btn-muted-text:#4a5568;
+            --shadow:        0 2px 8px rgba(0,0,0,0.05);
             --menu-bg:       #ffffff;
         }
 
         [data-theme="dark"] {
-            --bg:            #13131f;
-            --surface:       #1e1e2e;
+            --bg:            #0f0f17;
+            --surface:       #1a1a26;
             --sidebar-bg:    #111120;
             --sidebar-text:  #cdd6f4;
             --sidebar-muted: #666;
             --sidebar-hover: #ffffff;
             --sidebar-active-bg: #2a2a3e;
-            --text:          #cdd6f4;
-            --text-muted:    #888;
-            --text-faint:    #666;
-            --border:        #2a2a3e;
-            --summary-bg:    #252535;
-            --input-border:  #444;
-            --btn-muted-bg:  #2a2a3e;
-            --btn-muted-text:#aaa;
-            --shadow:        rgba(0,0,0,0.3);
+            --text:          #e2e8f0;
+            --text-muted:    #a0aec0;
+            --text-faint:    #718096;
+            --border:        #2d2d3f;
+            --summary-bg:    #222230;
+            --input-border:  #3f3f5a;
+            --btn-muted-bg:  #2d2d3f;
+            --btn-muted-text:#cbd5e0;
+            --shadow:        0 4px 12px rgba(0,0,0,0.25);
             --menu-bg:       #1e1e2e;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
             transition: background 0.2s, color 0.2s;
+            -webkit-font-smoothing: antialiased;
         }
 
         .layout {
@@ -64,8 +66,8 @@
 
         /* ── Sidebar ── */
         .sidebar {
-            width: 220px;
-            min-width: 220px;
+            width: 240px;
+            min-width: 240px;
             background: var(--sidebar-bg);
             color: var(--sidebar-text);
             display: flex;
@@ -74,14 +76,14 @@
             top: 0;
             height: 100vh;
             overflow-y: auto;
-            box-shadow: 3px 0 12px rgba(164, 60, 181, 0.25);
+            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
             z-index: 10;
-            transition: width 0.3s ease, min-width 0.3s ease;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar.collapsed {
-            width: 60px;
-            min-width: 60px;
+            width: 68px;
+            min-width: 68px;
         }
 
         .sidebar-inner {
@@ -93,13 +95,13 @@
         }
 
         .sidebar h2 {
-            font-size: 13px;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.2px;
             color: var(--accent-light);
-            padding: 0 20px 12px 20px;
-            border-bottom: 1px solid #333;
-            margin-bottom: 12px;
+            padding: 0 24px 12px 24px;
+            margin-bottom: 8px;
             white-space: nowrap;
             transition: opacity 0.2s;
         }
@@ -113,114 +115,97 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 4px 12px 4px 0;
-            border-left: 3px solid transparent;
+            padding: 2px 16px 2px 0;
+            border-left: 4px solid transparent;
             white-space: nowrap;
             overflow: hidden;
+            transition: all 0.2s;
         }
 
         .topic-block.active {
-            border-left: 3px solid var(--accent);
+            border-left: 4px solid var(--accent);
             background: var(--sidebar-active-bg);
         }
 
         .topic-block a {
             flex: 1;
-            padding: 8px 8px 8px 17px;
+            padding: 10px 12px 10px 20px;
             color: var(--sidebar-text);
             text-decoration: none;
             font-size: 14px;
-            transition: padding 0.3s;
+            font-weight: 500;
         }
         
         .sidebar.collapsed .topic-block a {
-            padding-left: 20px; /* Center simplistic icon if needed, or just text */
-            opacity: 0; /* Hide text in collapsed mode */
+            padding-left: 0;
+            text-align: center;
         }
         
-        /* Show first letter or icon when collapsed? For now simply hide text 
-           and let user hover or expand. Or better, keep sidebar purely for 
-           collapsing to maximize screen space. */
         .sidebar.collapsed .topic-block {
              justify-content: center;
              padding: 4px 0;
         }
-        .sidebar.collapsed .topic-block a {
-            opacity: 1;
-            text-align: center;
-            padding: 8px;
-            font-size: 16px; 
-            /* Show first letter as icon trick */
-            width: 100%;
-            overflow: hidden;
-            text-overflow: clip;
-        }
-        
         .sidebar.collapsed .topic-block a span.full-text { display: none; }
-        .sidebar.collapsed .topic-block a span.icon-text { display: block; font-weight: bold; color: var(--accent-light); }
-        
-        /* Normal state: hide icon text */
+        .sidebar.collapsed .topic-block a span.icon-text { display: block; font-weight: 800; color: var(--accent-light); font-size: 15px; }
         .topic-block a span.icon-text { display: none; }
 
-
-        .topic-block.active a { color: var(--accent-light); font-weight: bold; }
-        .topic-block a:hover  { color: var(--sidebar-hover); }
+        .topic-block.active a { color: var(--accent-light); }
+        .topic-block:hover { background: rgba(255, 255, 255, 0.05); }
 
         .sidebar-divider {
             border: none;
-            border-top: 1px solid #2a2a3a;
-            margin: 4px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            margin: 8px 24px;
         }
-        .sidebar.collapsed .sidebar-divider { margin: 4px 5px; }
+        .sidebar.collapsed .sidebar-divider { margin: 8px 12px; }
 
         .sidebar-footer {
             margin-top: auto;
-            border-top: 1px solid #333;
-            padding: 12px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 16px 24px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
         
-        .sidebar.collapsed .sidebar-footer {
-            padding: 12px 5px;
-            align-items: center;
-        }
-        
-        .sidebar.collapsed .sidebar-footer span { display: none; } /* Hide labels */
+        .sidebar.collapsed .sidebar-footer { padding: 16px 0; align-items: center; }
+        .sidebar.collapsed .sidebar-footer span { display: none; }
 
         .ollama-status {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 12px;
+            gap: 10px;
+            font-size: 11px;
+            font-weight: 600;
             color: var(--sidebar-muted);
             white-space: nowrap;
         }
 
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background: #555;
             flex-shrink: 0;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.05);
         }
 
-        .status-dot.online  { background: #a6e3a1; }
+        .status-dot.online  { background: #a6e3a1; box-shadow: 0 0 8px rgba(166, 227, 161, 0.4); }
         .status-dot.offline { background: #f38ba8; }
         
-        /* Toggle Button */
         .sidebar-toggle-btn {
             background: none;
             border: none;
             color: var(--sidebar-muted);
             cursor: pointer;
-            padding: 10px;
+            padding: 12px;
             align-self: flex-end;
-            margin-right: 10px;
-            font-size: 16px;
+            margin-right: 12px;
+            font-size: 18px;
+            border-radius: 8px;
+            transition: background 0.2s;
         }
-        .sidebar-toggle-btn:hover { color: var(--sidebar-hover); }
+        .sidebar-toggle-btn:hover { background: rgba(255,255,255,0.05); color: var(--sidebar-hover); }
         .sidebar.collapsed .sidebar-toggle-btn {
             align-self: center;
             margin-right: 0;
@@ -230,8 +215,8 @@
         /* ── Main area ── */
         .main {
             flex: 1;
-            padding: 30px 40px;
-            max-width: 900px;
+            padding: 0 40px;
+            max-width: 1000px;
             position: relative;
         }
 
@@ -239,78 +224,87 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
             gap: 12px;
-            position: sticky; /* Sticky header */
+            position: sticky;
             top: 0;
-            background: var(--bg);
+            background: rgba(248, 249, 250, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 5;
-            padding-bottom: 10px;
-            padding-top: 10px;
-            margin-top: -10px; /* Offset padding */
+            padding: 24px 0;
+            margin-bottom: 20px;
+        }
+        
+        [data-theme="dark"] .main-header {
+            background: rgba(15, 15, 23, 0.85);
         }
 
-        h1 { font-size: 24px; color: var(--accent); }
+        h1 { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
 
         .header-controls {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
         .theme-toggle {
             background: var(--surface);
             border: 1px solid var(--input-border);
             color: var(--text);
-            padding: 6px 12px;
-            border-radius: 20px;
+            padding: 8px 16px;
+            border-radius: 12px;
             cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
             white-space: nowrap;
-            flex-shrink: 0;
-            transition: background 0.2s, color 0.2s;
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
         }
 
         .theme-toggle:hover {
             border-color: var(--accent);
             color: var(--accent);
+            transform: translateY(-1px);
         }
 
-        /* Action Menu (Hamburger) */
-        .action-menu-container {
-            position: relative;
-        }
-
+        /* Action Menu */
         .icon-btn {
             background: var(--surface);
             border: 1px solid var(--input-border);
             color: var(--text);
-            padding: 6px 12px;
-            border-radius: 20px;
+            padding: 0;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
+            font-size: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 32px;
-            width: 32px;
+            height: 36px;
+            width: 36px;
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
         }
-        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 
         .action-dropdown {
             position: absolute;
-            top: 40px;
+            top: 70px;
             right: 0;
             background: var(--menu-bg);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            box-shadow: 0 4px 12px var(--shadow);
-            width: 200px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            width: 220px;
             display: none;
             flex-direction: column;
-            padding: 8px 0;
+            padding: 8px;
             z-index: 100;
+            animation: slideDown 0.2s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .action-dropdown.show { display: flex; }
@@ -319,140 +313,187 @@
             background: none;
             border: none;
             color: var(--text);
-            padding: 8px 16px;
+            padding: 10px 14px;
             text-align: left;
             cursor: pointer;
             font-size: 13px;
+            font-weight: 500;
             width: 100%;
+            border-radius: 8px;
+            transition: all 0.2s;
         }
-        .menu-item:hover { background: var(--bg); color: var(--accent); }
+        .menu-item:hover { background: var(--btn-muted-bg); color: var(--accent); }
         
         .menu-divider {
             height: 1px;
             background: var(--border);
-            margin: 4px 0;
+            margin: 6px 4px;
         }
 
         .active-topic-label {
-            font-size: 13px;
+            font-size: 14px;
+            font-weight: 600;
             color: var(--accent-light);
-            margin-bottom: 20px;
-            font-style: italic;
+            margin-bottom: 24px;
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(164, 60, 181, 0.1);
+            border-radius: 20px;
         }
 
         .search-bar {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 8px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .search-bar input {
-            padding: 8px 12px;
-            width: 300px;
+            padding: 12px 16px;
+            flex: 1;
+            max-width: 400px;
             font-size: 15px;
             border: 1px solid var(--input-border);
-            border-radius: 4px;
+            border-radius: 12px;
             background: var(--surface);
             color: var(--text);
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
+        }
+        
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(164, 60, 181, 0.15);
         }
 
         .search-bar button {
-            padding: 8px 16px;
+            padding: 12px 24px;
             font-size: 15px;
+            font-weight: 600;
             background: var(--accent);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 12px;
             cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(164, 60, 181, 0.3);
         }
 
-        .search-bar button:hover { background: var(--accent-dark); }
+        .search-bar button:hover { background: var(--accent-dark); transform: translateY(-1px); }
 
-        .hint { font-size: 12px; color: var(--text-faint); margin-bottom: 24px; }
+        .hint { font-size: 12px; color: var(--text-faint); margin-bottom: 32px; margin-left: 4px; }
 
         /* ── Story cards ── */
         .story {
             background: var(--surface);
-            border-radius: 6px;
-            padding: 16px 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px var(--shadow);
+            border-radius: 16px;
+            padding: 0;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .story:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+        }
+
+        .story-layout {
+            display: flex;
+            gap: 0;
+        }
+
+        .story-image {
+            width: 280px;
+            min-width: 280px;
+            height: auto;
+            min-height: 200px;
+            background: var(--btn-muted-bg);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .story-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+        
+        .story:hover .story-image img {
+            transform: scale(1.05);
+        }
+        
+        .story-content {
+            flex: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
         }
 
         .story-header {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            margin-bottom: 10px;
-            gap: 12px;
+            margin-bottom: 12px;
+            gap: 16px;
         }
 
-        .story h2 { font-size: 17px; color: var(--text); }
+        .story h2 { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.3; letter-spacing: -0.3px; }
 
         .summary {
             background: var(--summary-bg);
-            border-left: 3px solid var(--accent);
-            padding: 10px 14px;
-            margin-bottom: 12px;
+            border-left: 4px solid var(--accent);
+            padding: 16px;
+            margin-bottom: 20px;
             font-size: 14px;
             line-height: 1.6;
             color: var(--text);
-            border-radius: 0 4px 4px 0;
+            border-radius: 0 12px 12px 0;
         }
 
         .summary-label {
-            font-size: 11px;
-            font-weight: bold;
+            font-size: 10px;
+            font-weight: 800;
             text-transform: uppercase;
-            color: var(--accent-light);
-            letter-spacing: 0.5px;
-            margin-bottom: 5px;
+            color: var(--accent);
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
         }
 
-        .summary p           { margin-bottom: 0.7em; }
+        .summary p           { margin-bottom: 0.8em; }
         .summary p:last-child { margin-bottom: 0; }
 
         .summary-section-label {
-            color: var(--accent-light);
+            color: var(--accent);
             font-size: 13px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .story ul.summary-bullets {
-            margin: 4px 0 0.7em 1.2em;
+            margin: 8px 0 0.8em 1.2em;
             list-style: disc;
-        }
-
-        .summary-bullets li {
-            margin-bottom: 0.3em;
-            font-size: 14px;
-            line-height: 1.5;
-            border-bottom: none !important;
-            padding: 0 !important;
-            display: list-item !important;
-        }
-
-        .no-summary {
-            font-size: 13px;
-            color: var(--text-faint);
-            font-style: italic;
-            margin-bottom: 10px;
         }
 
         .btn {
             display: inline-block;
             border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
+            transition: all 0.2s;
         }
 
         .btn-dark         { background: var(--accent); color: white; }
-        .btn-dark:hover   { background: var(--accent-dark); }
+        .btn-dark:hover   { background: var(--accent-dark); transform: translateY(-1px); }
         .btn-muted        { background: var(--btn-muted-bg); color: var(--btn-muted-text); }
         .btn-muted:hover  { background: var(--input-border); }
         .btn-orange       { background: #fab387; color: #1e1e2e; }
@@ -460,39 +501,49 @@
 
         .action-row {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin-bottom: 12px;
+            margin-bottom: 20px;
         }
 
-        .story ul { list-style: none; padding: 0; }
+        .story ul.article-list { list-style: none; padding: 0; }
 
-        .story ul li {
-            padding: 6px 0;
+        .story ul.article-list li {
+            padding: 12px 0;
             font-size: 14px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 4px;
+            gap: 8px;
         }
 
-        .story ul li:last-child { border-bottom: none; }
+        .story ul.article-list li:last-child { border-bottom: none; }
 
-        .article-title       { color: var(--text); text-decoration: none; }
+        .article-title {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            line-height: 1.4;
+            flex-basis: 100%;
+            margin-bottom: 4px;
+        }
         .article-title:hover { color: var(--accent); text-decoration: underline; }
 
-        .full-text-link       { font-size: 11px; color: var(--accent-light); text-decoration: none; margin-left: 4px; }
+        .full-text-link       { font-size: 12px; font-weight: 600; color: var(--accent-light); text-decoration: none; }
         .full-text-link:hover { text-decoration: underline; }
 
-        .outlet-name { color: var(--text-muted); font-size: 12px; }
+        .outlet-name { color: var(--text-muted); font-size: 13px; font-weight: 500; }
 
         .bias-tag {
             display: inline-block;
             font-size: 10px;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 3px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .bias-1    { background-color: #1a6bb5; color: white; }
@@ -502,32 +553,43 @@
         .bias-5    { background-color: #b51a1a; color: white; }
         .bias-none { background-color: #ddd;    color: #666;  }
 
-        .article-actions { margin-left: auto; display: flex; gap: 4px; }
+        .article-actions { margin-left: auto; display: flex; gap: 8px; }
 
-        .empty { color: var(--text-faint); font-style: italic; margin-top: 40px; }
+        .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
 
         .pagination {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 16px;
-            padding: 20px 0 40px 0;
+            gap: 24px;
+            padding: 40px 0 80px 0;
         }
 
         .page-btn {
-            background: var(--accent);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--input-border);
+            padding: 10px 20px;
+            border-radius: 12px;
             text-decoration: none;
             font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
         }
 
-        .page-btn:hover { background: var(--accent-dark); }
+        .page-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 
         .page-info {
             font-size: 14px;
+            font-weight: 600;
             color: var(--text-muted);
+        }
+
+        @media (max-width: 900px) {
+            .story-layout { flex-direction: column; }
+            .story-image { width: 100%; height: 200px; min-width: unset; }
+            .main { padding: 0 20px; }
         }
     </style>
 </head>
@@ -540,13 +602,13 @@
         
         <div class="sidebar-inner">
             <div class="topic-block {% if not active_label and not is_multi_view %}active{% endif %}">
-                <a href="/articles">
+                <a href="{{ url_for('admin.list_articles') }}">
                     <span class="full-text">All Stories</span>
                     <span class="icon-text">ALL</span>
                 </a>
             </div>
             <div class="topic-block {% if is_multi_view %}active{% endif %}">
-                <a href="/multi-stories">
+                <a href="{{ url_for('admin.multi_article_stories') }}">
                     <span class="full-text">Grouped Stories</span>
                     <span class="icon-text">GRP</span>
                 </a>
@@ -557,19 +619,17 @@
 
             {% for topic in topics %}
             <div class="topic-block {% if active_label == topic.label %}active{% endif %}">
-                <a href="/articles?topic={{ topic.label | urlencode }}">
+                <a href="{{ url_for('admin.list_articles', topic=topic.label) }}">
                     <span class="full-text">{{ topic.label }}</span>
-                    <!-- Simple heuristic: first letter of topic -->
                     <span class="icon-text">{{ topic.label[0] }}</span>
                 </a>
             </div>
-            <hr class="sidebar-divider">
             {% endfor %}
 
             <div class="sidebar-footer">
                 <div class="ollama-status">
                     <div class="status-dot" id="ollama-dot"></div>
-                    <span id="ollama-label">Checking Ollama...</span>
+                    <span id="ollama-label">Ollama Status</span>
                 </div>
             </div>
         </div>
@@ -585,211 +645,232 @@
                 <div class="action-menu-container">
                     <button class="icon-btn" onclick="toggleActionMenu()">☰</button>
                     <div class="action-dropdown" id="action-dropdown">
-                        <form method="POST" action="/wake-ollama">
+                        <form method="POST" action="{{ url_for('admin.wake_ollama') }}">
                             <input type="hidden" name="label" value="{{ active_label or '' }}">
                             <button type="submit" class="menu-item">⚡ Wake Ollama</button>
                         </form>
-                        <form method="POST" action="/ollama-catchup">
+                        <form method="POST" action="{{ url_for('admin.ollama_catchup_route') }}">
                             <input type="hidden" name="label" value="{{ active_label or '' }}">
                             <button type="submit" class="menu-item">↻ Ollama Catchup</button>
                         </form>
-                        <form method="POST" action="/scrape-all-missing">
+                        <form method="POST" action="{{ url_for('admin.scrape_all_missing') }}">
                             <input type="hidden" name="label" value="{{ active_label or '' }}">
                             <button type="submit" class="menu-item">↻ Scrape Missing</button>
                         </form>
                         
                         <div class="menu-divider"></div>
                         
-                        <form method="POST" action="/force-regroup">
+                        <form method="POST" action="{{ url_for('admin.force_regroup') }}">
                             <input type="hidden" name="label" value="{{ active_label or '' }}">
                             <button type="submit" class="menu-item">⚡ Force Re-group</button>
                         </form>
-                        <form method="POST" action="/reclassify-articles">
+                        <form method="POST" action="{{ url_for('admin.force_resummarize') }}">
+                            <input type="hidden" name="label" value="{{ active_label or '' }}">
+                            <button type="submit" class="menu-item">⚡ Force Re-summarize</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin.reclassify_articles') }}">
                             <input type="hidden" name="label" value="{{ active_label or '' }}">
                             <button type="submit" class="menu-item">↻ Reclassify Topics</button>
                         </form>
+
+                        <div class="menu-divider"></div>
+
+                        <a href="/scrape-blocklist" class="menu-item" style="text-decoration:none;">🚫 Scrape Blocklist</a>
+                        <form method="POST" action="/audit-scrapes">
+                            <button type="submit" class="menu-item">⚡ Audit Bad Scrapes</button>
+                        </form>
+                        
+                        <div class="menu-divider"></div>
+                        
+                        <a href="{{ url_for('auth.logout') }}" class="menu-item" style="text-decoration:none;">🚪 Logout</a>
                     </div>
                 </div>
             </div>
         </div>
 
         {% if active_label %}
-            <p class="active-topic-label">Showing: {{ active_label }}</p>
+            <span class="active-topic-label">{{ active_label }}</span>
         {% endif %}
 
-        <form method="POST" action="/fetch" class="search-bar">
+        <form method="POST" action="{{ url_for('admin.fetch_articles') }}" class="search-bar">
             <input type="hidden" name="mode" value="query">
             <input type="text" name="query" placeholder="Search a topic e.g. climate, AI ...">
             <button type="submit">Fetch Articles</button>
         </form>
-        <p class="hint">Type a topic and click Fetch, or use the sidebar links</p>
+        <p class="hint">Search for news, or browse topics in the sidebar</p>
 
         {% if not is_multi_view %}
-        <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 13px; color: var(--text-muted);">Show single-article stories:</span>
-            <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}show_single={{ 'false' if show_single else 'true' }}&page=1"
-               style="font-size: 13px; color: var(--accent); text-decoration: none;">
-                {{ '✓ On' if show_single else '✗ Off' }}
+        <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 10px; margin-left: 4px;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Show single-article stories:</span>
+            <a href="{{ url_for('admin.list_articles', topic=active_label, show_single='false' if show_single else 'true', page=1) }}"
+               style="font-size: 13px; font-weight: 700; color: var(--accent); text-decoration: none;">
+                {{ '✓ ON' if show_single else '✗ OFF' }}
             </a>
         </div>
         {% endif %}
 
         {% if stories %}
             {% for story in stories %}
-            <div class="story">
-
-                <div class="story-header">
-                    <h2>{{ story.headline if story.headline else story.title }}</h2>
-                    {% if story.headline %}
-                    <span style="font-size:11px; color:var(--text-faint); font-style:italic;">AI headline</span>
-                    {% endif %}
-                </div>
-                
-                <div style="font-size: 11px; color: var(--text-faint); margin-bottom: 12px;">
-                    {% set latest_article = story.articles|sort(attribute='date', reverse=True)|first %}
-                    {% if latest_article %}
-                        Last updated: <span class="local-date" data-utc="{{ latest_article.date.isoformat() }}Z">{{ latest_article.date.strftime('%Y-%m-%d %H:%M') }}</span>
-                    {% endif %}
-                </div>
-
-                {% if story.summary and story.summary != story.title %}
-                    <div class="summary">
-                        <div class="summary-label">AI Summary</div>
-                        {% set in_bullets = [] %}
-                        {% for line in story.summary.split('\n') %}
-                            {% set l = line.strip() %}
-                            {% if l %}
-                                {% if l.startswith('•') %}
-                                    {% if not in_bullets %}
-                                        <ul class="summary-bullets">
-                                        {% set _ = in_bullets.append(1) %}
-                                    {% endif %}
-                                    <li>{{ l[1:].strip() }}</li>
-                                {% else %}
-                                    {% if in_bullets %}
-                                        </ul>
-                                        {% set _ = in_bullets.clear() %}
-                                    {% endif %}
-                                    {% if ':' in l and l.split(':')[0].strip()|length < 30 %}
-                                        {% set label = l.split(':', 1)[0].strip() %}
-                                        {% set rest = l.split(':', 1)[1].strip() %}
-                                        <p><strong class="summary-section-label">{{ label }}:</strong> {{ rest }}</p>
-                                    {% else %}
-                                        <p>{{ l }}</p>
-                                    {% endif %}
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-                        {% if in_bullets %}</ul>{% endif %}
-                    </div>
-                    <div class="action-row">
-                        <form method="POST" action="/summarize/{{ story.id }}">
-                            <input type="hidden" name="label" value="{{ active_label or '' }}">
-                            <button type="submit" class="btn btn-dark">↻ Re-summarize</button>
-                        </form>
-                    </div>
-                {% else %}
-                    <p class="no-summary">No summary yet.</p>
-                    <div class="action-row">
-                        <form method="POST" action="/summarize/{{ story.id }}">
-                            <input type="hidden" name="label" value="{{ active_label or '' }}">
-                            <button type="submit" class="btn btn-dark">✦ Generate Summary</button>
-                        </form>
-                    </div>
-                {% endif %}
-
-                <ul>
-                    {% for article in story.display_articles %}
-                    <li>
-                        <a class="article-title" href="{{ article.url }}" target="_blank">
-                            {{ article.title }}
-                        </a>
-
-                        {% if article.content and article.content | length > 500 %}
-                        <a class="full-text-link" href="/article/{{ article.id }}">[full text]</a>
+            <div class="story" id="story-{{ story.id }}">
+                <div class="story-layout">
+                    {% set featured_article = story.articles|selectattr('image_url')|first %}
+                    <div class="story-image">
+                        {% if featured_article and featured_article.image_url %}
+                            <img src="{{ featured_article.image_url }}" alt="Story Image" loading="lazy">
                         {% else %}
-                        <form method="POST" action="/scrape-article/{{ article.id }}" style="display:inline;">
-                            <input type="hidden" name="label" value="{{ active_label or '' }}">
-                            <button type="submit" class="full-text-link" style="background:none; border:none; cursor:pointer; padding:0;">
-                                [scrape]
-                            </button>
-                        </form>
+                            <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:40px; background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);">
+                                📰
+                            </div>
                         {% endif %}
-
-                        <span class="outlet-name">— {{ article.outlet.name }}</span>
+                    </div>
+                    
+                    <div class="story-content">
+                        <div class="story-header">
+                            <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}" style="color: inherit; text-decoration: none;">{{ story.headline if story.headline else story.title }}</a></h2>
+                        </div>
                         
-                        <div style="font-size: 11px; color: var(--text-faint); margin-top: 4px;">
-                            Published: <span class="local-date" data-utc="{{ article.date.isoformat() }}Z">{{ article.date.strftime('%Y-%m-%d %H:%M') }}</span>
-                            {% if article.fetched_at %}
-                            | Fetched: <span class="local-date" data-utc="{{ article.fetched_at.isoformat() }}Z">{{ article.fetched_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <div style="font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            {% set latest_article = story.articles|sort(attribute='date', reverse=True)|first %}
+                            {% if latest_article %}
+                                <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-light);"></span>
+                                Last updated: <span class="local-date" data-utc="{{ latest_article.date.isoformat() }}Z">{{ latest_article.date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            {% endif %}
+                            
+                            {% if story.deep_report %}
+                                <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">ANALYSIS AVAILABLE</span>
+                            {% endif %}
+
+                            {% if story.headline %}
+                                <span style="margin-left:auto; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:4px; font-style:normal;">AI HEADLINE</span>
                             {% endif %}
                         </div>
 
-                        {% if article.outlet.bias_score == 1 %}
-                            <span class="bias-tag bias-1">Outlet: Left</span>
-                        {% elif article.outlet.bias_score == 2 %}
-                            <span class="bias-tag bias-2">Outlet: Lean Left</span>
-                        {% elif article.outlet.bias_score == 3 %}
-                            <span class="bias-tag bias-3">Outlet: Center</span>
-                        {% elif article.outlet.bias_score == 4 %}
-                            <span class="bias-tag bias-4">Outlet: Lean Right</span>
-                        {% elif article.outlet.bias_score == 5 %}
-                            <span class="bias-tag bias-5">Outlet: Right</span>
+                        {% if story.articles|length > 1 %}
+                            {# Multi-article Story Uniform Layout #}
+                            <div style="margin-bottom: 20px;">
+                                <div style="font-size: 14px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                                    <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ story.articles|length }} ARTICLES</span>
+                                    <span>IN THIS STORY</span>
+                                </div>
+
+                                {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
+                                {% for art in story.articles %}
+                                    {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
+                                    {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
+                                    {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
+                                    {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
+                                    {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
+                                    {% endif %}
+                                {% endfor %}
+
+                                <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1px solid var(--border);">
+                                    <!-- Left Group -->
+                                    <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
+                                        <div style="font-size: 11px; font-weight: 800; color: #1a6bb5; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #1a6bb5; padding-bottom: 4px;">Left</div>
+                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b1 + counts.b2 }}</div>
+                                    </div>
+                                    <!-- Center Group -->
+                                    <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
+                                        <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #888; padding-bottom: 4px;">Center</div>
+                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b3 }}</div>
+                                    </div>
+                                    <!-- Right Group -->
+                                    <div style="flex: 1; text-align: center; padding: 0 5px;">
+                                        <div style="font-size: 11px; font-weight: 800; color: #b51a1a; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #b51a1a; padding-bottom: 4px;">Right</div>
+                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b4 + counts.b5 }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="action-row" style="margin-bottom: 0;">
+                                    <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="text-decoration: none; width: 100%; text-align: center; padding: 12px; font-weight: 800; letter-spacing: 1px;">
+                                        VIEW FULL COVERAGE & ANALYSIS →
+                                    </a>
+                                </div>
+                            </div>
                         {% else %}
-                            <span class="bias-tag bias-none">Outlet: Unrated</span>
+                            {# Single Article Story Layout (Original) #}
+                            <ul class="article-list">
+                                {% for article in story.display_articles %}
+                                <li>
+                                    <a class="article-title" href="{{ url_for('public.view_article', article_id=article.id) }}">
+                                        {{ article.title }}
+                                    </a>
+
+                                    <span class="outlet-name">{{ article.outlet.name }}</span>
+
+                                    <a class="full-text-link" href="{{ url_for('public.view_article', article_id=article.id) }}">Full Summary & Text →</a>
+
+                                    <div style="flex-basis: 100%; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                        {% if article.outlet.bias_score == 1 %}
+                                            <span class="bias-tag bias-1">Left</span>
+                                        {% elif article.outlet.bias_score == 2 %}
+                                            <span class="bias-tag bias-2">Lean Left</span>
+                                        {% elif article.outlet.bias_score == 3 %}
+                                            <span class="bias-tag bias-3">Center</span>
+                                        {% elif article.outlet.bias_score == 4 %}
+                                            <span class="bias-tag bias-4">Lean Right</span>
+                                        {% elif article.outlet.bias_score == 5 %}
+                                            <span class="bias-tag bias-5">Right</span>
+                                        {% else %}
+                                            <span class="bias-tag bias-none">Unrated</span>
+                                        {% endif %}
+
+                                        {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
+                                            <span style="color:var(--text-faint); font-size:10px;">•</span>
+                                            {% if article.bias_score == 1 %}
+                                                <span class="bias-tag bias-1">Article: Left</span>
+                                            {% elif article.bias_score == 2 %}
+                                                <span class="bias-tag bias-2">Article: Lean Left</span>
+                                            {% elif article.bias_score == 3 %}
+                                                <span class="bias-tag bias-3">Article: Center</span>
+                                            {% elif article.bias_score == 4 %}
+                                                <span class="bias-tag bias-4">Article: Lean Right</span>
+                                            {% elif article.bias_score == 5 %}
+                                                <span class="bias-tag bias-5">Article: Right</span>
+                                            {% endif %}
+                                        {% endif %}
+
+                                        <span class="article-actions">
+                                            <form method="POST" action="{{ url_for('admin.summarize_article_route', article_id=article.id) }}">
+                                                <input type="hidden" name="label" value="{{ active_label or '' }}">
+                                                <button type="submit" class="btn btn-muted"
+                                                    title="AI Summary">
+                                                    {{ '↻' if article.summary else '✦' }} Summary
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('admin.rate_article', article_id=article.id) }}">
+                                                <input type="hidden" name="label" value="{{ active_label or '' }}">
+                                                <button type="submit" class="btn btn-orange"
+                                                    title="Rate Bias">
+                                                    ✦ Bias
+                                                </button>
+                                            </form>
+                                        </span>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
                         {% endif %}
-
-                        {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
-                            {% if article.bias_score == 1 %}
-                                <span class="bias-tag bias-1">Article: Left</span>
-                            {% elif article.bias_score == 2 %}
-                                <span class="bias-tag bias-2">Article: Lean Left</span>
-                            {% elif article.bias_score == 3 %}
-                                <span class="bias-tag bias-3">Article: Center</span>
-                            {% elif article.bias_score == 4 %}
-                                <span class="bias-tag bias-4">Article: Lean Right</span>
-                            {% elif article.bias_score == 5 %}
-                                <span class="bias-tag bias-5">Article: Right</span>
-                            {% endif %}
-                        {% endif %}
-
-                        <span class="article-actions">
-                            <form method="POST" action="/rerank-outlet/{{ article.outlet.id }}">
-                                <input type="hidden" name="label" value="{{ active_label or '' }}">
-                                <button type="submit" class="btn btn-muted"
-                                    title="Re-rank {{ article.outlet.name }} bias via Ollama">
-                                    ↻ Outlet
-                                </button>
-                            </form>
-                            <form method="POST" action="/rate-article/{{ article.id }}">
-                                <input type="hidden" name="label" value="{{ active_label or '' }}">
-                                <button type="submit" class="btn btn-orange"
-                                    title="Rate this article's bias via Ollama">
-                                    ✦ Article
-                                </button>
-                            </form>
-                        </span>
-
-                    </li>
-                    {% endfor %}
-                </ul>
-
+                    </div>
+                </div>
             </div>
             {% endfor %}
         {% else %}
-            <p class="empty">No articles found. Use the fetch bar above or wait for the next scheduled fetch.</p>
+            <div class="empty">
+                <p>No articles found. Try fetching a new topic or check back later.</p>
+            </div>
         {% endif %}
 
         {% if total_pages > 1 %}
         <div class="pagination">
             {% if page > 1 %}
-                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}{% if not is_multi_view %}show_single={{ 'true' if show_single else 'false' }}&{% endif %}page={{ page - 1 }}" class="page-btn">← Prev</a>
+                <a href="{{ url_for('admin.list_articles', topic=active_label, show_single=show_single|string|lower, page=page-1) }}" class="page-btn">← PREVIOUS</a>
             {% endif %}
 
-            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+            <span class="page-info">PAGE {{ page }} OF {{ total_pages }}</span>
 
             {% if page < total_pages %}
-                <a href="?{% if active_label %}topic={{ active_label | urlencode }}&{% endif %}{% if not is_multi_view %}show_single={{ 'true' if show_single else 'false' }}&{% endif %}page={{ page + 1 }}" class="page-btn">Next →</a>
+                <a href="{{ url_for('admin.list_articles', topic=active_label, show_single=show_single|string|lower, page=page+1) }}" class="page-btn">NEXT →</a>
             {% endif %}
         </div>
         {% endif %}
@@ -893,6 +974,37 @@
             }
         });
     }
+
+    // ── Scroll Position ──
+    function saveStoryPosition(storyId) {
+        sessionStorage.setItem('last_story_id', storyId);
+    }
+
+    function restoreStoryPosition() {
+        const storyId = sessionStorage.getItem('last_story_id');
+        if (storyId) {
+            const el = document.getElementById('story-' + storyId);
+            if (el) {
+                setTimeout(() => {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+            sessionStorage.removeItem('last_story_id');
+        }
+    }
+
+    // Auto-save story position on any form submit within a story card
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.story').forEach(storyEl => {
+            const storyId = storyEl.id.replace('story-', '');
+            storyEl.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', function() {
+                    saveStoryPosition(storyId);
+                });
+            });
+        });
+        restoreStoryPosition();
+    });
 
     checkOllamaStatus();
     convertToLocalTime();

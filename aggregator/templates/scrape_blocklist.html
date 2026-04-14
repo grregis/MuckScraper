@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <title>Scrape Blocklist — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #a43cb5;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 900px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .audit-btn {
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 14px 20px; font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+        }
+        td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        .tag-permanent {
+            background: #b51a1a;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+        .tag-auto {
+            background: #e07b6a;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+        .unblock-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .unblock-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .empty { padding: 48px; text-align: center; color: var(--text-faint); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="/articles" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Scrape Blocklist</h1>
+    <p class="subtitle">Domains that will not be scraped. Permanent entries are pre-configured hard paywalls. Auto-blocked entries were detected at runtime.</p>
+
+    <form method="POST" action="/audit-scrapes">
+        <button type="submit" class="audit-btn">⚡ Run Scrape Audit Now</button>
+    </form>
+
+    <div class="card">
+        {% if entries %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Reason</th>
+                    <th>Added</th>
+                    <th>Type</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr>
+                    <td><strong>{{ entry.domain }}</strong></td>
+                    <td style="color: var(--text-muted);">{{ entry.reason }}</td>
+                    <td style="color: var(--text-faint); white-space: nowrap;">
+                        {{ entry.added_at.strftime('%Y-%m-%d') if entry.added_at else '—' }}
+                    </td>
+                    <td>
+                        {% if entry.is_permanent %}
+                            <span class="tag-permanent">Permanent</span>
+                        {% else %}
+                            <span class="tag-auto">Auto-blocked</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not entry.is_permanent %}
+                        <form method="POST" action="/unblock-domain" style="display:inline;">
+                            <input type="hidden" name="domain" value="{{ entry.domain }}">
+                            <button type="submit" class="unblock-btn">Unblock</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No blocked domains yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
+</body>
+</html>

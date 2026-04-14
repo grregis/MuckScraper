@@ -1,18 +1,25 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/topic_classifier.py
 # news_fetcher/topic_classifier.py
 
 import requests
 import os
 import logging
+from langfuse import Langfuse
+from langfuse.decorators import observe, langfuse_context
 
 logger = logging.getLogger(__name__)
+
+langfuse = Langfuse(
+    public_key=os.environ.get("LANGFUSE_PUBLIC_KEY", ""),
+    secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+    host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
+)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL       = os.environ.get("OLLAMA_MODEL", "")
 
 VALID_TOPICS = [
-    "US Headlines",
     "US Politics",
-    "International Headlines",
     "Science/Technology",
     "Gaming",
     "Sports",
@@ -21,6 +28,7 @@ VALID_TOPICS = [
 ]
 
 
+@observe()
 def classify_article(title, content_snippet=""):
     """
     Ask Ollama to classify an article into one or more topics.
@@ -39,22 +47,31 @@ def classify_article(title, content_snippet=""):
 
     topics_list = "\n".join(f"- {t}" for t in VALID_TOPICS if t != "Other")
 
-    prompt = f"""You are a news editor categorizing articles.
+    prompt = f"""You are a news editor categorizing articles. You must respond with ONLY category names from the list below, one per line. No other text, no notes, no explanations, no parentheses.
 
 Article: "{text}"
 
-Available categories:
-{topics_list}
-
-Which categories does this article belong to? An article can belong to multiple categories if relevant.
+Categories (choose only from these exact names):
+- US Politics
+- Science/Technology
+- Gaming
+- Sports
+- Business/Finance
+- Other
 
 Rules:
-- Only pick from the categories listed above
-- Pick as many as genuinely apply, but don't over-categorize
-- If it doesn't fit any category, respond with "Other"
-- Respond with ONLY the category names, one per line, nothing else
-- Do not include explanations or punctuation"""
+- Use EXACT category names only — do not create new categories
+- Business/Finance means financial markets, economics, corporate earnings, mergers — NOT general commerce
+- Sports contracts and player signings belong to Sports only, not Business/Finance
+- Pick the most specific category — if it's clearly Sports, do not also add other categories
+- Maximum 2 categories per article unless truly necessary
+- If none apply, respond with only: Other
+- Your entire response must be category names only — no parentheses, no notes, no commentary"""
 
+    langfuse_context.update_current_observation(
+        input=prompt,
+        metadata={"model": MODEL}
+    )
     try:
         response = requests.post(
             f"{OLLAMA_HOST}/api/generate",
@@ -68,6 +85,10 @@ Rules:
         response.raise_for_status()
 
         result = response.json().get("response", "").strip()
+        langfuse_context.update_current_observation(
+            output=result
+        )
+
         lines  = [line.strip() for line in result.splitlines() if line.strip()]
 
         matched = []
@@ -78,10 +99,13 @@ Rules:
                         matched.append(valid)
 
         if matched:
-            logger.info(f"  [Classifier] Tagged as: {', '.join(matched)}")
-            return matched
+            # Remove "Other" if any real categories were found
+            matched = [t for t in matched if t != "Other"]
+            if matched:
+                logger.info(f"  [Classifier] Tagged as: {', '.join(matched)}")
+                return matched
 
-        logger.info(f"  [Classifier] No match in response '{result}', using Other")
+        logger.info(f"  [Classifier] No match found, using Other")
         return ["Other"]
 
     except Exception as e:

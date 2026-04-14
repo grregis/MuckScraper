@@ -1,3 +1,4 @@
+# muckscraperHeadlinesGoogleNEW/docker-compose.yml
 services:
   postgres:
     image: pgvector/pgvector:pg14
@@ -18,6 +19,7 @@ services:
       - postgres
     command: sh -c "sleep 15 && python -m news_fetcher.scheduler"
     environment:
+      FLASK_APP: aggregator.app
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -29,6 +31,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       OLLAMA_MAC: ${OLLAMA_MAC}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
     restart: unless-stopped
 
   app:
@@ -37,8 +42,8 @@ services:
       - "5000:5000"
     depends_on:
       - postgres
-    command: sh -c "sleep 5 && python -m aggregator.app"
     environment:
+      FLASK_APP: aggregator.app
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -50,6 +55,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       OLLAMA_MAC: ${OLLAMA_MAC}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
     volumes:
       - .:/app
 

@@ -1,3 +1,4 @@
+# muckscraperHeadlinesGoogleNEW/news_fetcher/scraper.py
 # news_fetcher/scraper.py
 
 import requests
@@ -6,6 +7,8 @@ import bleach
 import time
 import os
 import logging
+from difflib import SequenceMatcher
+import re
 logger = logging.getLogger(__name__)
 
 HEADERS_DEFAULT = {
@@ -63,6 +66,106 @@ SKIP_DOMAINS = [
     "instagram.com",
     "tiktok.com",
 ]
+
+STRONG_BAD_SCRAPE_INDICATORS = [
+    "unusual activity detected",
+    "verify you are human",
+    "enable javascript to continue",
+    "you have been blocked",
+    "access to this page has been denied",
+    "please sign in to continue",
+    "subscribe to continue reading",
+    "please verify you're not a robot",
+    "complete the security check",
+    "captcha",
+    "403 forbidden",
+    "this content is for subscribers",
+    "create a free account to read",
+    "sign up to read",
+    "your access to this article",
+    "to continue reading, please",
+    "this article is for paying subscribers",
+]
+
+WEAK_BAD_SCRAPE_INDICATORS = [
+    "sign in",
+    "log in",
+    "subscribe",
+    "premium content",
+]
+
+
+def get_domain(url):
+    """Extract bare domain from a URL, stripping www."""
+    try:
+        from urllib.parse import urlparse
+        netloc = urlparse(url).netloc.lower()
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        return netloc
+    except Exception:
+        return None
+
+
+def is_domain_blocked(url):
+    """Return True if this URL's domain is on the scrape blocklist."""
+    try:
+        from aggregator.models import ScrapeBlocklist
+        domain = get_domain(url)
+        if not domain:
+            return False
+        return ScrapeBlocklist.query.filter_by(domain=domain).first() is not None
+    except Exception:
+        return False
+
+
+def add_to_blocklist(url, reason, is_permanent=False):
+    """Add a domain to the scrape blocklist. Silent no-op if already present."""
+    try:
+        from aggregator import db
+        from aggregator.models import ScrapeBlocklist
+        from datetime import datetime
+        domain = get_domain(url)
+        if not domain:
+            return
+        existing = ScrapeBlocklist.query.filter_by(domain=domain).first()
+        if existing:
+            return
+        entry = ScrapeBlocklist(
+            domain=domain,
+            reason=reason,
+            is_permanent=is_permanent,
+            added_at=datetime.utcnow(),
+        )
+        db.session.add(entry)
+        db.session.commit()
+        logger.info(f"[Blocklist] Added {domain}: {reason}")
+    except Exception as e:
+        logger.warning(f"[Blocklist] Failed to add domain: {e}")
+
+
+def detect_bad_scrape(content):
+    """
+    Check scraped content for signs of a login wall, captcha, or bot-detection page.
+    Returns (is_bad: bool, reason: str or None).
+    """
+    if not content:
+        return False, None
+
+    # Strip HTML and collapse whitespace for clean comparison
+    clean = re.sub(r'<[^>]+>', ' ', content)
+    clean = re.sub(r'\s+', ' ', clean).strip().lower()
+
+    for indicator in STRONG_BAD_SCRAPE_INDICATORS:
+        if indicator in clean:
+            return True, f"Bad scrape: strong indicator '{indicator}'"
+
+    if len(clean) < 300:
+        for indicator in WEAK_BAD_SCRAPE_INDICATORS:
+            if indicator in clean:
+                return True, f"Bad scrape: weak indicator '{indicator}' in short content ({len(clean)} chars)"
+
+    return False, None
 
 
 def should_skip(url):
@@ -264,39 +367,51 @@ def try_archive_fallback(url):
 def scrape_article(url):
     """
     Main entry point. Strategy:
-    1. Skip social/video domains entirely
-    2. For Playwright domains — use Playwright, fall back to archive.ph
-    3. For Googlebot domains — try Googlebot UA first
-    4. For everything else — try BS4 (with readability), fall back to Playwright, then archive.ph
+    1. Skip if domain is on the blocklist
+    2. Skip social/video domains entirely
+    3. For Playwright domains — use Playwright, fall back to archive.ph
+    4. For Googlebot domains — try Googlebot UA first
+    5. For everything else — try BS4 (with readability), fall back to Playwright, then archive.ph
+    6. After any successful scrape, run bad-scrape detection
     Returns sanitized HTML or None.
     """
+    if is_domain_blocked(url):
+        logger.info(f"  [Scraper] Domain blocked, skipping: {url[:60]}")
+        return None
+
     if should_skip(url):
         logger.info(f"  [Scraper] Skipping {url[:60]}")
         return None
 
-    # Playwright-first domains
+    content = None
+
     if needs_playwright(url):
         logger.info(f"  [Scraper] Using Playwright for {url[:60]}")
         content = extract_article_html_playwright(url)
         if not content:
             content = try_archive_fallback(url)
-        return content
 
-    # Googlebot user agent domains
-    if use_googlebot(url):
+    elif use_googlebot(url):
         logger.info(f"  [Scraper] Using Googlebot UA for {url[:60]}")
         content = extract_article_html_bs4(url, headers=HEADERS_GOOGLEBOT)
         if not content:
             content = extract_article_html_bs4(url, headers=HEADERS_DEFAULT)
         if not content:
             content = try_archive_fallback(url)
-        return content
 
-    # Default: BS4 with readability → Playwright → archive.ph
-    content = extract_article_html_bs4(url)
-    if not content:
-        logger.info(f"  [Scraper] BS4 failed, trying Playwright for {url[:60]}")
-        content = extract_article_html_playwright(url)
-    if not content:
-        content = try_archive_fallback(url)
+    else:
+        content = extract_article_html_bs4(url)
+        if not content:
+            logger.info(f"  [Scraper] BS4 failed, trying Playwright for {url[:60]}")
+            content = extract_article_html_playwright(url)
+        if not content:
+            content = try_archive_fallback(url)
+
+    if content:
+        is_bad, reason = detect_bad_scrape(content)
+        if is_bad:
+            logger.warning(f"  [Scraper] {reason} — clearing content and blocking domain for {url[:60]}")
+            add_to_blocklist(url, reason)
+            return None
+
     return content
