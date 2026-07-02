@@ -1,12 +1,12 @@
 # muckscraperHeadlinesGoogleNEW/news_fetcher/outlet_bias_llm.py
 # news_fetcher/outlet_bias_llm.py
 
-import requests
-import json
 import os
 import logging
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
+
+from news_fetcher import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +15,6 @@ langfuse = Langfuse(
     secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
-
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
-MODEL = os.environ.get("OLLAMA_MODEL", "")
 
 BIAS_LABELS = {
     1: "Left",
@@ -30,30 +27,14 @@ BIAS_LABELS = {
 
 @observe()
 def _ask_ollama(prompt):
-    """Send a prompt to Ollama and return the raw response string or None."""
+    """Send a prompt to the configured LLM provider and return the raw response string or None."""
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": MODEL}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        result = response.json().get("response", "").strip()
-        langfuse_context.update_current_observation(
-            output=result
-        )
-        return result
-    except Exception as e:
-        logger.info(f"  Error calling Ollama: {e}")
-        return None
+    result = llm_client.generate_text(prompt, timeout=30)
+    langfuse_context.update_current_observation(output=result)
+    return result
 
 
 def _parse_bias_score(raw, label):
@@ -96,7 +77,7 @@ Rating:"""
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": MODEL}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
     raw = _ask_ollama(prompt)
     langfuse_context.update_current_observation(
@@ -139,7 +120,7 @@ Rating:"""
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": MODEL}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
     raw = _ask_ollama(prompt)
     langfuse_context.update_current_observation(

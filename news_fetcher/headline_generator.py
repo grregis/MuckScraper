@@ -3,9 +3,10 @@
 
 import logging
 import os
-import requests
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
+
+from news_fetcher import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +16,16 @@ langfuse = Langfuse(
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
-MODEL       = os.environ.get("OLLAMA_MODEL", "")
-
 
 @observe()
 def generate_story_headline(story):
     """
     Generate a news wire style headline for a multi-article story.
-    Returns a headline string or None if Ollama is unavailable.
+    Returns a headline string or None if the LLM provider is unavailable.
     Only runs if the story has 2+ articles.
     """
-    if not OLLAMA_HOST or not MODEL:
-        logger.warning("Ollama not configured, skipping headline generation.")
+    if not llm_client.is_configured():
+        logger.warning("LLM provider not configured, skipping headline generation.")
         return None
 
     if len(story.articles) < 2:
@@ -56,38 +54,24 @@ Rules:
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": MODEL}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model":  MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-
-        headline = response.json().get("response", "").strip()
-        langfuse_context.update_current_observation(
-            output=headline
-        )
-
-        # Clean up common LLM artifacts
-        headline = headline.strip('"\'').strip()
-
-        if headline and len(headline.split()) <= 20:
-            logger.info(f"Generated headline: '{headline}'")
-            return headline
-
-        logger.warning(f"Headline too long or empty: '{headline}'")
+    headline = llm_client.generate_text(prompt, timeout=30)
+    if headline is None:
+        logger.error(f"Error generating headline for '{story.title}'")
         return None
 
-    except Exception as e:
-        logger.error(f"Error generating headline for '{story.title}': {e}")
-        return None
+    langfuse_context.update_current_observation(output=headline)
+
+    # Clean up common LLM artifacts
+    headline = headline.strip('"\'').strip()
+
+    if headline and len(headline.split()) <= 20:
+        logger.info(f"Generated headline: '{headline}'")
+        return headline
+
+    logger.warning(f"Headline too long or empty: '{headline}'")
+    return None
 
 
 def generate_missing_headlines():

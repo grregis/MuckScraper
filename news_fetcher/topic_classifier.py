@@ -1,11 +1,12 @@
 # muckscraperHeadlinesGoogleNEW/news_fetcher/topic_classifier.py
 # news_fetcher/topic_classifier.py
 
-import requests
 import os
 import logging
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
+
+from news_fetcher import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +15,6 @@ langfuse = Langfuse(
     secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
-
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
-MODEL       = os.environ.get("OLLAMA_MODEL", "")
 
 VALID_TOPICS = [
     "US Politics",
@@ -36,7 +34,7 @@ def classify_article(title, content_snippet=""):
     Returns a list of topic label strings.
     Falls back to ["Other"] if Ollama is unavailable or classification fails.
     """
-    if not OLLAMA_HOST or not MODEL:
+    if not llm_client.is_configured():
         return ["Other"]
 
     # Use title + first 200 chars of content for classification
@@ -77,44 +75,30 @@ Rules:
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": MODEL}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model":  MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
+    result = llm_client.generate_text(prompt, timeout=30)
+    if result is None:
+        logger.info("  [Classifier] No response, using Other")
+        return ["Other"]
 
-        result = response.json().get("response", "").strip()
-        langfuse_context.update_current_observation(
-            output=result
-        )
+    langfuse_context.update_current_observation(output=result)
 
-        lines  = [line.strip() for line in result.splitlines() if line.strip()]
+    lines  = [line.strip() for line in result.splitlines() if line.strip()]
 
-        matched = []
-        for line in lines:
-            for valid in VALID_TOPICS:
-                if valid.lower() in line.lower():
-                    if valid not in matched:
-                        matched.append(valid)
+    matched = []
+    for line in lines:
+        for valid in VALID_TOPICS:
+            if valid.lower() in line.lower():
+                if valid not in matched:
+                    matched.append(valid)
 
+    if matched:
+        # Remove "Other" if any real categories were found
+        matched = [t for t in matched if t != "Other"]
         if matched:
-            # Remove "Other" if any real categories were found
-            matched = [t for t in matched if t != "Other"]
-            if matched:
-                logger.info(f"  [Classifier] Tagged as: {', '.join(matched)}")
-                return matched
+            logger.info(f"  [Classifier] Tagged as: {', '.join(matched)}")
+            return matched
 
-        logger.info(f"  [Classifier] No match found, using Other")
-        return ["Other"]
-
-    except Exception as e:
-        logger.info(f"  [Classifier] Error: {e}, using Other")
-        return ["Other"]
+    logger.info(f"  [Classifier] No match found, using Other")
+    return ["Other"]

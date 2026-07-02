@@ -1,5 +1,3 @@
-import os
-import requests
 import logging
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
@@ -7,21 +5,11 @@ from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload
 from aggregator.constants import TOPICS
 from aggregator.story_view import apply_aggregator_filter
+from news_fetcher.llm_client import check_llm_status as check_ollama_status
 
 logger = logging.getLogger(__name__)
 
 public = Blueprint("public", __name__)
-
-
-def check_ollama_status():
-    ollama_host = os.environ.get("OLLAMA_HOST", "")
-    if not ollama_host:
-        return False
-    try:
-        response = requests.get(f"{ollama_host}/api/tags", timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
 
 
 @public.route("/")

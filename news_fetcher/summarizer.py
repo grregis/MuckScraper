@@ -1,12 +1,14 @@
 # muckscraperHeadlinesGoogleNEW/news_fetcher/summarizer.py
 # news_fetcher/summarizer.py
 
-import requests
 import os
 import re
 import logging
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
+
+from news_fetcher import llm_client
+from news_fetcher.llm_client import check_llm_status as check_ollama_status
 
 logger = logging.getLogger(__name__)
 
@@ -16,20 +18,10 @@ langfuse = Langfuse(
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
 
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
 MODEL = os.environ.get("OLLAMA_MODEL", "")
 
-if not MODEL:
+if llm_client.LLM_PROVIDER == "ollama" and not MODEL:
     logging.warning("OLLAMA_MODEL environment variable is not set. All summarization will fail.")
-
-
-def check_ollama_status():
-    """Returns True if Ollama is reachable, False otherwise."""
-    try:
-        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
 
 
 def strip_html(text):
@@ -313,33 +305,13 @@ Executive Summary:"""
             "excluded_prompt_articles": len(excluded_articles),
         }
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
+    summary = llm_client.generate_text(prompt, timeout=120)
+    langfuse_context.update_current_observation(output=summary)
 
-        result = response.json()
-        summary = result.get("response", "").strip()
-
-        langfuse_context.update_current_observation(
-            output=summary
-        )
-
-        if summary:
-            logger.info(f"  Generated {analysis_type} summary for story: {story.title[:60]}...")
-            return summary
-        return None
-
-    except Exception as e:
-        logger.info(f"  Error generating summary for '{story.title}': {e}")
-        return None
+    if summary:
+        logger.info(f"  Generated {analysis_type} summary for story: {story.title[:60]}...")
+        return summary
+    return None
 
 
 @observe()
@@ -623,27 +595,12 @@ Rules:
         }
     )
 
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=180,
-        )
-        response.raise_for_status()
-        result = response.json()
-        report = result.get("response", "").strip()
-        langfuse_context.update_current_observation(output=report)
-        if report:
-            logger.info(f"  Generated {analysis_type} deep report for: {story.title[:60]}...")
-            return report
-        return None
-    except Exception as e:
-        logger.error(f"  Error generating deep report for '{story.title}': {e}")
-        return None
+    report = llm_client.generate_text(prompt, timeout=180)
+    langfuse_context.update_current_observation(output=report)
+    if report:
+        logger.info(f"  Generated {analysis_type} deep report for: {story.title[:60]}...")
+        return report
+    return None
 
 
 @observe()
@@ -700,27 +657,12 @@ Summary:"""
         metadata={"model": MODEL, "analysis_type": analysis_type, "persona": persona}
     )
 
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        result = response.json()
-        summary = result.get("response", "").strip()
-        langfuse_context.update_current_observation(output=summary)
-        if summary:
-            logger.info(f"  Generated {analysis_type} summary for article: {article.title[:60]}...")
-            return summary
-        return None
-    except Exception as e:
-        logger.error(f"  Error generating summary for article '{article.title}': {e}")
-        return None
+    summary = llm_client.generate_text(prompt, timeout=120)
+    langfuse_context.update_current_observation(output=summary)
+    if summary:
+        logger.info(f"  Generated {analysis_type} summary for article: {article.title[:60]}...")
+        return summary
+    return None
 
 
 @observe()
@@ -823,24 +765,9 @@ Analysis:"""
         metadata={"model": MODEL, "analysis_type": analysis_type, "scope": "article_deep_analysis"}
     )
 
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=150,
-        )
-        response.raise_for_status()
-        result = response.json()
-        analysis = result.get("response", "").strip()
-        langfuse_context.update_current_observation(output=analysis)
-        if analysis:
-            logger.info(f"  Generated {analysis_type} article analysis: {article.title[:60]}...")
-            return analysis
-        return None
-    except Exception as e:
-        logger.error(f"  Error generating deep analysis for article '{article.title}': {e}")
-        return None
+    analysis = llm_client.generate_text(prompt, timeout=150)
+    langfuse_context.update_current_observation(output=analysis)
+    if analysis:
+        logger.info(f"  Generated {analysis_type} article analysis: {article.title[:60]}...")
+        return analysis
+    return None

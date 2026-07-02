@@ -1,7 +1,6 @@
 # muckscraperHeadlinesGoogleNEW/news_fetcher/story_grouper.py
 # news_fetcher/story_grouper.py
 
-import requests
 import os
 import re
 import unicodedata
@@ -11,6 +10,8 @@ from dataclasses import dataclass, field
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
 
+from news_fetcher import llm_client
+
 logger = logging.getLogger(__name__)
 
 langfuse = Langfuse(
@@ -19,7 +20,6 @@ langfuse = Langfuse(
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
 
-OLLAMA_HOST     = os.environ.get("OLLAMA_HOST", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 
 SIMILARITY_THRESHOLD = 0.92
@@ -97,27 +97,14 @@ TITLE_TOKEN_REPLACEMENTS = {
 
 @observe()
 def get_embedding(text):
-    if not OLLAMA_HOST:
-        return None
     langfuse_context.update_current_observation(
         input=text,
-        metadata={"model": EMBEDDING_MODEL}
+        metadata={"model": EMBEDDING_MODEL, "provider": llm_client.EMBEDDING_PROVIDER}
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/embeddings",
-            json={"model": EMBEDDING_MODEL, "prompt": text},
-            timeout=15,
-        )
-        response.raise_for_status()
-        embedding = response.json().get("embedding")
-        if embedding:
-            langfuse_context.update_current_observation(output=str(embedding))
-            return embedding
-        return None
-    except Exception as e:
-        logger.info(f"  [Embeddings] Error generating embedding: {e}")
-        return None
+    embedding = llm_client.get_embedding(text)
+    if embedding:
+        langfuse_context.update_current_observation(output=str(embedding))
+    return embedding
 
 
 def cosine_similarity(vec1, vec2):
@@ -289,7 +276,7 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             candidate_story_ids=_candidate_story_ids([best_title_match]),
         )
 
-    if overlap_candidates and OLLAMA_HOST:
+    if overlap_candidates and llm_client.is_configured():
         overlap_candidates.sort(key=lambda item: item[0], reverse=True)
         unique_candidates = []
         seen_story_ids = set()
@@ -388,7 +375,7 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             candidate_story_ids=_candidate_story_ids([best_story]),
         )
 
-    if best_global_score >= LOWER_THRESHOLD and best_story and OLLAMA_HOST:
+    if best_global_score >= LOWER_THRESHOLD and best_story and llm_client.is_configured():
         logger.info(f"  [Grouper] Ambiguous match (score: {best_global_score:.3f}), asking Ollama...")
         logger.info(f"  [Grouper] article_content present: {bool(article_content)}, length: {len(article_content) if article_content else 0}")
 
@@ -539,33 +526,23 @@ def ask_ollama_for_match(article_title, candidate_stories, article_content=None,
     story_list = "\n".join(story_lines)
     prompt = build_match_prompt(article_title, story_list, article_content=article_content)
 
-    model = os.environ.get("OLLAMA_MODEL", "")
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"model": model}
+        metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    try:
-        response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=30,
-        )
-        response.raise_for_status()
-        result = response.json().get("response", "").strip()
-        langfuse_context.update_current_observation(output=result)
-
-        for token in result.split():
-            if token.isdigit():
-                match_index = int(token)
-                if 1 <= match_index <= len(candidate_stories):
-                    matched = candidate_stories[match_index - 1]
-                    logger.info(f"  [Grouper] Matched to story: '{matched.title}'")
-                    return matched
-                elif match_index == 0:
-                    return None
-
+    result = llm_client.generate_text(prompt, timeout=30)
+    if result is None:
         return None
+    langfuse_context.update_current_observation(output=result)
 
-    except Exception as e:
-        logger.info(f"  [Grouper] Ollama error: {e}")
-        return None
+    for token in result.split():
+        if token.isdigit():
+            match_index = int(token)
+            if 1 <= match_index <= len(candidate_stories):
+                matched = candidate_stories[match_index - 1]
+                logger.info(f"  [Grouper] Matched to story: '{matched.title}'")
+                return matched
+            elif match_index == 0:
+                return None
+
+    return None

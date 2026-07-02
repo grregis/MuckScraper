@@ -15,6 +15,7 @@ bleach
 readability-lxml
 pgvector
 numpy
+google-genai
 python-dotenv
 wakeonlan
 langfuse>=2.0.0,<3.0.0
