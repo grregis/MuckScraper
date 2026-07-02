@@ -2,8 +2,6 @@
 services:
   postgres:
     image: pgvector/pgvector:pg14
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -66,7 +64,7 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     depends_on:
       - postgres
       - meilisearch
