@@ -23,6 +23,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+
 _gemini_client = None
 
 
@@ -39,12 +42,16 @@ def is_configured():
     that decided whether an LLM-backed step should run at all."""
     if LLM_PROVIDER == "gemini":
         return bool(GEMINI_API_KEY)
+    if LLM_PROVIDER == "groq":
+        return bool(GROQ_API_KEY)
     return bool(OLLAMA_HOST and OLLAMA_MODEL)
 
 
 def generate_text(prompt, timeout=30):
     if LLM_PROVIDER == "gemini":
         return _generate_text_gemini(prompt, timeout)
+    if LLM_PROVIDER == "groq":
+        return _generate_text_groq(prompt, timeout)
     return _generate_text_ollama(prompt, timeout)
 
 
@@ -77,6 +84,27 @@ def _generate_text_gemini(prompt, timeout):
         return text or None
     except Exception as e:
         logger.info(f"  [llm_client] Gemini generate error: {e}")
+        return None
+
+
+def _generate_text_groq(prompt, timeout):
+    if not GROQ_API_KEY:
+        return None
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        text = response.json()["choices"][0]["message"]["content"]
+        return (text or "").strip() or None
+    except Exception as e:
+        logger.info(f"  [llm_client] Groq generate error: {e}")
         return None
 
 
@@ -132,6 +160,8 @@ def _get_embedding_gemini(text):
 def check_llm_status():
     if LLM_PROVIDER == "gemini":
         return bool(GEMINI_API_KEY)
+    if LLM_PROVIDER == "groq":
+        return bool(GROQ_API_KEY)
     return _check_ollama_status()
 
 
