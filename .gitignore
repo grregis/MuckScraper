@@ -32,6 +32,7 @@ docker-compose.private.yml
 
 # Production / Setup scripts
 .aider*
+fableaudit.md
 TODO.md
 catcode.sh
 TROUBLESHOOTINGHL.md
