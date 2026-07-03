@@ -7,6 +7,7 @@
 # reachable again.
 
 import os
+import time
 import logging
 import requests
 
@@ -87,7 +88,11 @@ def _generate_text_gemini(prompt, timeout):
         return None
 
 
-def _generate_text_groq(prompt, timeout):
+GROQ_MAX_RETRIES = 2
+GROQ_MAX_RETRY_WAIT_SECONDS = 65
+
+
+def _generate_text_groq(prompt, timeout, _attempt=0):
     if not GROQ_API_KEY:
         return None
     try:
@@ -100,6 +105,18 @@ def _generate_text_groq(prompt, timeout):
             },
             timeout=timeout,
         )
+        if response.status_code == 429 and _attempt < GROQ_MAX_RETRIES:
+            # Groq's free tier is limited to 6,000 tokens/minute (TPM), which
+            # large summary/deep-report prompts can exceed on their own -- a
+            # 429 here usually just means "wait out this minute's window",
+            # unlike Gemini's per-day quota where retrying is futile.
+            wait_seconds = min(
+                float(response.headers.get("Retry-After", 15)) + 1,
+                GROQ_MAX_RETRY_WAIT_SECONDS,
+            )
+            logger.info(f"  [llm_client] Groq rate-limited, retrying in {wait_seconds:.0f}s")
+            time.sleep(wait_seconds)
+            return _generate_text_groq(prompt, timeout, _attempt=_attempt + 1)
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
         return (text or "").strip() or None

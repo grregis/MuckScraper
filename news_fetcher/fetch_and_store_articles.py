@@ -1918,7 +1918,7 @@ def sync_allsides_ratings():
 def publish_edition():
     """
     Create an Edition record for the current fetch cycle.
-    Determines edition type (night/morning/afternoon/evening) from Eastern time.
+    Determines edition type (morning if before noon, evening otherwise) from Eastern time.
     Only includes stories that are new since the last edition, or have received
     new articles since then. Prefers multi-article stories and only falls back to
     single-article stories when needed to fill the edition.
@@ -1932,14 +1932,7 @@ def publish_edition():
     hour = now_eastern.hour
     today = now_eastern.date()
 
-    if 5 <= hour < 12:
-        edition_type = 'morning'
-    elif 12 <= hour < 17:
-        edition_type = 'afternoon'
-    elif 17 <= hour < 22:
-        edition_type = 'evening'
-    else:
-        edition_type = 'night'
+    edition_type = 'morning' if hour < 12 else 'evening'
 
     # Skip if this edition slot already published
     existing = Edition.query.filter_by(date=today, edition_type=edition_type).first()

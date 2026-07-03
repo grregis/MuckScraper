@@ -199,7 +199,7 @@ class Edition(db.Model):
 
     id           = db.Column(db.Integer, primary_key=True)
     date         = db.Column(db.Date, nullable=False)
-    edition_type = db.Column(db.String(16), nullable=False)  # night/morning/afternoon/evening
+    edition_type = db.Column(db.String(16), nullable=False)  # morning/evening
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     published    = db.Column(db.Boolean, default=True)
 
