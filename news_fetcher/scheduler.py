@@ -14,6 +14,7 @@ from news_fetcher.rss_fetcher import (
     enrich_skewed_stories_with_left_feeds,
     get_skewed_story_ids_for_left_enrichment,
 )
+from news_fetcher import llm_client
 from datetime import datetime, timedelta, timezone
 import logging
 import sys
@@ -864,14 +865,29 @@ def run_all_fetches(run_full_pipeline=True):
                 initial_ranking = {"status": "error", "reason": str(e)}
                 run_metrics["steps"]["headline_ranking_initial"] = initial_ranking
 
-            right_ranking, right_second_pass_ranking = _run_targeted_rss_enrichment_pass(
-                RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state, initial_ranking
-            )
+            if llm_client.LLM_PROVIDER == "groq":
+                # Each pass re-runs run_optional_headline_ranking() (batched Groq calls
+                # plus an editorial_rerank() call), so the 4 extra passes below cost up
+                # to 4x the Groq load of the single initial ranking above. Skip them
+                # while on Groq's free tier; re-enable once Ollama is back.
+                logging.info("--- Skipping targeted left/right RSS enrichment passes (LLM_PROVIDER=groq) ---")
+                for step in (
+                    "targeted_right_rss_enrichment", "targeted_right_rss_bias_retry", "headline_ranking",
+                    "targeted_right_rss_enrichment_second_pass", "targeted_right_rss_second_pass_bias_retry",
+                    "headline_ranking_post_second_pass", "targeted_left_rss_enrichment", "targeted_left_rss_bias_retry",
+                    "headline_ranking_after_left_enrichment", "targeted_left_rss_enrichment_second_pass",
+                    "targeted_left_rss_second_pass_bias_retry", "headline_ranking_post_left_second_pass",
+                ):
+                    run_metrics["steps"][step] = {"status": "skipped", "reason": "groq_provider"}
+            else:
+                right_ranking, right_second_pass_ranking = _run_targeted_rss_enrichment_pass(
+                    RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state, initial_ranking
+                )
 
-            _run_targeted_rss_enrichment_pass(
-                LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state,
-                right_second_pass_ranking or right_ranking,
-            )
+                _run_targeted_rss_enrichment_pass(
+                    LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state,
+                    right_second_pass_ranking or right_ranking,
+                )
 
             logging.info("--- Publishing edition ---")
             try:

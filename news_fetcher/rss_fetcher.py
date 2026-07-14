@@ -101,7 +101,7 @@ def _extract_image(entry):
     return None
 
 
-def fetch_feed(feed_url):
+def fetch_feed(feed_url, max_entries=30):
     """
     Fetch a single RSS feed.
     Returns (source_name, list of normalized article dicts).
@@ -114,7 +114,7 @@ def fetch_feed(feed_url):
         )
 
         articles = []
-        for entry in feed.entries[:30]:
+        for entry in feed.entries[:max_entries]:
             title = entry.get("title", "").strip()
             url = entry.get("link", "").strip()
             if not title or not url:
@@ -140,14 +140,24 @@ def fetch_feed(feed_url):
         return None, []
 
 
+RSS_MAX_ENTRIES_PER_FEED_GROQ = 10
+
+
 def fetch_and_store_rss():
     """
     Fetch all RSS feeds and store articles via the normal ingestion pipeline.
     Each article goes through the same dedup, scraping, embedding, topic
     classification, and story grouping as NewsAPI/GNews articles.
     Must be called within a Flask app context.
+
+    While LLM_PROVIDER=groq, entries per feed are capped well below the normal
+    30 — every stored article costs at least one classify_article() call, and
+    Groq's free-tier TPM budget can't keep up with the full wire-service volume.
     """
     from news_fetcher.fetch_and_store_articles import store_articles
+    from news_fetcher import llm_client
+
+    max_entries = RSS_MAX_ENTRIES_PER_FEED_GROQ if llm_client.LLM_PROVIDER == "groq" else 30
 
     logger.info("=== RSS fetch starting ===")
     total = 0
@@ -168,7 +178,7 @@ def fetch_and_store_rss():
     }
 
     for feed_url in RSS_FEEDS:
-        source_name, articles = fetch_feed(feed_url)
+        source_name, articles = fetch_feed(feed_url, max_entries=max_entries)
         if articles:
             feed_metrics = store_articles(articles, "Global News", provider="rss")
             metrics["feeds_with_articles"] += 1
