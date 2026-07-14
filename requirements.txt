@@ -13,7 +13,7 @@ apscheduler
 playwright
 bleach
 readability-lxml
-pgvector
+pgvector==0.4.2  # 0.5.0 requires SQLAlchemy 2.x
 numpy
 google-genai
 python-dotenv
