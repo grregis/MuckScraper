@@ -1722,19 +1722,133 @@ def fetch_and_store_articles(topic_name, mode="top", query=None,
     }
 
 
-def process_current_edition():
+STALE_ARTICLE_THRESHOLD = 3  # new articles needed to trigger reanalysis
+
+# How far back to look for stories left incomplete in a superseded edition
+# (e.g. Ollama was unreachable while that edition was still "latest").
+BACKFILL_LOOKBACK_DAYS = 2
+
+
+def _fill_story_content(story, metrics):
     """
-    Exhaustively summarize and analyze ONLY the stories selected for the latest edition.
-    1. Finds the most recent Edition.
-    2. For every story in that edition:
-       - Generates the Story Summary (if missing).
-       - Generates the Deep Report (if multi-source and missing).
-       - Generates a summary for EVERY article associated with that story.
+    Generate any missing summary/deep-report/child-article-summary content
+    for a single story. Returns True if anything was generated or reset.
+    """
+    from news_fetcher.summarizer import summarize_story, generate_deep_report, summarize_article
+
+    article_count = len(story.articles)
+    if article_count == 0:
+        return False
+
+    changed = False
+
+    try:
+        story_is_stale = False
+
+        # Check if analysis is stale — enough new articles arrived
+        # since the last time this story was summarized
+        if story.summary_generated_at and article_count >= 2:
+            new_article_count = sum(
+                1 for a in story.articles
+                if a.fetched_at and a.fetched_at > story.summary_generated_at
+            )
+            if new_article_count >= STALE_ARTICLE_THRESHOLD:
+                logger.info(
+                    f"  [Processor] Story stale ({new_article_count} new articles "
+                    f"since last analysis): {story.title[:60]}"
+                )
+                story.summary = None
+                story.deep_report = None
+                story_is_stale = True
+                metrics["stale_stories_reset"] += 1
+                changed = True
+
+        if article_count >= 2:
+            story_outputs_ready = bool(story.summary) and bool(story.deep_report)
+        else:
+            story_outputs_ready = bool(story.summary)
+
+        missing_child_summaries = any(
+            article.content and not article.summary
+            for article in story.articles
+        )
+
+        if not story_is_stale and story_outputs_ready and not missing_child_summaries:
+            metrics["stable_stories_skipped"] += 1
+            return changed
+
+        # 1. Process Story-level Summaries
+        if article_count >= 2:
+            if not story.summary:
+                summary = summarize_story(story)
+                if summary:
+                    story.summary = summary
+                    story.summary_generated_at = datetime.utcnow()
+                    metrics["story_summaries_generated"] += 1
+                    changed = True
+                    logger.info(f"  [Processor] Story summary: {story.title[:60]}")
+
+            if not story.deep_report:
+                report = generate_deep_report(story)
+                if report:
+                    story.deep_report = report
+                    metrics["deep_reports_generated"] += 1
+                    changed = True
+                    logger.info(f"  [Processor] Deep report: {story.title[:60]}")
+        else:
+            # Single-article story: Ensure story summary exists
+            story.headline = None
+            if not story.summary:
+                art = story.articles[0]
+                summary = art.summary or summarize_article(art)
+                if summary:
+                    art.summary = summary
+                    story.summary = summary
+                    story.summary_generated_at = datetime.utcnow()
+                    metrics["story_summaries_generated"] += 1
+                    changed = True
+                    logger.info(f"  [Processor] Single-source summary: {story.title[:60]}")
+
+            # Ensure old stories that once had multiple articles (and thus a deep_report)
+            # are cleaned up when they later appear as single-article stories.
+            story.deep_report = None
+
+        db.session.commit()
+        # This is critical for the static site links
+        for article in story.articles:
+            if not article.summary and article.content:
+                summary = summarize_article(article)
+                if summary:
+                    article.summary = summary
+                    metrics["child_article_summaries_generated"] += 1
+                    changed = True
+                    logger.info(f"    [Processor] Child article summary: {article.title[:60]}")
+        db.session.commit()
+
+    except Exception as e:
+        logger.error(f"  [Processor] Error processing story {story.id}: {e}")
+        db.session.rollback()
+
+    return changed
+
+
+def process_current_edition(backfill_recent=False):
+    """
+    Exhaustively summarize and analyze the stories selected for the latest
+    edition.
+    1. Finds the most recent Edition and fills any missing summary/deep-report/
+       child-article-summary content for its stories.
+    2. If backfill_recent is True, also does the same, within
+       BACKFILL_LOOKBACK_DAYS, for any other published edition's stories that
+       are still incomplete — this catches stories that were left without a
+       summary because Ollama was unreachable while their edition was still
+       "latest" (it only recovered after a newer edition superseded it, so
+       they'd otherwise never be revisited). Off by default since it touches
+       editions beyond the current one — callers that want it (the scheduler)
+       opt in explicitly.
     This ensures the static headlines site is fully populated.
     """
-    from news_fetcher.summarizer import (
-        summarize_story, generate_deep_report, summarize_article, check_ollama_status
-    )
+    from news_fetcher.summarizer import check_ollama_status
     from aggregator.models import Edition, EditionStory
 
     latest_edition = Edition.query.order_by(Edition.created_at.desc()).first()
@@ -1749,6 +1863,7 @@ def process_current_edition():
             "child_article_analyses_generated": 0,
             "stale_stories_reset": 0,
             "stable_stories_skipped": 0,
+            "backfilled_edition_ids": [],
         }
 
     ollama_available = check_ollama_status()
@@ -1770,98 +1885,39 @@ def process_current_edition():
         "child_article_analyses_generated": 0,
         "stale_stories_reset": 0,
         "stable_stories_skipped": 0,
+        "backfilled_edition_ids": [],
     }
 
     logger.info(f"[Processor] Processing {len(stories)} stories from {latest_edition.edition_type} edition...")
 
-    STALE_ARTICLE_THRESHOLD = 3  # new articles needed to trigger reanalysis
-
+    processed_story_ids = set()
     for story in stories:
-        article_count = len(story.articles)
-        if article_count == 0:
-            continue
+        processed_story_ids.add(story.id)
+        _fill_story_content(story, metrics)
 
-        try:
-            story_is_stale = False
+    if backfill_recent:
+        cutoff = datetime.utcnow().date() - timedelta(days=BACKFILL_LOOKBACK_DAYS)
+        stale_editions = Edition.query.filter(
+            Edition.published == True,
+            Edition.id != latest_edition.id,
+            Edition.date >= cutoff,
+        ).order_by(Edition.date.desc(), Edition.created_at.desc()).all()
 
-            # Check if analysis is stale — enough new articles arrived
-            # since the last time this story was summarized
-            if story.summary_generated_at and article_count >= 2:
-                new_article_count = sum(
-                    1 for a in story.articles
-                    if a.fetched_at and a.fetched_at > story.summary_generated_at
+        for edition in stale_editions:
+            edition_changed = False
+            for es in edition.edition_stories.order_by(EditionStory.rank).all():
+                story = es.story
+                if not story or story.id in processed_story_ids:
+                    continue
+                processed_story_ids.add(story.id)
+                if _fill_story_content(story, metrics):
+                    edition_changed = True
+            if edition_changed:
+                logger.info(
+                    f"  [Processor] Backfilled stories in superseded edition "
+                    f"{edition.date} {edition.edition_type}"
                 )
-                if new_article_count >= STALE_ARTICLE_THRESHOLD:
-                    logger.info(
-                        f"  [Processor] Story stale ({new_article_count} new articles "
-                        f"since last analysis): {story.title[:60]}"
-                    )
-                    story.summary = None
-                    story.deep_report = None
-                    story_is_stale = True
-                    metrics["stale_stories_reset"] += 1
-
-            if article_count >= 2:
-                story_outputs_ready = bool(story.summary) and bool(story.deep_report)
-            else:
-                story_outputs_ready = bool(story.summary)
-
-            missing_child_summaries = any(
-                article.content and not article.summary
-                for article in story.articles
-            )
-
-            if not story_is_stale and story_outputs_ready and not missing_child_summaries:
-                metrics["stable_stories_skipped"] += 1
-                continue
-
-            # 1. Process Story-level Summaries
-            if article_count >= 2:
-                if not story.summary:
-                    summary = summarize_story(story)
-                    if summary:
-                        story.summary = summary
-                        story.summary_generated_at = datetime.utcnow()
-                        metrics["story_summaries_generated"] += 1
-                        logger.info(f"  [Processor] Story summary: {story.title[:60]}")
-
-                if not story.deep_report:
-                    report = generate_deep_report(story)
-                    if report:
-                        story.deep_report = report
-                        metrics["deep_reports_generated"] += 1
-                        logger.info(f"  [Processor] Deep report: {story.title[:60]}")
-            else:
-                # Single-article story: Ensure story summary exists
-                story.headline = None
-                if not story.summary:
-                    art = story.articles[0]
-                    summary = art.summary or summarize_article(art)
-                    if summary:
-                        art.summary = summary
-                        story.summary = summary
-                        story.summary_generated_at = datetime.utcnow()
-                        metrics["story_summaries_generated"] += 1
-                        logger.info(f"  [Processor] Single-source summary: {story.title[:60]}")
-
-                # Ensure old stories that once had multiple articles (and thus a deep_report)
-                # are cleaned up when they later appear as single-article stories.
-                story.deep_report = None
-
-            db.session.commit()
-            # This is critical for the static site links
-            for article in story.articles:
-                if not article.summary and article.content:
-                    summary = summarize_article(article)
-                    if summary:
-                        article.summary = summary
-                        metrics["child_article_summaries_generated"] += 1
-                        logger.info(f"    [Processor] Child article summary: {article.title[:60]}")
-            db.session.commit()
-
-        except Exception as e:
-            logger.error(f"  [Processor] Error processing story {story.id}: {e}")
-            db.session.rollback()
+                metrics["backfilled_edition_ids"].append(edition.id)
 
     logger.info("[Processor] Current edition processing complete.")
     return metrics

@@ -110,7 +110,7 @@ def run_optional_headline_ranking():
     return {"status": "ok"}
 
 
-def run_optional_static_export():
+def run_optional_static_export(extra_edition_ids=None):
     """
     Export optional static output when an additional exporter is available.
     This keeps the main open-source stack working even when deployment-specific
@@ -130,7 +130,7 @@ def run_optional_static_export():
             "reason": str(e),
         }
 
-    export_static_site()
+    export_static_site(extra_edition_ids=extra_edition_ids)
     return {"status": "ok"}
 
 
@@ -901,7 +901,7 @@ def run_all_fetches(run_full_pipeline=True):
             logging.info("--- Processing current edition content ---")
             _check_ollama_status_for_report(ollama_state, "before_process_current_edition")
             try:
-                run_metrics["steps"]["process_current_edition"] = process_current_edition()
+                run_metrics["steps"]["process_current_edition"] = process_current_edition(backfill_recent=True)
             except Exception as e:
                 db.session.rollback()
                 logging.error(f"Error processing edition content: {e}")
@@ -910,7 +910,12 @@ def run_all_fetches(run_full_pipeline=True):
 
             logging.info("--- Exporting static site ---")
             try:
-                run_metrics["steps"]["static_export"] = run_optional_static_export()
+                backfilled_edition_ids = run_metrics["steps"]["process_current_edition"].get(
+                    "backfilled_edition_ids"
+                ) if isinstance(run_metrics["steps"].get("process_current_edition"), dict) else None
+                run_metrics["steps"]["static_export"] = run_optional_static_export(
+                    extra_edition_ids=backfilled_edition_ids
+                )
             except Exception as e:
                 db.session.rollback()
                 logging.error(f"Error exporting static site: {e}")
