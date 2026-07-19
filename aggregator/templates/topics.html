@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
+    <title>Topics — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 900px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .card + .card { margin-top: 24px; }
+        .section-title { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 14px 20px; font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+        }
+        td { padding: 10px 20px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr.inactive { opacity: 0.5; }
+        input[type="text"], input[type="number"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        input[type="text"].name-input { width: 220px; }
+        input[type="text"].icon-input { width: 60px; }
+        input[type="number"].sort-input { width: 64px; }
+        .save-btn, .add-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .add-form {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 20px;
+        }
+        .empty { padding: 48px; text-align: center; color: var(--text-faint); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="/articles" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Topics</h1>
+    <p class="subtitle">Topics used for classification and the sidebar filter. Inactive topics are hidden from the classifier and nav, but historical tags on existing articles/stories are kept.</p>
+
+    <div class="card">
+        {% if topics %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Icon</th>
+                    <th>Order</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for topic in topics %}
+                <tr class="{{ 'inactive' if not topic.is_active else '' }}">
+                    <form method="POST" action="{{ url_for('admin.update_topic', topic_id=topic.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <td>{{ topic.name }}</td>
+                        <td><input type="text" class="icon-input" name="icon" maxlength="4" value="{{ topic.icon or '' }}"></td>
+                        <td><input type="number" class="sort-input" name="sort_order" value="{{ topic.sort_order if topic.sort_order is not none else '' }}"></td>
+                        <td><input type="checkbox" name="is_active" {{ 'checked' if topic.is_active else '' }}></td>
+                        <td><button type="submit" class="save-btn">Save</button></td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No topics yet.</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('admin.add_topic') }}" class="add-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" class="name-input" name="name" placeholder="New topic name" required>
+            <input type="text" class="icon-input" name="icon" placeholder="Icon" maxlength="4">
+            <input type="number" class="sort-input" name="sort_order" placeholder="Order">
+            <button type="submit" class="add-btn">+ Add Topic</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

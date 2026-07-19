@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
+    <title>RSS Feeds — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 1000px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .card + .card { margin-top: 24px; }
+        .section-title {
+            font-size: 16px;
+            font-weight: 800;
+            padding: 20px 20px 0;
+        }
+        .section-subtitle {
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 4px 20px 16px;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 12px 20px; font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+        }
+        td { padding: 10px 20px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr.disabled { opacity: 0.5; }
+        .url-cell { word-break: break-all; max-width: 380px; }
+        input[type="text"], input[type="url"], select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        input.label-input { width: 160px; }
+        input.url-input { width: 320px; }
+        .save-btn, .add-btn { background: var(--accent); }
+        .save-btn, .add-btn, .delete-btn {
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .delete-btn { background: #b51a1a; }
+        .row-actions { display: flex; gap: 6px; }
+        .add-form {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+        .empty { padding: 24px; text-align: center; color: var(--text-faint); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="/articles" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>RSS Feeds</h1>
+    <p class="subtitle">General ingestion runs every fetch. Right/left enrichment feeds are used to backfill bias-skewed stories. A feed URL can appear in more than one bucket.</p>
+
+    {% for bucket in buckets %}
+    <div class="card">
+        <div class="section-title">{{ bucket.replace('_', ' ')|title }}</div>
+        <div class="section-subtitle">{{ feeds_by_bucket[bucket]|length }} feed(s)</div>
+        {% if feeds_by_bucket[bucket] %}
+        <table>
+            <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Label</th>
+                    <th>Enabled</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for feed in feeds_by_bucket[bucket] %}
+                <tr class="{{ 'disabled' if not feed.enabled else '' }}">
+                    <form method="POST" action="{{ url_for('admin.update_rss_feed', feed_id=feed.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <td class="url-cell">{{ feed.url }}</td>
+                        <td><input type="text" class="label-input" name="label" value="{{ feed.label or '' }}" placeholder="Label"></td>
+                        <td><input type="checkbox" name="enabled" {{ 'checked' if feed.enabled else '' }}></td>
+                        <td><button type="submit" class="save-btn">Save</button></td>
+                    </form>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin.delete_rss_feed', feed_id=feed.id) }}" style="display:inline;" onsubmit="return confirm('Remove this feed?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="delete-btn">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No feeds in this bucket.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('admin.add_rss_feed') }}" class="add-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="url" class="url-input" name="url" placeholder="https://example.com/feed" required>
+            <select name="bucket" required>
+                {% for bucket in buckets %}
+                <option value="{{ bucket }}">{{ bucket.replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" class="label-input" name="label" placeholder="Label (optional)">
+            <button type="submit" class="add-btn">+ Add Feed</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

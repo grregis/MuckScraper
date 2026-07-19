@@ -38,8 +38,11 @@ class Outlet(db.Model):
 class Topic(db.Model):
     __tablename__ = "topics"
 
-    id   = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, unique=True, nullable=False)
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String, unique=True, nullable=False)
+    icon       = db.Column(db.String(4), nullable=True)
+    sort_order = db.Column(db.Integer, nullable=True)
+    is_active  = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
 
     stories  = db.relationship("Story",   secondary=story_topics,  back_populates="topics")
     articles = db.relationship("Article", secondary=article_topics, back_populates="topics")
@@ -192,6 +195,24 @@ class ScrapeBlocklist(db.Model):
     reason       = db.Column(db.String, nullable=False)
     added_at     = db.Column(db.DateTime, default=datetime.utcnow)
     is_permanent = db.Column(db.Boolean, default=False, nullable=False)
+
+
+class RssFeed(db.Model):
+    __tablename__ = "rss_feeds"
+    __table_args__ = (
+        # The same feed URL can legitimately appear in more than one bucket
+        # (e.g. Fox News is both a general-ingestion feed and a right-enrichment
+        # feed) — the three source lists in rss_fetcher.py are fetched
+        # independently, so uniqueness is per (url, bucket), not per url alone.
+        db.UniqueConstraint("url", "bucket", name="uq_rss_feed_url_bucket"),
+    )
+
+    id         = db.Column(db.Integer, primary_key=True)
+    url        = db.Column(db.String, nullable=False)
+    bucket     = db.Column(db.String(32), nullable=False)  # general / right_enrichment / left_enrichment
+    label      = db.Column(db.String, nullable=True)
+    enabled    = db.Column(db.Boolean, default=True, nullable=False)
+    added_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Edition(db.Model):

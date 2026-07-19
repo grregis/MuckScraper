@@ -451,6 +451,31 @@
 
     <div class="section">
         <div class="section-head">
+            <div class="section-title">Configuration</div>
+            <div class="section-copy">Manage the topic taxonomy and RSS feed sources.</div>
+        </div>
+        <div class="tool-list">
+            <div class="tool-card">
+                <div class="tool-card-title">Topics</div>
+                <p>Add, reorder, or deactivate the topics used for classification and the sidebar filter.</p>
+                <div class="meta-row">
+                    <span class="badge">Navigation</span>
+                </div>
+                <a href="{{ url_for('admin.topics_page') }}" class="btn btn-secondary">Open Topics</a>
+            </div>
+            <div class="tool-card">
+                <div class="tool-card-title">RSS Feeds</div>
+                <p>Manage general-ingestion and left/right enrichment RSS feed sources.</p>
+                <div class="meta-row">
+                    <span class="badge">Navigation</span>
+                </div>
+                <a href="{{ url_for('admin.rss_feeds_page') }}" class="btn btn-secondary">Open RSS Feeds</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
             <div class="section-title">Data Maintenance</div>
             <div class="section-copy">These actions change canonical stored data and should be used carefully, ideally when you already know the inconsistency you are fixing.</div>
         </div>

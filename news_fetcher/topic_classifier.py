@@ -2,6 +2,7 @@
 # news_fetcher/topic_classifier.py
 
 import os
+import time
 import logging
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
@@ -16,15 +17,44 @@ langfuse = Langfuse(
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
 
-VALID_TOPICS = [
-    "US Politics",
-    "US News",
-    "International News",
-    "Sci/Tech",
-    "Sports",
-    "Buss/Fin",
-    "Other",
+# Default taxonomy, used only if the DB is briefly unreachable (see
+# _active_topic_names below) — keeps a transient DB hiccup from crashing
+# classification of every remaining article in a batch.
+_FALLBACK_TOPIC_NAMES = [
+    "US Politics", "US News", "International News",
+    "Sci/Tech", "Sports", "Buss/Fin", "Other",
 ]
+_TOPIC_NAME_CACHE_TTL_SECONDS = 60
+_topic_name_cache = {"names": None, "expires_at": 0.0}
+
+
+def _active_topic_names():
+    """
+    Active topic names from the DB, in admin-configured order. Cached for
+    _TOPIC_NAME_CACHE_TTL_SECONDS so a batch classification run (one call
+    per article) doesn't re-query on every article. The rule bullets in
+    the classification prompt below are written for the default
+    7-category taxonomy — adding/removing topics via the admin UI changes
+    which names the model can choose from, but the semantic guidance
+    still reflects the default set until prompts are made configurable
+    too (tracked as a follow-up).
+    """
+    now = time.monotonic()
+    if _topic_name_cache["names"] is not None and now < _topic_name_cache["expires_at"]:
+        return _topic_name_cache["names"]
+
+    from aggregator import db
+    from aggregator.models import Topic
+    try:
+        names = [t.name for t in Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all()]
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"  [Classifier] Failed to load active topics from DB, using default taxonomy: {e}")
+        return _FALLBACK_TOPIC_NAMES
+
+    _topic_name_cache["names"] = names
+    _topic_name_cache["expires_at"] = now + _TOPIC_NAME_CACHE_TTL_SECONDS
+    return names
 
 
 @observe()
@@ -37,6 +67,10 @@ def classify_article(title, content_snippet=""):
     if not llm_client.is_configured():
         return ["Other"]
 
+    valid_topics = _active_topic_names()
+    if not valid_topics:
+        return ["Other"]
+
     # Use title + first 200 chars of content for classification
     text = title
     if content_snippet:
@@ -44,20 +78,14 @@ def classify_article(title, content_snippet=""):
         if clean:
             text += f"\n{clean}"
 
-    topics_list = "\n".join(f"- {t}" for t in VALID_TOPICS if t != "Other")
+    categories_list = "\n".join(f"- {t}" for t in valid_topics if t != "Other")
 
     prompt = f"""You are a news editor categorizing articles. You must respond with ONLY category names from the list below, one per line. No other text, no notes, no explanations, no parentheses.
 
 Article: "{text}"
 
 Categories (choose only from these exact names):
-- US Politics
-- US News
-- International News
-- Sci/Tech
-- Sports
-- Buss/Fin
-- Other
+{categories_list}
 
 Rules:
 - Use EXACT category names only — do not create new categories
@@ -88,7 +116,7 @@ Rules:
 
     matched = []
     for line in lines:
-        for valid in VALID_TOPICS:
+        for valid in valid_topics:
             if valid.lower() in line.lower():
                 if valid not in matched:
                     matched.append(valid)

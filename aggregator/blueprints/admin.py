@@ -7,8 +7,7 @@ from flask import Blueprint, current_app, render_template, request, redirect, ur
 from flask_login import login_required
 from sqlalchemy import case, func, or_
 from aggregator import db
-from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload
-from aggregator.constants import TOPICS
+from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
 
@@ -414,7 +413,7 @@ def list_articles(per_page=25, force_multi=False):
     return render_template(
         "articles.html",
         stories=stories,
-        topics=TOPICS,
+        topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_label=active_label,
         active_scrape_status=active_scrape_status,
         active_search_query=active_search_query,
@@ -970,3 +969,91 @@ def metrics():
         "last_headline_site_metrics": _load_json_setting("last_headline_site_metrics"),
         "scrape_outcome_history": _load_json_setting("scrape_outcome_history_v1"),
     })
+
+
+@admin.route("/topics")
+@login_required
+def topics_page():
+    topics = Topic.query.order_by(Topic.sort_order.asc().nullslast(), Topic.name.asc()).all()
+    return render_template("topics.html", topics=topics)
+
+
+@admin.route("/topics/add", methods=["POST"])
+@login_required
+def add_topic():
+    name = request.form.get("name", "").strip()
+    icon = request.form.get("icon", "").strip()[:4] or None
+    sort_order = request.form.get("sort_order", type=int)
+
+    if name and not Topic.query.filter_by(name=name).first():
+        max_order = db.session.query(func.max(Topic.sort_order)).scalar()
+        db.session.add(Topic(
+            name=name,
+            icon=icon,
+            sort_order=sort_order if sort_order is not None else (max_order or 0) + 1,
+            is_active=True,
+        ))
+        db.session.commit()
+        logger.info(f"[Topics] Added topic: {name}")
+    return redirect(url_for("admin.topics_page"))
+
+
+@admin.route("/topics/<int:topic_id>/update", methods=["POST"])
+@login_required
+def update_topic(topic_id):
+    topic = Topic.query.get_or_404(topic_id)
+    icon = request.form.get("icon", "").strip()[:4]
+    sort_order = request.form.get("sort_order", type=int)
+
+    topic.icon = icon or None
+    if sort_order is not None:
+        topic.sort_order = sort_order
+    topic.is_active = request.form.get("is_active") == "on"
+    db.session.commit()
+    return redirect(url_for("admin.topics_page"))
+
+
+RSS_FEED_BUCKETS = ["general", "right_enrichment", "left_enrichment"]
+
+
+@admin.route("/rss-feeds")
+@login_required
+def rss_feeds_page():
+    feeds_by_bucket = {
+        bucket: RssFeed.query.filter_by(bucket=bucket).order_by(RssFeed.url.asc()).all()
+        for bucket in RSS_FEED_BUCKETS
+    }
+    return render_template("rss_feeds.html", feeds_by_bucket=feeds_by_bucket, buckets=RSS_FEED_BUCKETS)
+
+
+@admin.route("/rss-feeds/add", methods=["POST"])
+@login_required
+def add_rss_feed():
+    url = request.form.get("url", "").strip()
+    bucket = request.form.get("bucket", "").strip()
+    label = request.form.get("label", "").strip() or None
+
+    if url and bucket in RSS_FEED_BUCKETS and not RssFeed.query.filter_by(url=url, bucket=bucket).first():
+        db.session.add(RssFeed(url=url, bucket=bucket, label=label, enabled=True))
+        db.session.commit()
+        logger.info(f"[RssFeeds] Added feed: {url} ({bucket})")
+    return redirect(url_for("admin.rss_feeds_page"))
+
+
+@admin.route("/rss-feeds/<int:feed_id>/update", methods=["POST"])
+@login_required
+def update_rss_feed(feed_id):
+    feed = RssFeed.query.get_or_404(feed_id)
+    feed.label = request.form.get("label", "").strip() or None
+    feed.enabled = request.form.get("enabled") == "on"
+    db.session.commit()
+    return redirect(url_for("admin.rss_feeds_page"))
+
+
+@admin.route("/rss-feeds/<int:feed_id>/delete", methods=["POST"])
+@login_required
+def delete_rss_feed(feed_id):
+    feed = RssFeed.query.get_or_404(feed_id)
+    db.session.delete(feed)
+    db.session.commit()
+    return redirect(url_for("admin.rss_feeds_page"))

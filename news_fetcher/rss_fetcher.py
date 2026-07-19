@@ -11,62 +11,14 @@ from news_fetcher.story_grouper import normalize_title_tokens, titles_are_near_d
 
 logger = logging.getLogger(__name__)
 
-RSS_FEEDS = [
-    # Wire services / Center
-    "https://feeds.apnews.com/rss/topnews",
-    "https://feeds.reuters.com/reuters/topNews",
-    "https://feeds.bbci.co.uk/news/rss.xml",
-    "https://feeds.npr.org/1001/rss.xml",
-    "https://www.pbs.org/newshour/feeds/rss/headlines",
-    "https://www.economist.com/the-world-this-week/rss.xml",
-    # Center-Left
-    "https://rss.cnn.com/rss/edition.rss",
-    "https://feeds.nbcnews.com/nbcnews/public/news",
-    "https://feeds.washingtonpost.com/rss/world",
-    "https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/section/world/rss.xml",
-    "https://www.theguardian.com/world/rss",
-    # Center-Right
-    "https://moxie.foxnews.com/google-publisher/latest.xml",
-    "https://moxie.foxbusiness.com/google-publisher/latest.xml",
-    "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
-    "https://nypost.com/feed/",
-    "https://www.washingtontimes.com/rss/headlines/news/politics/",
-    "https://reason.com/feed/",
-    "https://www.nationalreview.com/feed/",
-    # Political / Neutral
-    "https://thehill.com/feed/",
-    "https://api.axios.com/feed/",
-    "https://rss.politico.com/politics-news.xml",
-    # International / Additional Networks
-    "https://www.aljazeera.com/xml/rss/all.xml",
-    "https://nationalpost.com/feed/",
-    "https://torontosun.com/feed/",
-    "https://feeds.abcnews.com/abcnews/topstories",
-    "https://www.cbsnews.com/latest/rss/main",
-]
-
-RIGHT_ENRICHMENT_FEEDS = [
-    "https://moxie.foxnews.com/google-publisher/latest.xml",
-    "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
-    "https://nypost.com/feed/",
-    "https://www.washingtonexaminer.com/rss",
-    "https://www.washingtontimes.com/rss/headlines/news/politics/",
-    "https://www.nationalreview.com/feed/",
-    "https://moxie.foxbusiness.com/google-publisher/latest.xml",
-    "https://www.newsmax.com/rss/Newsfront/16/",
-    "https://www.dailywire.com/feeds/rss.xml",
-]
 RIGHT_ENRICHMENT_TOPIC = "Targeted Right RSS Enrichment"
-LEFT_ENRICHMENT_FEEDS = [
-    "https://rss.cnn.com/rss/edition.rss",
-    "https://feeds.nbcnews.com/nbcnews/public/news",
-    "https://feeds.washingtonpost.com/rss/world",
-    "https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/section/world/rss.xml",
-    "https://www.theguardian.com/world/rss",
-    "https://feeds.npr.org/1001/rss.xml",
-    "https://www.cbsnews.com/latest/rss/main",
-]
 LEFT_ENRICHMENT_TOPIC = "Targeted Left RSS Enrichment"
+
+
+def _active_feed_urls(bucket):
+    """Enabled RssFeed URLs for a bucket (general / right_enrichment / left_enrichment)."""
+    from aggregator.models import RssFeed
+    return [f.url for f in RssFeed.query.filter_by(bucket=bucket, enabled=True).all()]
 
 
 def _parse_published(entry):
@@ -158,13 +110,14 @@ def fetch_and_store_rss():
     from news_fetcher import llm_client
 
     max_entries = RSS_MAX_ENTRIES_PER_FEED_GROQ if llm_client.LLM_PROVIDER == "groq" else 30
+    feed_urls = _active_feed_urls("general")
 
     logger.info("=== RSS fetch starting ===")
     total = 0
     metrics = {
         "provider": "rss",
         "status": "ok",
-        "feeds_attempted": len(RSS_FEEDS),
+        "feeds_attempted": len(feed_urls),
         "feeds_with_articles": 0,
         "input_articles": 0,
         "stored": 0,
@@ -177,7 +130,7 @@ def fetch_and_store_rss():
         "per_feed": [],
     }
 
-    for feed_url in RSS_FEEDS:
+    for feed_url in feed_urls:
         source_name, articles = fetch_feed(feed_url, max_entries=max_entries)
         if articles:
             feed_metrics = store_articles(articles, "Global News", provider="rss")
@@ -466,12 +419,13 @@ def enrich_skewed_stories_with_right_feeds(
     """
     from aggregator.models import Story
 
+    right_feed_urls = _active_feed_urls("right_enrichment")
     metrics = {
         "provider": "rss_enrichment_right",
         "status": "ok",
         "stories_considered": 0,
         "stories_targeted": [],
-        "feeds_attempted": len(RIGHT_ENRICHMENT_FEEDS),
+        "feeds_attempted": len(right_feed_urls),
         "feeds_with_articles": 0,
         "feed_articles_scanned": 0,
         "input_articles": 0,
@@ -511,7 +465,7 @@ def enrich_skewed_stories_with_right_feeds(
 
     metrics = _enrich_stories_with_feed_set(
         target_stories,
-        RIGHT_ENRICHMENT_FEEDS,
+        right_feed_urls,
         provider="rss_enrichment_right",
         topic_name=RIGHT_ENRICHMENT_TOPIC,
         max_articles_per_story=max_articles_per_story,
@@ -558,7 +512,7 @@ def enrich_skewed_stories_with_left_feeds(
 
     metrics = _enrich_stories_with_feed_set(
         target_stories,
-        LEFT_ENRICHMENT_FEEDS,
+        _active_feed_urls("left_enrichment"),
         provider="rss_enrichment_left",
         topic_name=LEFT_ENRICHMENT_TOPIC,
         max_articles_per_story=max_articles_per_story,
@@ -575,12 +529,12 @@ def enrich_story_with_opposite_feeds(story, max_articles_per_story=3, lookback_h
 
     if leftish_total > rightish_total:
         direction = "right"
-        feed_urls = RIGHT_ENRICHMENT_FEEDS
+        feed_urls = _active_feed_urls("right_enrichment")
         provider = "rss_enrichment_right_manual"
         topic_name = RIGHT_ENRICHMENT_TOPIC
     elif rightish_total > leftish_total:
         direction = "left"
-        feed_urls = LEFT_ENRICHMENT_FEEDS
+        feed_urls = _active_feed_urls("left_enrichment")
         provider = "rss_enrichment_left_manual"
         topic_name = LEFT_ENRICHMENT_TOPIC
     else:
