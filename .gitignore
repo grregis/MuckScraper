@@ -38,3 +38,7 @@ catcode.sh
 TROUBLESHOOTINGHL.md
 tests
 scripts
+
+# Internal working docs — not for the public repo
+PROJECT_MAP.md
+TROUBLESHOOTING.md
