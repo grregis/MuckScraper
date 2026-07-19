@@ -58,3 +58,13 @@ def apply_aggregator_filter(story):
         "readable_pct": round((readable_articles / total_articles) * 100) if total_articles else 0,
         "full_pct": round((status_counts["success"] / total_articles) * 100) if total_articles else 0,
     }
+
+
+def annotate_edition_story_flags(edition_story_rows):
+    """Flatten EditionStory rows to their Story objects, tagged with .edition_has_updates."""
+    stories = []
+    for edition_story in edition_story_rows:
+        story = edition_story.story
+        story.edition_has_updates = bool(getattr(edition_story, "has_updates", False))
+        stories.append(story)
+    return stories

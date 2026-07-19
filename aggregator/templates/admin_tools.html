@@ -452,7 +452,7 @@
     <div class="section">
         <div class="section-head">
             <div class="section-title">Configuration</div>
-            <div class="section-copy">Manage the topic taxonomy and RSS feed sources.</div>
+            <div class="section-copy">Manage the topic taxonomy, RSS feed sources, and the public headlines feed.</div>
         </div>
         <div class="tool-list">
             <div class="tool-card">
@@ -470,6 +470,14 @@
                     <span class="badge">Navigation</span>
                 </div>
                 <a href="{{ url_for('admin.rss_feeds_page') }}" class="btn btn-secondary">Open RSS Feeds</a>
+            </div>
+            <div class="tool-card">
+                <div class="tool-card-title">Headlines</div>
+                <p>View the latest published edition's headlines and analysis as a plain list.</p>
+                <div class="meta-row">
+                    <span class="badge">Navigation</span>
+                </div>
+                <a href="{{ url_for('public.headlines_feed') }}" class="btn btn-secondary">Open Headlines</a>
             </div>
         </div>
     </div>
