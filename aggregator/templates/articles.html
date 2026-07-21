@@ -708,6 +708,12 @@
 
         <div class="sidebar-inner">
             <div class="sidebar-content">
+                <div class="topic-block">
+                    <a href="{{ url_for('public.headlines_feed') }}">
+                        <span class="full-text">Headlines</span>
+                        <span class="icon-text">HL</span>
+                    </a>
+                </div>
                 <div class="topic-block {% if not active_label and not is_multi_view %}active{% endif %}">
                     <a href="{{ url_for('admin.list_articles', scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '') }}">
                         <span class="full-text">All Stories</span>
