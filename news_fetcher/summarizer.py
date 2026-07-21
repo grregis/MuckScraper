@@ -73,8 +73,15 @@ def _select_story_prompt_articles(story, limit=10):
 
     This is intentionally conservative: it only removes clear outliers from
     multi-source clusters and does not alter persisted story membership.
+
+    story.articles has no defined order, so it's sorted most-recent-first
+    before truncating to `limit` — otherwise a story with more than `limit`
+    articles can silently drop its newest developments from the prompt if
+    they don't happen to land in the collection's native DB order.
     """
-    articles = list(story.articles[:limit])
+    from datetime import datetime as _dt
+    sorted_articles = sorted(story.articles, key=lambda a: getattr(a, "date", None) or _dt.min, reverse=True)
+    articles = sorted_articles[:limit]
     if len(articles) < 3:
         return articles, []
 

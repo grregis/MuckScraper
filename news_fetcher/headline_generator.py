@@ -32,8 +32,15 @@ def generate_story_headline(story):
         logger.debug(f"Story '{story.title}' has only 1 article, skipping headline.")
         return None
 
+    # story.articles has no defined order — sort most-recent-first so a
+    # story with more than 10 articles doesn't silently drop its newest
+    # developments from the prompt just because they land later in the
+    # collection's native DB order.
+    from datetime import datetime
+    sorted_articles = sorted(story.articles, key=lambda a: getattr(a, "date", None) or datetime.min, reverse=True)
+
     titles = "\n".join(
-        f"- {article.title}" for article in story.articles[:10]
+        f"- {article.title}" for article in sorted_articles[:10]
     )
 
     prompt = f"""You are a wire service editor writing a single headline.
