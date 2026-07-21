@@ -958,10 +958,16 @@ def store_articles(articles_data, topic_name, provider=None):
     return metrics
 
 
-def review_ambiguous_grouping_matches(review_hours=24, max_articles=75):
+def review_ambiguous_grouping_matches(max_articles=75):
     """
-    Recheck only articles that had an ambiguous first-pass grouping decision.
+    Recheck articles that had an ambiguous first-pass grouping decision, oldest first.
     This is intentionally capped and only runs during the full pipeline.
+
+    No age cutoff: an earlier version excluded articles older than 24h, which
+    silently orphaned any backlog the cap couldn't clear in time (grouping_needs_review
+    stayed True forever once an article aged out). Oldest-first ordering with no
+    cutoff means the cap still bounds each run's Ollama load, but the backlog
+    drains over successive runs instead of losing articles permanently.
     """
     from news_fetcher.story_grouper import find_matching_story_with_metadata
 
@@ -969,11 +975,9 @@ def review_ambiguous_grouping_matches(review_hours=24, max_articles=75):
         logger.info("Ollama offline, skipping ambiguous grouping review.")
         return {"status": "skipped_no_ollama", "reviewed": 0, "reassigned": 0}
 
-    cutoff = datetime.utcnow() - timedelta(hours=review_hours)
     articles = Article.query.filter(
         Article.grouping_needs_review == True,
         Article.grouping_reviewed_at.is_(None),
-        Article.fetched_at >= cutoff,
     ).order_by(Article.fetched_at.asc()).limit(max_articles).all()
 
     if not articles:
