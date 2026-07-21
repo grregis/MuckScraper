@@ -1,0 +1,49 @@
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+            <div class="sidebar-content">
+                <div class="topic-block {% if active_nav == 'headlines' %}active{% endif %}">
+                    <a href="{{ url_for('public.headlines_feed') }}">
+                        <span class="full-text">Headlines</span>
+                    </a>
+                </div>
+                <div class="topic-block {% if active_nav == 'all' %}active{% endif %}">
+                    <a href="{{ url_for('admin.list_articles', scrape_status=active_scrape_status|default(none), show_single=show_single|default(false)|string|lower, q=active_search_query|default(none) or '') }}">
+                        <span class="full-text">All Stories</span>
+                    </a>
+                </div>
+                <div class="topic-block {% if active_nav == 'grouped' %}active{% endif %}">
+                    <a href="{{ url_for('admin.multi_article_stories', topic=active_label|default(none), scrape_status=active_scrape_status|default(none), q=active_search_query|default(none) or '') }}">
+                        <span class="full-text">Grouped Stories</span>
+                    </a>
+                </div>
+                <div class="topic-block {% if active_nav == 'fetch' %}active{% endif %}">
+                    <a href="{{ url_for('admin.fetch_page') }}">
+                        <span class="full-text">Fetch Articles</span>
+                    </a>
+                </div>
+                <hr class="sidebar-divider">
+
+                <h2>Topics</h2>
+
+                {% for topic in topics|default([]) %}
+                <div class="topic-block {% if active_label|default(none) == topic.name %}active{% endif %}">
+                    <a href="{{ url_for('admin.list_articles', topic=topic.name, scrape_status=active_scrape_status|default(none), show_single=show_single|default(false)|string|lower, q=active_search_query|default(none) or '') }}">
+                        <span class="full-text">{{ topic.name }}</span>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-status">
+                    <div class="status-dot" id="ollama-dot"></div>
+                    <span id="ollama-label">Ollama Status</span>
+                </div>
+                <div class="sidebar-status">
+                    <div class="status-dot" id="meili-dot"></div>
+                    <span id="meili-label">Meili Search Status</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">«</button>

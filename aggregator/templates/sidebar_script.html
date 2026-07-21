@@ -1,0 +1,63 @@
+    // ── Sidebar ──
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const btn = document.getElementById('sidebar-toggle');
+        sidebar.classList.toggle('collapsed');
+
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('muckscraper-sidebar', isCollapsed ? 'collapsed' : 'expanded');
+        btn.textContent = isCollapsed ? '»' : '«';
+    }
+
+    const savedSidebar = localStorage.getItem('muckscraper-sidebar');
+    if (savedSidebar === 'collapsed') {
+        document.getElementById('sidebar').classList.add('collapsed');
+        document.getElementById('sidebar-toggle').textContent = '»';
+    }
+
+    // ── Ollama status ──
+    function checkOllamaStatus() {
+        fetch('/ollama-status')
+            .then(r => r.json())
+            .then(data => {
+                const dot   = document.getElementById('ollama-dot');
+                const label = document.getElementById('ollama-label');
+                if (data.online) {
+                    dot.className     = 'status-dot online';
+                    label.textContent = 'Ollama Online';
+                } else {
+                    dot.className     = 'status-dot offline';
+                    label.textContent = 'Ollama Offline';
+                }
+            })
+            .catch(() => {
+                document.getElementById('ollama-dot').className = 'status-dot offline';
+                document.getElementById('ollama-label').textContent = 'Ollama Offline';
+            });
+    }
+
+    function checkMeiliStatus() {
+        fetch('/meili-status')
+            .then(r => r.json())
+            .then(data => {
+                const dot = document.getElementById('meili-dot');
+                const label = document.getElementById('meili-label');
+                if (data.online) {
+                    dot.className = 'status-dot online';
+                    label.textContent = 'Meili Search Online';
+                } else {
+                    dot.className = 'status-dot offline';
+                    label.textContent = 'Meili Search Offline';
+                }
+            })
+            .catch(() => {
+                document.getElementById('meili-dot').className = 'status-dot offline';
+                document.getElementById('meili-label').textContent = 'Meili Search Offline';
+            });
+    }
+
+    checkOllamaStatus();
+    checkMeiliStatus();
+
+    setInterval(checkOllamaStatus, 30000);
+    setInterval(checkMeiliStatus, 30000);

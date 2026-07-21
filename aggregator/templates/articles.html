@@ -66,176 +66,7 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        .layout {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* ── Sidebar ── */
-        .sidebar {
-            width: 240px;
-            min-width: 240px;
-            background: var(--sidebar-bg);
-            color: var(--sidebar-text);
-            display: flex;
-            flex-direction: column;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow: hidden;
-            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
-            z-index: 10;
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            scrollbar-width: none;
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .sidebar::-webkit-scrollbar { display: none; }
-
-        .sidebar.collapsed {
-            width: 68px;
-            min-width: 68px;
-        }
-
-        .sidebar-inner {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            height: 100%;
-            min-height: 0;
-            padding: 24px 0;
-            overflow-x: hidden;
-        }
-
-        .sidebar-content {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            scrollbar-width: none;
-        }
-
-        .sidebar-content::-webkit-scrollbar { display: none; }
-
-        .sidebar h2 {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            color: var(--accent-light);
-            padding: 0 24px 12px 24px;
-            margin-bottom: 8px;
-            white-space: nowrap;
-            transition: opacity 0.2s;
-        }
-
-        .sidebar.collapsed h2 {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .topic-block {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 2px 16px 2px 0;
-            border-left: 4px solid transparent;
-            white-space: nowrap;
-            overflow: hidden;
-            transition: all 0.2s;
-        }
-
-        .topic-block.active {
-            border-left: 4px solid var(--accent);
-            background: var(--sidebar-active-bg);
-        }
-
-        .topic-block a {
-            flex: 1;
-            padding: 10px 12px 10px 20px;
-            color: var(--sidebar-text);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .sidebar.collapsed .topic-block a {
-            padding-left: 0;
-            text-align: center;
-        }
-
-        .sidebar.collapsed .topic-block {
-             justify-content: center;
-             padding: 4px 0;
-        }
-        .sidebar.collapsed .topic-block a span.full-text { display: none; }
-        .sidebar.collapsed .topic-block a span.icon-text { display: block; font-weight: 800; color: var(--accent-light); font-size: 15px; }
-        .topic-block a span.icon-text { display: none; }
-
-        .topic-block.active a { color: var(--accent-light); }
-        .topic-block:hover { background: rgba(255, 255, 255, 0.05); }
-
-        .sidebar-divider {
-            border: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            margin: 8px 24px;
-        }
-        .sidebar.collapsed .sidebar-divider { margin: 8px 12px; }
-
-        .sidebar-footer {
-            margin-top: auto;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 16px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            background: var(--sidebar-bg);
-            flex-shrink: 0;
-        }
-
-        .sidebar.collapsed .sidebar-footer { padding: 16px 0; align-items: center; }
-        .sidebar.collapsed .sidebar-footer span { display: none; }
-
-        .sidebar-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--sidebar-muted);
-            white-space: nowrap;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #555;
-            flex-shrink: 0;
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.05);
-        }
-
-        .status-dot.online  { background: #a6e3a1; box-shadow: 0 0 8px rgba(166, 227, 161, 0.4); }
-        .status-dot.offline { background: #f38ba8; }
-
-        .sidebar-toggle-btn {
-            background: none;
-            border: none;
-            color: var(--sidebar-muted);
-            cursor: pointer;
-            padding: 12px;
-            align-self: flex-end;
-            flex-shrink: 0;
-            margin-right: 12px;
-            font-size: 18px;
-            border-radius: 8px;
-            transition: background 0.2s;
-        }
-        .sidebar-toggle-btn:hover { background: rgba(255,255,255,0.05); color: var(--sidebar-hover); }
-        .sidebar.collapsed .sidebar-toggle-btn {
-            align-self: center;
-            margin-right: 0;
-            transform: rotate(180deg);
-        }
+        {% include 'sidebar_styles.html' %}
 
         /* ── Main area ── */
         .main {
@@ -703,61 +534,7 @@
 
 <div class="layout">
 
-    <div class="sidebar" id="sidebar">
-        <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">«</button>
-
-        <div class="sidebar-inner">
-            <div class="sidebar-content">
-                <div class="topic-block">
-                    <a href="{{ url_for('public.headlines_feed') }}">
-                        <span class="full-text">Headlines</span>
-                        <span class="icon-text">HL</span>
-                    </a>
-                </div>
-                <div class="topic-block {% if not active_label and not is_multi_view %}active{% endif %}">
-                    <a href="{{ url_for('admin.list_articles', scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '') }}">
-                        <span class="full-text">All Stories</span>
-                        <span class="icon-text">ALL</span>
-                    </a>
-                </div>
-                <div class="topic-block {% if is_multi_view %}active{% endif %}">
-                    <a href="{{ url_for('admin.multi_article_stories', topic=active_label, scrape_status=active_scrape_status, q=active_search_query or '') }}">
-                        <span class="full-text">Grouped Stories</span>
-                        <span class="icon-text">GRP</span>
-                    </a>
-                </div>
-                <div class="topic-block">
-                    <a href="{{ url_for('admin.fetch_page') }}">
-                        <span class="full-text">Fetch Articles</span>
-                        <span class="icon-text">GET</span>
-                    </a>
-                </div>
-                <hr class="sidebar-divider">
-
-                <h2>Topics</h2>
-
-                {% for topic in topics %}
-                <div class="topic-block {% if active_label == topic.name %}active{% endif %}">
-                    <a href="{{ url_for('admin.list_articles', topic=topic.name, scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '') }}">
-                        <span class="full-text">{{ topic.name }}</span>
-                        <span class="icon-text">{{ topic.icon }}</span>
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="sidebar-footer">
-                <div class="sidebar-status">
-                    <div class="status-dot" id="ollama-dot"></div>
-                    <span id="ollama-label">Ollama Status</span>
-                </div>
-                <div class="sidebar-status">
-                    <div class="status-dot" id="meili-dot"></div>
-                    <span id="meili-label">Meili Search Status</span>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include 'sidebar_nav.html' %}
 
     <div class="main">
         <div class="main-header">
@@ -1047,22 +824,7 @@
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     applyTheme(savedTheme);
 
-    // ── Sidebar ──
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const btn = document.getElementById('sidebar-toggle');
-        sidebar.classList.toggle('collapsed');
-
-        const isCollapsed = sidebar.classList.contains('collapsed');
-        localStorage.setItem('muckscraper-sidebar', isCollapsed ? 'collapsed' : 'expanded');
-        btn.textContent = isCollapsed ? '»' : '«';
-    }
-
-    const savedSidebar = localStorage.getItem('muckscraper-sidebar');
-    if (savedSidebar === 'collapsed') {
-        document.getElementById('sidebar').classList.add('collapsed');
-        document.getElementById('sidebar-toggle').textContent = '»';
-    }
+    {% include 'sidebar_script.html' %}
 
     const aiTaskStartUrl = "{{ url_for('admin.start_ai_task') }}";
     const aiTaskStatusTemplate = "{{ url_for('admin.ai_task_status', task_type='TASK_TYPE', resource_id=999999) }}";
@@ -1147,47 +909,6 @@
         await pollAiTask(taskType, resourceId, button);
     }
 
-    // ── Ollama status ──
-    function checkOllamaStatus() {
-        fetch('/ollama-status')
-            .then(r => r.json())
-            .then(data => {
-                const dot   = document.getElementById('ollama-dot');
-                const label = document.getElementById('ollama-label');
-                if (data.online) {
-                    dot.className     = 'status-dot online';
-                    label.textContent = 'Ollama Online';
-                } else {
-                    dot.className     = 'status-dot offline';
-                    label.textContent = 'Ollama Offline';
-                }
-            })
-            .catch(() => {
-                document.getElementById('ollama-dot').className = 'status-dot offline';
-                document.getElementById('ollama-label').textContent = 'Ollama Offline';
-            });
-    }
-
-    function checkMeiliStatus() {
-        fetch('/meili-status')
-            .then(r => r.json())
-            .then(data => {
-                const dot = document.getElementById('meili-dot');
-                const label = document.getElementById('meili-label');
-                if (data.online) {
-                    dot.className = 'status-dot online';
-                    label.textContent = 'Meili Search Online';
-                } else {
-                    dot.className = 'status-dot offline';
-                    label.textContent = 'Meili Search Offline';
-                }
-            })
-            .catch(() => {
-                document.getElementById('meili-dot').className = 'status-dot offline';
-                document.getElementById('meili-label').textContent = 'Meili Search Offline';
-            });
-    }
-
     // ── Local Timezone Conversion ──
     function convertToLocalTime() {
         const dateElements = document.querySelectorAll('.local-date');
@@ -1241,11 +962,7 @@
         restoreStoryPosition();
     });
 
-    checkOllamaStatus();
-    checkMeiliStatus();
     convertToLocalTime();
-    setInterval(checkOllamaStatus, 30000);
-    setInterval(checkMeiliStatus, 30000);
 </script>
 
 </body>

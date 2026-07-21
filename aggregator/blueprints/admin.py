@@ -316,7 +316,12 @@ def apply_scrape_result(article, result):
 @admin.route("/fetch-page")
 @login_required
 def fetch_page():
-    return render_template("fetch.html", fetch_presets=FETCH_PRESETS)
+    return render_template(
+        "fetch.html",
+        fetch_presets=FETCH_PRESETS,
+        topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
+        active_nav="fetch",
+    )
 
 
 @admin.route("/tools")
@@ -410,6 +415,13 @@ def list_articles(per_page=25, force_multi=False):
         apply_aggregator_filter(story)
         story_bias_totals(story)
 
+    if force_multi:
+        active_nav = "grouped"
+    elif active_label:
+        active_nav = None
+    else:
+        active_nav = "all"
+
     return render_template(
         "articles.html",
         stories=stories,
@@ -421,7 +433,8 @@ def list_articles(per_page=25, force_multi=False):
         page=page,
         total_pages=total_pages,
         show_single=show_single,
-        is_multi_view=force_multi
+        is_multi_view=force_multi,
+        active_nav=active_nav,
     )
 
 

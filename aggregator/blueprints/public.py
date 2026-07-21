@@ -63,6 +63,8 @@ def headlines_feed():
         total_pages=total_pages,
         has_next=page < total_pages,
         has_prev=page > 1,
+        topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
+        active_nav="headlines",
     )
 
 
@@ -77,7 +79,12 @@ def view_story(story_id):
 
     apply_aggregator_filter(story)
 
-    return render_template("story.html", story=story, ollama_online=ollama_online)
+    return render_template(
+        "story.html",
+        story=story,
+        ollama_online=ollama_online,
+        topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
+    )
 
 
 @public.route("/article/<int:article_id>")
@@ -85,7 +92,12 @@ def view_article(article_id):
     article = Article.query.get_or_404(article_id)
     ollama_online = check_ollama_status()
 
-    return render_template("article.html", article=article, ollama_online=ollama_online)
+    return render_template(
+        "article.html",
+        article=article,
+        ollama_online=ollama_online,
+        topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
+    )
 
 
 @public.route("/ollama-status")

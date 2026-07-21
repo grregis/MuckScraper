@@ -218,14 +218,18 @@
             .story-card { padding: 24px; border-radius: 0; }
             h1 { font-size: 28px; }
         }
+        {% include 'sidebar_styles.html' %}
     </style>
 </head>
 <body>
 
+<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">
+
 <div class="topbar">
     <div class="topbar-left" style="display:flex; align-items:center; gap:24px;">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('admin.list_articles') }}">← Back to Feed</a>
     </div>
     <button id="theme-toggle" onclick="toggleTheme()"
         style="background:none; border:1px solid #444; color:#cdd6f4;
@@ -373,7 +377,12 @@
     </div>
 </div>
 
+</div>
+</div>
+
 <script>
+    {% include 'sidebar_script.html' %}
+
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         const btn = document.getElementById('theme-toggle');

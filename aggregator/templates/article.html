@@ -354,9 +354,14 @@
             h1 { font-size: 28px; }
             .topbar { padding: 16px 20px; }
         }
+        {% include 'sidebar_styles.html' %}
     </style>
 </head>
 <body>
+
+<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">
 
 <div class="topbar">
     <div class="topbar-left">
@@ -479,7 +484,12 @@
     </div>
 </div>
 
+</div>
+</div>
+
 <script>
+    {% include 'sidebar_script.html' %}
+
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         const btn = document.getElementById('theme-toggle');

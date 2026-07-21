@@ -10,28 +10,43 @@
     <title>Headlines — MuckScraper</title>
     <style>
         :root {
-            --accent: #5a5f52;
-            --bg: #f8f9fa;
-            --surface: #ffffff;
-            --topbar-bg: #1e1e2e;
-            --topbar-text: #cdd6f4;
-            --text: #1a1a1a;
-            --text-muted: #555;
-            --text-faint: #888;
-            --border: #eef0f2;
-            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+            --accent:        #5a5f52;
+            --accent-light:  #7a8172;
+            --accent-dark:   #464b40;
+            --bg:            #f8f9fa;
+            --surface:       #ffffff;
+            --text:          #1a1a1a;
+            --text-muted:    #555;
+            --text-faint:    #888;
+            --border:        #eef0f2;
+            --summary-bg:    #fdfbff;
+            --input-border:  #dde1e7;
+            --btn-muted-bg:  #f0f2f5;
+            --btn-muted-text:#4a5568;
+            --shadow:        0 2px 8px rgba(0,0,0,0.05);
+            --topbar-bg:     #1e1e2e;
+            --topbar-text:   #cdd6f4;
         }
         [data-theme="dark"] {
-            --bg: #0f0f17;
-            --surface: #1a1a26;
-            --text: #e2e8f0;
-            --text-muted: #a0aec0;
-            --text-faint: #718096;
-            --border: #2d2d3f;
-            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+            --bg:            #0f0f17;
+            --surface:       #1a1a26;
+            --text:          #e2e8f0;
+            --text-muted:    #a0aec0;
+            --text-faint:    #718096;
+            --border:        #2d2d3f;
+            --summary-bg:    #222230;
+            --input-border:  #3f3f5a;
+            --btn-muted-bg:  #2d2d3f;
+            --btn-muted-text:#cbd5e0;
+            --shadow:        0 4px 12px rgba(0,0,0,0.25);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+        }
         .topbar {
             background: var(--topbar-bg);
             padding: 16px 40px;
@@ -41,118 +56,198 @@
         }
         .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
         .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
-        .container { max-width: 760px; margin: 48px auto; padding: 0 20px; }
-        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
-        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
-        .card {
+        .header-controls { display: flex; align-items: center; gap: 12px; }
+        .theme-toggle {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--topbar-text);
+            padding: 6px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .main { max-width: 1000px; margin: 0 auto; padding: 0 40px; }
+        .main-header { padding: 24px 0 8px; }
+        h1 { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; margin-bottom: 4px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+
+        .story {
             background: var(--surface);
             border-radius: 16px;
-            border: 1px solid var(--border);
+            padding: 0;
+            margin-bottom: 32px;
             box-shadow: var(--shadow);
-            padding: 24px 28px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .card + .card { margin-top: 20px; }
-        .story-title { font-size: 19px; font-weight: 800; margin-bottom: 10px; line-height: 1.3; }
-        .story-title a { color: inherit; text-decoration: none; }
-        .story-title a:hover { color: var(--accent); text-decoration: underline; }
-        .story-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-        .updates-tag {
-            background: var(--accent);
-            color: white;
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .story:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .story-layout { display: flex; gap: 0; }
+        .story-image {
+            width: 280px;
+            min-width: 280px;
+            height: auto;
+            min-height: 200px;
+            background: var(--btn-muted-bg);
+            position: relative;
+            overflow: hidden;
         }
-        .bias-tag {
-            display: inline-block;
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .story-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
+        .story:hover .story-image img { transform: scale(1.05); }
+        .story-content { flex: 1; padding: 24px; display: flex; flex-direction: column; }
+        .story-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; gap: 16px; }
+        .story h2 { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.3; letter-spacing: -0.3px; }
+        .story h2 a { color: inherit; text-decoration: none; }
+        .story h2 a:hover { color: var(--accent); text-decoration: underline; }
+
+        .summary {
+            background: var(--summary-bg);
+            border-left: 4px solid var(--accent);
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text);
+            border-radius: 0 12px 12px 0;
         }
-        .bias-1    { background-color: #1a6bb5; color: white; }
-        .bias-2    { background-color: #6aaee0; color: white; }
-        .bias-3    { background-color: #888;    color: white; }
-        .bias-4    { background-color: #e07b6a; color: white; }
-        .bias-5    { background-color: #b51a1a; color: white; }
-        .bias-none { background-color: #ddd;    color: #666;  }
-        .summary { font-size: 14px; line-height: 1.6; color: var(--text); margin-bottom: 16px; }
-        .summary.pending { color: var(--text-faint); font-style: italic; }
-        .outlet-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .outlet-name { color: var(--text-muted); font-size: 12px; font-weight: 600; margin-right: 2px; }
-        .read-more { font-size: 13px; font-weight: 700; color: var(--accent); text-decoration: none; }
-        .read-more:hover { text-decoration: underline; }
-        .empty { padding: 64px; text-align: center; color: var(--text-faint); font-style: italic; }
-        .pagination {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            padding: 32px 0 8px;
-        }
+        .summary.pending { color: var(--text-faint); font-style: italic; background: var(--btn-muted-bg); border-left-color: var(--border); }
+        .summary-label { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 1.5px; margin-bottom: 8px; }
+
+        .btn { display: inline-block; border: none; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+        .btn-dark { background: var(--accent); color: white; }
+        .btn-dark:hover { background: var(--accent-dark); transform: translateY(-1px); }
+        .action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0; }
+
+        .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
+
+        .pagination { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 40px 0 80px 0; }
         .page-btn {
             background: var(--surface);
             color: var(--text);
-            border: 1px solid var(--border);
-            padding: 8px 18px;
-            border-radius: 10px;
+            border: 1px solid var(--input-border);
+            padding: 10px 20px;
+            border-radius: 12px;
             text-decoration: none;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
+            transition: all 0.2s;
             box-shadow: var(--shadow);
         }
-        .page-info { color: var(--text-muted); font-size: 13px; }
+        .page-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+        .page-info { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+
+        @media (max-width: 900px) {
+            .story-layout { flex-direction: column; }
+            .story-image { width: 100%; height: 200px; min-width: unset; }
+            .main { padding: 0 20px; }
+        }
+        {% include 'sidebar_styles.html' %}
     </style>
 </head>
 <body>
+<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">
+
 <div class="topbar">
     <div>
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('admin.list_articles') }}" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+    <div class="header-controls">
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+        <a href="{{ url_for('admin.tools_page') }}" class="theme-toggle" style="text-decoration: none;">🛠 Admin Tools</a>
     </div>
 </div>
 
-<div class="container">
-    <h1>Headlines</h1>
-    <p class="subtitle">{{ edition_label }}</p>
+<div class="main">
+    <div class="main-header">
+        <h1>Headlines</h1>
+        <div class="subtitle">{{ edition_label }}</div>
+    </div>
 
     {% if stories %}
         {% for story in stories %}
-        <div class="card">
-            <div class="story-title">
-                <a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a>
-            </div>
-            <div class="story-meta">
-                {% if story.last_updated %}
-                    <span style="font-size: 11px; color: var(--text-faint);">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}</span>
-                {% endif %}
-                {% if story.edition_has_updates %}
-                    <span class="updates-tag">New Updates</span>
-                {% endif %}
-            </div>
-            {% if story.summary %}
-                <div class="summary">{{ story.summary | get_big_picture }}</div>
-            {% else %}
-                <div class="summary pending">Analysis pending — this story hasn't been summarized yet.</div>
-            {% endif %}
-            <div class="outlet-row">
-                {% for outlet in story.unique_outlets %}
-                    <span class="outlet-name">{{ outlet.name }}</span>
-                    {% if outlet.bias_score == 1 %}<span class="bias-tag bias-1">Left</span>
-                    {% elif outlet.bias_score == 2 %}<span class="bias-tag bias-2">Lean Left</span>
-                    {% elif outlet.bias_score == 3 %}<span class="bias-tag bias-3">Center</span>
-                    {% elif outlet.bias_score == 4 %}<span class="bias-tag bias-4">Lean Right</span>
-                    {% elif outlet.bias_score == 5 %}<span class="bias-tag bias-5">Right</span>
-                    {% else %}<span class="bias-tag bias-none">Unrated</span>
+        <div class="story" id="story-{{ story.id }}">
+            <div class="story-layout">
+                {% set featured_article = story.articles|selectattr('image_url')|first %}
+                <div class="story-image">
+                    {% if featured_article and featured_article.image_url %}
+                        <img src="{{ featured_article.image_url }}" alt="Story Image" loading="lazy">
+                    {% else %}
+                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:40px; background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);">
+                            📰
+                        </div>
                     {% endif %}
-                {% endfor %}
+                </div>
+
+                <div class="story-content">
+                    <div class="story-header">
+                        <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a></h2>
+                    </div>
+
+                    <div style="font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        {% if story.last_updated %}
+                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-light);"></span>
+                            Last updated: {{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}
+                        {% endif %}
+                        {% if story.deep_report %}
+                            <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">ANALYSIS AVAILABLE</span>
+                        {% endif %}
+                        {% if story.edition_has_updates %}
+                            <span style="background: #1a6bb5; color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">NEW UPDATES</span>
+                        {% endif %}
+                        {% if story.has_ai_headline %}
+                            <span style="margin-left:auto; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:4px; font-style:normal;">AI HEADLINE</span>
+                        {% endif %}
+                    </div>
+
+                    <div style="font-size: 14px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                        <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ story.articles|length }} ARTICLE{{ 'S' if story.articles|length != 1 else '' }}</span>
+                        <span>IN THIS STORY</span>
+                    </div>
+
+                    {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
+                    {% for art in story.articles %}
+                        {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
+                        {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
+                        {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
+                        {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
+                        {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
+                        {% endif %}
+                    {% endfor %}
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1px solid var(--border);">
+                        <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
+                            <div style="font-size: 11px; font-weight: 800; color: #1a6bb5; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #1a6bb5; padding-bottom: 4px;">Left</div>
+                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b1 + counts.b2 }}</div>
+                        </div>
+                        <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
+                            <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #888; padding-bottom: 4px;">Center</div>
+                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b3 }}</div>
+                        </div>
+                        <div style="flex: 1; text-align: center; padding: 0 5px;">
+                            <div style="font-size: 11px; font-weight: 800; color: #b51a1a; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #b51a1a; padding-bottom: 4px;">Right</div>
+                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b4 + counts.b5 }}</div>
+                        </div>
+                    </div>
+
+                    {% if story.summary %}
+                        <div class="summary">
+                            <div class="summary-label">The Big Picture</div>
+                            {{ story.summary | get_big_picture }}
+                        </div>
+                    {% else %}
+                        <div class="summary pending">Analysis pending — this story hasn't been summarized yet.</div>
+                    {% endif %}
+
+                    <div class="action-row">
+                        <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="width: 100%; text-align: center; padding: 12px; font-weight: 800; letter-spacing: 1px;">
+                            VIEW FULL COVERAGE & ANALYSIS →
+                        </a>
+                    </div>
+                </div>
             </div>
-            <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="read-more">Read full coverage →</a>
         </div>
         {% endfor %}
 
@@ -166,10 +261,31 @@
             {% endif %}
         </div>
     {% else %}
-        <div class="card">
-            <div class="empty">No headlines yet — check back after the next scheduled fetch.</div>
-        </div>
+        <div class="empty">No headlines yet — check back after the next scheduled fetch.</div>
     {% endif %}
 </div>
+
+</div>
+</div>
+
+<script>
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        const btn = document.getElementById('theme-toggle');
+        if (btn) btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('muckscraper-theme', next);
+        applyTheme(next);
+    }
+
+    const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
+    applyTheme(savedTheme);
+
+    {% include 'sidebar_script.html' %}
+</script>
 </body>
 </html>

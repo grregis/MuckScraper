@@ -148,13 +148,17 @@
             .container { margin: 28px auto; padding: 0 14px 32px; }
             .custom-grid { grid-template-columns: 1fr; }
         }
+        {% include 'sidebar_styles.html' %}
     </style>
 </head>
 <body>
+<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">
+
 <div class="topbar">
     <div class="topbar-left">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('admin.list_articles') }}">← Back to Feed</a>
     </div>
     <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
 </div>
@@ -250,7 +254,12 @@
     </div>
 </div>
 
+</div>
+</div>
+
 <script>
+    {% include 'sidebar_script.html' %}
+
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme') || 'light';
         const next = current === 'light' ? 'dark' : 'light';
