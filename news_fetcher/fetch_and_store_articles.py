@@ -1101,7 +1101,7 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
             try:
                 published_at = datetime.fromisoformat(
                     published_at_str.replace("Z", "+00:00")
-                ) if published_at_str else datetime.utcnow()
+                ).replace(tzinfo=None) if published_at_str else datetime.utcnow()
             except Exception:
                 published_at = datetime.utcnow()
 
@@ -1198,7 +1198,7 @@ def fetch_gnews(topic_name, query=None, category=None):
             try:
                 published_at = datetime.fromisoformat(
                     published_at_str.replace("Z", "+00:00")
-                ) if published_at_str else datetime.utcnow()
+                ).replace(tzinfo=None) if published_at_str else datetime.utcnow()
             except Exception:
                 published_at = datetime.utcnow()
 
