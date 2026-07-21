@@ -201,15 +201,19 @@ def _merge_counts(target, source):
         target[key] = target.get(key, 0) + value
 
 
-def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_ranking):
+def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state):
     """
     Run one direction (left or right) of targeted RSS enrichment: a first
-    enrichment pass, an optional bias retry + headline reranking, then a
-    second pass on the reranked skewed stories with the same follow-up steps.
+    enrichment pass, then a second pass on stories still skewed after the
+    first, with the same bias-retry follow-up step.
 
-    Returns (ranking_result, second_pass_ranking_result) so the caller can
-    chain `second_pass_ranking_result or ranking_result` into the next pass's
-    `entry_ranking`.
+    Headline ranking no longer runs between passes here — a single ranking
+    pass now runs once at the end of the full pipeline (see run_all_fetches)
+    instead of up to 5 times. The second-pass target query
+    (config["get_skewed_ids_func"]) still orders by Story.headline_score, so
+    it uses whatever score the previous pipeline run set rather than a
+    mid-run refresh — the same tradeoff already accepted on the Groq
+    provider path, which skips these passes' ranking re-runs entirely.
     """
     steps = run_metrics["steps"]
     direction = config["direction"]
@@ -244,15 +248,8 @@ def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_r
             logging.error(f"Error retrying outlet bias after targeted {direction} enrichment: {e}")
             run_metrics["status"] = "partial_error"
             steps[config["bias_retry_step"]] = {"status": "error", "reason": str(e)}
-        try:
-            steps[config["ranking_step"]] = run_optional_headline_ranking()
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error reranking after targeted {direction} enrichment: {e}")
-            run_metrics["status"] = "partial_error"
-            steps[config["ranking_step"]] = {"status": "error", "reason": str(e)}
 
-        logging.info(f"--- Running second-pass targeted {direction} RSS enrichment on reranked skewed stories ---")
+        logging.info(f"--- Running second-pass targeted {direction} RSS enrichment on skewed stories ---")
         try:
             reranked_target_ids = config["get_skewed_ids_func"](max_stories=5, candidate_pool=30)
             if reranked_target_ids:
@@ -282,19 +279,11 @@ def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_r
                         logging.error(f"Error retrying outlet bias after second-pass targeted {direction} enrichment: {e}")
                         run_metrics["status"] = "partial_error"
                         steps[config["second_pass_bias_retry_step"]] = {"status": "error", "reason": str(e)}
-                    try:
-                        steps[config["second_pass_ranking_step"]] = run_optional_headline_ranking()
-                    except Exception as e:
-                        db.session.rollback()
-                        logging.error(f"Error reranking after second-pass targeted {direction} enrichment: {e}")
-                        run_metrics["status"] = "partial_error"
-                        steps[config["second_pass_ranking_step"]] = {"status": "error", "reason": str(e)}
                 else:
                     steps[config["second_pass_bias_retry_step"]] = {
                         "status": "skipped",
                         "reason": "no_second_pass_enrichment_articles",
                     }
-                    steps[config["second_pass_ranking_step"]] = steps[config["ranking_step"]]
             else:
                 steps[config["second_pass_enrichment_step"]] = {
                     "status": "skipped",
@@ -304,7 +293,6 @@ def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_r
                     "status": "skipped",
                     "reason": "no_reranked_skewed_stories",
                 }
-                steps[config["second_pass_ranking_step"]] = steps[config["ranking_step"]]
         except Exception as e:
             db.session.rollback()
             logging.error(f"Error in second-pass targeted {direction} RSS enrichment: {e}")
@@ -317,16 +305,11 @@ def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_r
                 "status": "skipped",
                 "reason": "second_pass_error",
             }
-            steps[config["second_pass_ranking_step"]] = {
-                "status": "skipped",
-                "reason": "second_pass_error",
-            }
     else:
         steps[config["bias_retry_step"]] = {
             "status": "skipped",
             "reason": "no_enrichment_articles",
         }
-        steps[config["ranking_step"]] = entry_ranking
         steps[config["second_pass_enrichment_step"]] = {
             "status": "skipped",
             "reason": "first_pass_no_enrichment_articles",
@@ -335,9 +318,6 @@ def _run_targeted_rss_enrichment_pass(config, run_metrics, ollama_state, entry_r
             "status": "skipped",
             "reason": "first_pass_no_enrichment_articles",
         }
-        steps[config["second_pass_ranking_step"]] = steps[config["ranking_step"]]
-
-    return steps[config["ranking_step"]], steps[config["second_pass_ranking_step"]]
 
 
 RIGHT_RSS_ENRICHMENT_CONFIG = {
@@ -347,10 +327,8 @@ RIGHT_RSS_ENRICHMENT_CONFIG = {
     "get_skewed_ids_func": get_skewed_story_ids_for_right_enrichment,
     "enrichment_step": "targeted_right_rss_enrichment",
     "bias_retry_step": "targeted_right_rss_bias_retry",
-    "ranking_step": "headline_ranking",
     "second_pass_enrichment_step": "targeted_right_rss_enrichment_second_pass",
     "second_pass_bias_retry_step": "targeted_right_rss_second_pass_bias_retry",
-    "second_pass_ranking_step": "headline_ranking_post_second_pass",
     "bias_retry_ollama_label": "before_targeted_enrichment_bias_retry",
     "second_pass_bias_retry_ollama_label": "before_second_pass_targeted_enrichment_bias_retry",
 }
@@ -362,10 +340,8 @@ LEFT_RSS_ENRICHMENT_CONFIG = {
     "get_skewed_ids_func": get_skewed_story_ids_for_left_enrichment,
     "enrichment_step": "targeted_left_rss_enrichment",
     "bias_retry_step": "targeted_left_rss_bias_retry",
-    "ranking_step": "headline_ranking_after_left_enrichment",
     "second_pass_enrichment_step": "targeted_left_rss_enrichment_second_pass",
     "second_pass_bias_retry_step": "targeted_left_rss_second_pass_bias_retry",
-    "second_pass_ranking_step": "headline_ranking_post_left_second_pass",
     "bias_retry_ollama_label": "before_targeted_left_enrichment_bias_retry",
     "second_pass_bias_retry_ollama_label": "before_second_pass_targeted_left_enrichment_bias_retry",
 }
@@ -855,39 +831,36 @@ def run_all_fetches(run_full_pipeline=True):
                 logging.error(f"Error reviewing ambiguous grouping matches: {e}")
                 run_metrics["status"] = "partial_error"
                 run_metrics["steps"]["review_ambiguous_grouping_matches"] = {"status": "error", "reason": str(e)}
+            if llm_client.LLM_PROVIDER == "groq":
+                # Targeted left/right RSS enrichment adds meaningful classification/
+                # bias-rating LLM load on top of the regular fetch; skip it on Groq's
+                # free tier. Re-enable once Ollama is back.
+                logging.info("--- Skipping targeted left/right RSS enrichment passes (LLM_PROVIDER=groq) ---")
+                for step in (
+                    "targeted_right_rss_enrichment", "targeted_right_rss_bias_retry",
+                    "targeted_right_rss_enrichment_second_pass", "targeted_right_rss_second_pass_bias_retry",
+                    "targeted_left_rss_enrichment", "targeted_left_rss_bias_retry",
+                    "targeted_left_rss_enrichment_second_pass", "targeted_left_rss_second_pass_bias_retry",
+                ):
+                    run_metrics["steps"][step] = {"status": "skipped", "reason": "groq_provider"}
+            else:
+                _run_targeted_rss_enrichment_pass(RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)
+                _run_targeted_rss_enrichment_pass(LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)
+
+            # Single ranking pass for the whole run, positioned after all
+            # enrichment so publish_edition() below sees a fully fresh,
+            # post-enrichment score. Previously this ran up to 5x per run
+            # (once here, plus twice per enrichment direction) — trimmed
+            # since collect_all_external_headlines() + the Ollama matching/
+            # editorial-rerank calls inside it don't need to be redone
+            # mid-run just to catch a few newly-enriched articles.
             try:
-                initial_ranking = run_optional_headline_ranking()
-                run_metrics["steps"]["headline_ranking_initial"] = initial_ranking
+                run_metrics["steps"]["headline_ranking"] = run_optional_headline_ranking()
             except Exception as e:
                 db.session.rollback()
                 logging.error(f"Error in headline ranking: {e}")
                 run_metrics["status"] = "partial_error"
-                initial_ranking = {"status": "error", "reason": str(e)}
-                run_metrics["steps"]["headline_ranking_initial"] = initial_ranking
-
-            if llm_client.LLM_PROVIDER == "groq":
-                # Each pass re-runs run_optional_headline_ranking() (batched Groq calls
-                # plus an editorial_rerank() call), so the 4 extra passes below cost up
-                # to 4x the Groq load of the single initial ranking above. Skip them
-                # while on Groq's free tier; re-enable once Ollama is back.
-                logging.info("--- Skipping targeted left/right RSS enrichment passes (LLM_PROVIDER=groq) ---")
-                for step in (
-                    "targeted_right_rss_enrichment", "targeted_right_rss_bias_retry", "headline_ranking",
-                    "targeted_right_rss_enrichment_second_pass", "targeted_right_rss_second_pass_bias_retry",
-                    "headline_ranking_post_second_pass", "targeted_left_rss_enrichment", "targeted_left_rss_bias_retry",
-                    "headline_ranking_after_left_enrichment", "targeted_left_rss_enrichment_second_pass",
-                    "targeted_left_rss_second_pass_bias_retry", "headline_ranking_post_left_second_pass",
-                ):
-                    run_metrics["steps"][step] = {"status": "skipped", "reason": "groq_provider"}
-            else:
-                right_ranking, right_second_pass_ranking = _run_targeted_rss_enrichment_pass(
-                    RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state, initial_ranking
-                )
-
-                _run_targeted_rss_enrichment_pass(
-                    LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state,
-                    right_second_pass_ranking or right_ranking,
-                )
+                run_metrics["steps"]["headline_ranking"] = {"status": "error", "reason": str(e)}
 
             logging.info("--- Publishing edition ---")
             try:
@@ -926,19 +899,15 @@ def run_all_fetches(run_full_pipeline=True):
             run_metrics["steps"]["allsides_sync"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["clear_stale_single_article_headlines"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["review_ambiguous_grouping_matches"] = {"status": "skipped", "reason": "fetch_only_run"}
-            run_metrics["steps"]["headline_ranking_initial"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_right_rss_enrichment"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_right_rss_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
-            run_metrics["steps"]["headline_ranking"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_right_rss_enrichment_second_pass"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_right_rss_second_pass_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_enrichment"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
-            run_metrics["steps"]["headline_ranking_after_left_enrichment"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_enrichment_second_pass"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_second_pass_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
-            run_metrics["steps"]["headline_ranking_post_left_second_pass"] = {"status": "skipped", "reason": "fetch_only_run"}
-            run_metrics["steps"]["headline_ranking_post_second_pass"] = {"status": "skipped", "reason": "fetch_only_run"}
+            run_metrics["steps"]["headline_ranking"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["publish_edition"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["process_current_edition"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["static_export"] = {"status": "skipped", "reason": "fetch_only_run"}
