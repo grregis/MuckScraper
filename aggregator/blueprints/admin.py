@@ -17,6 +17,7 @@ admin = Blueprint("admin", __name__)
 SEARCH_REINDEX_STATUS_KEY = "search_reindex_status_v1"
 search_reindex_lock = threading.Lock()
 ai_task_lock = threading.Lock()
+bulk_task_lock = threading.Lock()
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
 FETCH_PRESETS = [
     {
@@ -249,6 +250,82 @@ def _run_search_reindex(app):
                     "article_documents": None,
                 },
             )
+
+
+def _bulk_task_status_key(action):
+    return f"bulk_task_status_v1:{action}"
+
+
+def _bulk_task_status_payload(action):
+    payload = _load_json_setting(_bulk_task_status_key(action))
+    if payload:
+        return payload
+    return {
+        "status": "idle",
+        "started_at": None,
+        "finished_at": None,
+        "message": f"{action} has not been run in this app session yet.",
+    }
+
+
+def _run_bulk_task(app, action, fn):
+    with app.app_context():
+        started_at = _bulk_task_status_payload(action).get("started_at")
+        try:
+            fn()
+            _save_json_setting(
+                _bulk_task_status_key(action),
+                {
+                    "status": "success",
+                    "started_at": started_at,
+                    "finished_at": datetime.utcnow().isoformat(),
+                    "message": f"{action} completed successfully.",
+                },
+            )
+            logger.info(f"[BulkTask] {action} completed")
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"[BulkTask] {action} failed: {e}")
+            _save_json_setting(
+                _bulk_task_status_key(action),
+                {
+                    "status": "error",
+                    "started_at": started_at,
+                    "finished_at": datetime.utcnow().isoformat(),
+                    "message": str(e),
+                },
+            )
+
+
+def _start_bulk_task(action, fn):
+    """
+    Run a long-running admin action (reclassify, resummarize, regroup, scrape
+    backlog, etc.) in a background thread instead of inline in the request.
+    These can take minutes on a full DB, which was blowing past gunicorn's
+    worker timeout and killing the request mid-run (GitHub issue #3).
+
+    Returns (started, status) — started is False (with the current running
+    status) if this action is already in progress.
+    """
+    with bulk_task_lock:
+        current_status = _bulk_task_status_payload(action)
+        if current_status.get("status") == "running":
+            return False, current_status
+
+        started_at = datetime.utcnow().isoformat()
+        _save_json_setting(
+            _bulk_task_status_key(action),
+            {
+                "status": "running",
+                "started_at": started_at,
+                "finished_at": None,
+                "message": f"{action} is running.",
+            },
+        )
+        app = current_app._get_current_object()
+        thread = threading.Thread(target=_run_bulk_task, args=(app, action, fn), daemon=True)
+        thread.start()
+        return True, _bulk_task_status_payload(action)
 
 
 def article_domain(url):
@@ -575,11 +652,8 @@ def rate_article(article_id):
 def ollama_catchup_route():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
-    try:
-        from news_fetcher.fetch_and_store_articles import ollama_catchup
-        ollama_catchup()
-    except Exception as e:
-        logger.error(f"Catchup error: {e}")
+    from news_fetcher.fetch_and_store_articles import ollama_catchup
+    _start_bulk_task("ollama_catchup", ollama_catchup)
     return redirect_to_articles(label, scrape_status)
 
 
@@ -604,23 +678,24 @@ def scrape_article_route(article_id):
 def scrape_all_missing():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
-    try:
-        from news_fetcher.scraper import scrape_article, should_auto_rescrape_article
-        candidates = Article.query.filter(
-            (Article.content == None) |
-            (Article.content == "") |
-            (db.func.length(Article.content) < 500) |
-            (Article.scrape_status.in_(["pending", "failed"]))
-        ).order_by(Article.fetched_at.desc()).limit(100).all()
-        eligible = [article for article in candidates if should_auto_rescrape_article(article)][:20]
-        if eligible:
-            for article in eligible:
-                result = scrape_article(article.url, fallback_content=article.content)
-                apply_scrape_result(article, result)
-            db.session.commit()
-    except Exception as e:
-        logger.error(f"Scrape all error: {e}")
+    _start_bulk_task("scrape_all_missing", _scrape_all_missing_task)
     return redirect_to_articles(label, scrape_status)
+
+
+def _scrape_all_missing_task():
+    from news_fetcher.scraper import scrape_article, should_auto_rescrape_article
+    candidates = Article.query.filter(
+        (Article.content == None) |
+        (Article.content == "") |
+        (db.func.length(Article.content) < 500) |
+        (Article.scrape_status.in_(["pending", "failed"]))
+    ).order_by(Article.fetched_at.desc()).limit(100).all()
+    eligible = [article for article in candidates if should_auto_rescrape_article(article)][:20]
+    if eligible:
+        for article in eligible:
+            result = scrape_article(article.url, fallback_content=article.content)
+            apply_scrape_result(article, result)
+        db.session.commit()
 
 
 @admin.route("/rescrape-article/<int:article_id>", methods=["POST"])
@@ -642,11 +717,8 @@ def rescrape_article_route(article_id):
 def force_regroup():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
-    try:
-        from news_fetcher.fetch_and_store_articles import force_regroup_all
-        force_regroup_all()
-    except Exception as e:
-        logger.exception(f"Force regroup error: {e}")
+    from news_fetcher.fetch_and_store_articles import force_regroup_all
+    _start_bulk_task("force_regroup", force_regroup_all)
     return redirect_to_articles(label, scrape_status)
 
 
@@ -655,11 +727,8 @@ def force_regroup():
 def force_resummarize():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
-    try:
-        from news_fetcher.fetch_and_store_articles import force_resummarize_all
-        force_resummarize_all()
-    except Exception as e:
-        logger.exception(f"Force resummarize error: {e}")
+    from news_fetcher.fetch_and_store_articles import force_resummarize_all
+    _start_bulk_task("force_resummarize", force_resummarize_all)
     return redirect_to_articles(label, scrape_status)
 
 
@@ -788,11 +857,8 @@ def ai_task_status(task_type, resource_id):
 def reclassify_articles():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
-    try:
-        from news_fetcher.fetch_and_store_articles import reclassify_all_articles
-        reclassify_all_articles()
-    except Exception as e:
-        logger.exception(f"Reclassify error: {e}")
+    from news_fetcher.fetch_and_store_articles import reclassify_all_articles
+    _start_bulk_task("reclassify_articles", reclassify_all_articles)
     return redirect_to_articles(label, scrape_status)
 
 
@@ -921,12 +987,8 @@ def scrape_blocklist():
 @admin.route("/audit-scrapes", methods=["POST"])
 @login_required
 def audit_scrapes():
-    label = request.form.get("label", "")
-    try:
-        from news_fetcher.fetch_and_store_articles import audit_existing_scrapes
-        audit_existing_scrapes()
-    except Exception as e:
-        logger.exception(f"Audit error: {e}")
+    from news_fetcher.fetch_and_store_articles import audit_existing_scrapes
+    _start_bulk_task("audit_scrapes", audit_existing_scrapes)
     return redirect(url_for("admin.scrape_blocklist"))
 
 
