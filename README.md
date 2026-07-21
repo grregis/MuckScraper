@@ -136,6 +136,20 @@ Recommended deployment:
 ```bash
 git clone https://github.com/grregis/muckscraper.git
 cd muckscraper
+./install.sh
+```
+
+The first run creates `.env` from `.env.sample` and stops so you can fill in
+your API keys, Ollama host, and admin login. Run it again once that's done —
+it builds the core services, sets up the database (pgvector extension +
+tables) and admin user, and starts the scheduler. Safe to re-run.
+
+Then open `http://localhost:5000`.
+
+<details>
+<summary>Manual steps (if you'd rather not use install.sh)</summary>
+
+```bash
 cp .env.sample .env
 # Edit .env with your API keys, local model host, and admin login
 docker compose up -d --build postgres meilisearch app
@@ -143,7 +157,7 @@ docker compose exec app python bootstrap_admin.py
 docker compose up -d scheduler
 ```
 
-Then open `http://localhost:5000`.
+</details>
 
 If you pull schema changes later:
 
