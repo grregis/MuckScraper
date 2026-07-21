@@ -958,7 +958,7 @@ def store_articles(articles_data, topic_name, provider=None):
     return metrics
 
 
-def review_ambiguous_grouping_matches(max_articles=75):
+def review_ambiguous_grouping_matches(max_articles=300):
     """
     Recheck articles that had an ambiguous first-pass grouping decision, oldest first.
     This is intentionally capped and only runs during the full pipeline.
@@ -968,6 +968,11 @@ def review_ambiguous_grouping_matches(max_articles=75):
     stayed True forever once an article aged out). Oldest-first ordering with no
     cutoff means the cap still bounds each run's Ollama load, but the backlog
     drains over successive runs instead of losing articles permanently.
+
+    Bumped from 75 to 300 (2026-07-19) to drain the ~15k-article backlog this
+    orphaned faster — each review is an Ollama call at ~10-15s, so this adds
+    roughly 50-75 minutes per full-pipeline run. Turn back down if that starts
+    crowding out the rest of the run.
     """
     from news_fetcher.story_grouper import find_matching_story_with_metadata
 
