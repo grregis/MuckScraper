@@ -252,6 +252,16 @@ def _run_search_reindex(app):
             )
 
 
+BULK_TASK_ACTIONS = {
+    "ollama_catchup",
+    "scrape_all_missing",
+    "force_regroup",
+    "force_resummarize",
+    "reclassify_articles",
+    "audit_scrapes",
+}
+
+
 def _bulk_task_status_key(action):
     return f"bulk_task_status_v1:{action}"
 
@@ -785,6 +795,14 @@ def reindex_search():
 @login_required
 def reindex_search_status():
     return jsonify(_search_reindex_status_payload())
+
+
+@admin.route("/bulk-task-status/<action>")
+@login_required
+def bulk_task_status(action):
+    if action not in BULK_TASK_ACTIONS:
+        return jsonify({"status": "error", "message": "Unknown action."}), 404
+    return jsonify(_bulk_task_status_payload(action))
 
 
 @admin.route("/ai-task/start", methods=["POST"])
