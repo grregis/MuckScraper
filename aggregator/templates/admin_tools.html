@@ -282,6 +282,15 @@
     </style>
 </head>
 <body>
+{% macro bulk_task_status_box(action) %}
+<div class="status-box" id="bulk-status-box-{{ action }}">
+    <div class="status-line">
+        <span class="status-pill idle" id="bulk-state-{{ action }}">Idle</span>
+    </div>
+    <div class="status-copy" id="bulk-message-{{ action }}">Not run in this app session yet.</div>
+    <div class="status-meta" id="bulk-meta-{{ action }}"></div>
+</div>
+{% endmacro %}
 <div class="topbar">
     <div class="topbar-left">
         <span class="topbar-title">MuckScraper</span>
@@ -354,8 +363,9 @@
                 <form method="POST" action="{{ url_for('admin.ollama_catchup_route') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn">Run AI Catch-up</button>
+                    <button type="submit" class="btn" id="bulk-btn-ollama_catchup">Run AI Catch-up</button>
                 </form>
+                {{ bulk_task_status_box("ollama_catchup") }}
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Scrape Missing</div>
@@ -366,8 +376,9 @@
                 <form method="POST" action="{{ url_for('admin.scrape_all_missing') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn">Scrape Missing</button>
+                    <button type="submit" class="btn" id="bulk-btn-scrape_all_missing">Scrape Missing</button>
                 </form>
+                {{ bulk_task_status_box("scrape_all_missing") }}
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Reindex Search</div>
@@ -402,8 +413,9 @@
                 <form method="POST" action="{{ url_for('admin.reclassify_articles') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn btn-broad">Reclassify Topics</button>
+                    <button type="submit" class="btn btn-broad" id="bulk-btn-reclassify_articles">Reclassify Topics</button>
                 </form>
+                {{ bulk_task_status_box("reclassify_articles") }}
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Rebuild Story Grouping</div>
@@ -414,8 +426,9 @@
                 <form method="POST" action="{{ url_for('admin.force_regroup') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn btn-danger">Rebuild Story Grouping</button>
+                    <button type="submit" class="btn btn-danger" id="bulk-btn-force_regroup">Rebuild Story Grouping</button>
                 </form>
+                {{ bulk_task_status_box("force_regroup") }}
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Rebuild Story Summaries</div>
@@ -426,8 +439,9 @@
                 <form method="POST" action="{{ url_for('admin.force_resummarize') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn btn-danger">Rebuild Story Summaries</button>
+                    <button type="submit" class="btn btn-danger" id="bulk-btn-force_resummarize">Rebuild Story Summaries</button>
                 </form>
+                {{ bulk_task_status_box("force_resummarize") }}
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Sync AllSides Ratings</div>
@@ -467,8 +481,9 @@
                 <form method="POST" action="{{ url_for('admin.audit_scrapes') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
-                    <button type="submit" class="btn btn-broad">Audit Stored Scrapes</button>
+                    <button type="submit" class="btn btn-broad" id="bulk-btn-audit_scrapes">Audit Stored Scrapes</button>
                 </form>
+                {{ bulk_task_status_box("audit_scrapes") }}
             </div>
         </div>
     </div>
@@ -612,10 +627,54 @@
             });
     }
 
+    const BULK_TASK_ACTIONS = [
+        'ollama_catchup', 'scrape_all_missing', 'reclassify_articles',
+        'force_regroup', 'force_resummarize', 'audit_scrapes',
+    ];
+    const BULK_TASK_STATUS_URL_TEMPLATE = '{{ url_for("admin.bulk_task_status", action="__ACTION__") }}';
+
+    function applyBulkTaskStatus(action, status) {
+        const button = document.getElementById(`bulk-btn-${action}`);
+        const state = document.getElementById(`bulk-state-${action}`);
+        const message = document.getElementById(`bulk-message-${action}`);
+        const meta = document.getElementById(`bulk-meta-${action}`);
+        if (!button || !state || !message || !meta) return;
+
+        const currentStatus = status.status || 'idle';
+        state.className = `status-pill ${currentStatus}`;
+        state.textContent = currentStatus === 'running'
+            ? 'Working'
+            : currentStatus === 'success'
+                ? 'Successful'
+                : currentStatus === 'error'
+                    ? 'Failed'
+                    : 'Idle';
+
+        message.textContent = status.message || 'No status available.';
+
+        const details = [];
+        if (status.started_at) details.push(`Started: ${formatStatusTimestamp(status.started_at)}`);
+        if (status.finished_at) details.push(`Finished: ${formatStatusTimestamp(status.finished_at)}`);
+        meta.textContent = details.join(' · ');
+
+        button.disabled = currentStatus === 'running';
+    }
+
+    function pollBulkTaskStatuses() {
+        BULK_TASK_ACTIONS.forEach((action) => {
+            fetch(BULK_TASK_STATUS_URL_TEMPLATE.replace('__ACTION__', action))
+                .then(r => r.json())
+                .then(status => applyBulkTaskStatus(action, status))
+                .catch(() => {});
+        });
+    }
+
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     applyTheme(savedTheme);
     pollSearchReindexStatus();
     setInterval(pollSearchReindexStatus, 5000);
+    pollBulkTaskStatuses();
+    setInterval(pollBulkTaskStatuses, 5000);
 </script>
 </body>
 </html>
