@@ -2,7 +2,7 @@ import logging
 import json
 import threading
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
 from sqlalchemy import case, func, or_
@@ -387,6 +387,13 @@ def redirect_to_articles(label=None, scrape_status=None):
         params["topic"] = label
     if scrape_status:
         params["scrape_status"] = scrape_status
+    show_single = request.form.get("show_single", "").strip().lower()
+    if not show_single and request.referrer:
+        referrer = urlparse(request.referrer)
+        if referrer.netloc == request.host:
+            show_single = parse_qs(referrer.query).get("show_single", [""])[0]
+    if show_single == "true":
+        params["show_single"] = "true"
     return redirect(url_for("admin.list_articles", **params))
 
 
