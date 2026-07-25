@@ -1737,13 +1737,46 @@ STALE_ARTICLE_THRESHOLD = 3  # new articles needed to trigger reanalysis
 # (e.g. Ollama was unreachable while that edition was still "latest").
 BACKFILL_LOOKBACK_DAYS = 2
 
+# AppSetting key for the opt-in "also generate Article.deep_analysis during
+# story fill" toggle. Stored via the same JSON-in-AppSetting mechanism the admin
+# blueprint uses for other persisted settings.
+AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY = "auto_article_deep_analysis_enabled"
+
+
+def _auto_article_deep_analysis_enabled():
+    """Whether ingestion should also generate per-article deep analysis.
+
+    Off by default: deep-analysis prompts run at a higher timeout than article
+    summaries and cost real extra GPU time for every qualifying article, so this
+    should not silently turn on for everyone. Reads the AppSetting toggle
+    directly (same pattern scraper.py uses for its retry cache) so the fetcher
+    has no import dependency on the admin blueprint.
+    """
+    from aggregator.models import AppSetting
+
+    setting = AppSetting.query.filter_by(
+        key=AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY
+    ).first()
+    if not setting:
+        return False
+    try:
+        return bool(json.loads(setting.value))
+    except (ValueError, TypeError):
+        return False
+
 
 def _fill_story_content(story, metrics):
     """
     Generate any missing summary/deep-report/child-article-summary content
     for a single story. Returns True if anything was generated or reset.
     """
-    from news_fetcher.summarizer import summarize_story, generate_deep_report, summarize_article
+    from news_fetcher.summarizer import (
+        summarize_story,
+        generate_deep_report,
+        summarize_article,
+        generate_article_deep_analysis,
+        article_needs_deep_analysis,
+    )
 
     article_count = len(story.articles)
     if article_count == 0:
@@ -1833,6 +1866,27 @@ def _fill_story_content(story, metrics):
                     changed = True
                     logger.info(f"    [Processor] Child article summary: {article.title[:60]}")
         db.session.commit()
+
+        # Optionally generate per-article deep analysis for qualifying articles
+        # (politics/science/business). Off by default because these prompts run
+        # at a higher timeout than summaries and cost real extra GPU time per
+        # article -- see _auto_article_deep_analysis_enabled(). Mirrors the child
+        # summary block above: pre-filter cheaply with article_needs_deep_analysis
+        # so we don't probe the LLM for articles that would never qualify.
+        if _auto_article_deep_analysis_enabled():
+            for article in story.articles:
+                if (
+                    not article.deep_analysis
+                    and article.content
+                    and article_needs_deep_analysis(article)
+                ):
+                    analysis = generate_article_deep_analysis(article)
+                    if analysis:
+                        article.deep_analysis = analysis
+                        metrics["child_article_analyses_generated"] += 1
+                        changed = True
+                        logger.info(f"    [Processor] Child article deep analysis: {article.title[:60]}")
+            db.session.commit()
 
     except Exception as e:
         logger.error(f"  [Processor] Error processing story {story.id}: {e}")

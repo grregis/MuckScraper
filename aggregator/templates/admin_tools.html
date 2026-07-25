@@ -333,6 +333,18 @@
                 <p>View the latest published edition's headlines and analysis as a plain list.</p>
                 <a href="{{ url_for('public.headlines_feed') }}" class="btn btn-secondary">Open Headlines</a>
             </div>
+            <div class="tool-card">
+                <div class="tool-card-title">Auto Article Deep Analysis</div>
+                <p>When on, ingestion also generates per-article deep analysis for qualifying articles (politics/science/business) alongside their summaries. Off by default &mdash; each analysis costs extra GPU time.</p>
+                <div class="meta-row">
+                    <span class="badge">{{ 'Enabled' if auto_article_deep_analysis_enabled else 'Disabled' }}</span>
+                </div>
+                <form method="POST" action="{{ url_for('admin.toggle_auto_article_deep_analysis') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="enabled" value="{{ 'false' if auto_article_deep_analysis_enabled else 'true' }}">
+                    <button type="submit" class="btn">{{ 'Disable' if auto_article_deep_analysis_enabled else 'Enable' }}</button>
+                </form>
+            </div>
         </div>
     </div>
 
