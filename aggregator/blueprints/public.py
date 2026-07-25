@@ -102,6 +102,9 @@ def view_article(article_id):
 
 @public.route("/ollama-status")
 def ollama_status():
+    # Unauthenticated route -- only the boolean, never the host/role, which
+    # would otherwise leak internal network details (e.g. a LAN IP) to anyone.
+    # The full detail is available to admins at admin.ollama_status_detail.
     return jsonify({"online": check_ollama_status()})
 
 

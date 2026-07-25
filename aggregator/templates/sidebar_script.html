@@ -24,7 +24,10 @@
                 const label = document.getElementById('ollama-label');
                 if (data.online) {
                     dot.className     = 'status-dot online';
-                    label.textContent = 'Ollama Online';
+                    // Flag when the fallback host is serving so a sleeping primary is visible.
+                    label.textContent = (data.role === 'fallback')
+                        ? 'Ollama Online (fallback)'
+                        : 'Ollama Online';
                 } else {
                     dot.className     = 'status-dot offline';
                     label.textContent = 'Ollama Offline';

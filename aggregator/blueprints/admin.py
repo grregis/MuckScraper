@@ -804,6 +804,13 @@ def reindex_search_status():
     return jsonify(_search_reindex_status_payload())
 
 
+@admin.route("/ollama-status")
+@login_required
+def ollama_status_detail():
+    from news_fetcher.llm_client import llm_status_detail
+    return jsonify(llm_status_detail())
+
+
 @admin.route("/bulk-task-status/<action>")
 @login_required
 def bulk_task_status(action):
