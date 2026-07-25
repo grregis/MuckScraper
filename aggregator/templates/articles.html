@@ -661,6 +661,7 @@
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="label" value="{{ active_label or '' }}">
                                         <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
+                                        <input type="hidden" name="next" value="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '') }}">
                                         <button type="submit" class="btn btn-muted" style="width: 100%; padding: 10px 12px; font-weight: 700;">
                                             {% if story.enrichment_direction == 'right' %}
                                                 Fetch More Right-Leaning Coverage
@@ -737,6 +738,7 @@
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="label" value="{{ active_label or '' }}">
                                                 <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
+                                                <input type="hidden" name="next" value="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '') }}">
                                                 <button type="submit" class="btn btn-orange"
                                                     title="Rate Bias">
                                                     ✦ Bias
