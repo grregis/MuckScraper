@@ -17,8 +17,26 @@ LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "ollama").strip().lower()
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
+# Optional second Ollama host used when OLLAMA_HOST is unreachable -- e.g. an
+# always-on CPU box that covers for a Wake-on-LAN GPU box while it sleeps or
+# wakes. Leave blank to keep the original single-host behavior unchanged.
+OLLAMA_FALLBACK_HOST = os.environ.get("OLLAMA_FALLBACK_HOST", "")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
+
+# How long to keep serving from the fallback host before re-probing whether the
+# primary has come back online (issue #7's "detects that it comes online").
+OLLAMA_PRIMARY_RECHECK_SECONDS = int(
+    os.environ.get("OLLAMA_PRIMARY_RECHECK_SECONDS", "60")
+)
+# The reachability probe must stay short: a sleeping primary that never answers
+# its SYN would otherwise stall behind a real call's full generate timeout.
+_OLLAMA_PROBE_TIMEOUT = 5
+
+# Shared host-health state so most calls skip a known-down primary instead of
+# paying its connect timeout every time. A race here costs at most one extra
+# probe, so no lock is needed.
+_ollama_state = {"active": None, "next_primary_probe": 0.0}
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
@@ -56,20 +74,106 @@ def generate_text(prompt, timeout=30):
     return _generate_text_ollama(prompt, timeout)
 
 
-def _generate_text_ollama(prompt, timeout):
-    if not OLLAMA_HOST:
-        return None
+def _probe_ollama_host(host):
+    """Cheap reachability check (GET /api/tags) used by the fallback selector
+    and the admin status surface. Kept short via _OLLAMA_PROBE_TIMEOUT."""
+    if not host:
+        return False
     try:
+        response = requests.get(f"{host}/api/tags", timeout=_OLLAMA_PROBE_TIMEOUT)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def _ollama_host_candidates():
+    """Ordered hosts to try for the next Ollama call, preferring the primary
+    when it is known-good and the fallback otherwise.
+
+    Steps (order matters):
+    1. No fallback configured -> return just the primary, so behavior is
+       identical to the old single-host code for anyone who never sets
+       OLLAMA_FALLBACK_HOST.
+    2. On first use, or while parked on the fallback past the recheck window,
+       do ONE cheap probe of the primary. This avoids gambling a long generate
+       timeout on a sleeping GPU box AND lets us auto-recover to the primary
+       once it wakes.
+    3. Return the preferred host first and the other as a last-resort retry.
+    """
+    primary = OLLAMA_HOST
+    fallback = OLLAMA_FALLBACK_HOST
+    if not fallback:
+        return [primary]
+
+    now = time.monotonic()
+    active = _ollama_state["active"]
+    if active is None or (
+        active != "primary" and now >= _ollama_state["next_primary_probe"]
+    ):
+        _ollama_state["next_primary_probe"] = now + OLLAMA_PRIMARY_RECHECK_SECONDS
+        active = _ollama_state["active"] = (
+            "primary" if _probe_ollama_host(primary) else "fallback"
+        )
+
+    if active == "fallback":
+        return [fallback, primary]
+    return [primary, fallback]
+
+
+def _mark_ollama_host_up(host):
+    if host == OLLAMA_HOST:
+        _ollama_state["active"] = "primary"
+    elif host == OLLAMA_FALLBACK_HOST:
+        _ollama_state["active"] = "fallback"
+        _ollama_state["next_primary_probe"] = (
+            time.monotonic() + OLLAMA_PRIMARY_RECHECK_SECONDS
+        )
+
+
+def _mark_ollama_host_down(host):
+    # If the primary failed mid-request, park on the fallback and defer the next
+    # primary probe rather than retrying the dead primary on every subsequent call.
+    if host == OLLAMA_HOST and OLLAMA_FALLBACK_HOST:
+        _ollama_state["active"] = "fallback"
+        _ollama_state["next_primary_probe"] = (
+            time.monotonic() + OLLAMA_PRIMARY_RECHECK_SECONDS
+        )
+
+
+def _ollama_request(kind, fn):
+    """Run fn(host) against the preferred Ollama host, falling back to the other
+    host on failure, and update the shared health state. Returns fn's result, or
+    None if every candidate failed. `kind` is a label used only for logging."""
+    for host in _ollama_host_candidates():
+        if not host:
+            continue
+        try:
+            result = fn(host)
+        except Exception as e:
+            logger.info(f"  [llm_client] Ollama {kind} error on {host}: {e}")
+            _mark_ollama_host_down(host)
+            continue
+        _mark_ollama_host_up(host)
+        if host == OLLAMA_FALLBACK_HOST and host != OLLAMA_HOST:
+            logger.info(f"  [llm_client] Ollama {kind} served by fallback host {host}")
+        return result
+    return None
+
+
+def _generate_text_ollama(prompt, timeout):
+    if not OLLAMA_HOST and not OLLAMA_FALLBACK_HOST:
+        return None
+
+    def _call(host):
         response = requests.post(
-            f"{OLLAMA_HOST}/api/generate",
+            f"{host}/api/generate",
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
             timeout=timeout,
         )
         response.raise_for_status()
         return response.json().get("response", "").strip()
-    except Exception as e:
-        logger.info(f"  [llm_client] Ollama generate error: {e}")
-        return None
+
+    return _ollama_request("generate", _call)
 
 
 def _generate_text_gemini(prompt, timeout):
@@ -132,19 +236,19 @@ def get_embedding(text):
 
 
 def _get_embedding_ollama(text):
-    if not OLLAMA_HOST:
+    if not OLLAMA_HOST and not OLLAMA_FALLBACK_HOST:
         return None
-    try:
+
+    def _call(host):
         response = requests.post(
-            f"{OLLAMA_HOST}/api/embeddings",
+            f"{host}/api/embeddings",
             json={"model": EMBEDDING_MODEL, "prompt": text},
             timeout=15,
         )
         response.raise_for_status()
         return response.json().get("embedding") or None
-    except Exception as e:
-        logger.info(f"  [llm_client] Ollama embedding error: {e}")
-        return None
+
+    return _ollama_request("embedding", _call)
 
 
 def _get_embedding_gemini(text):
@@ -183,8 +287,31 @@ def check_llm_status():
 
 
 def _check_ollama_status():
-    try:
-        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
+    # Online if EITHER host answers -- the fallback keeps AI features available
+    # (and the sidebar dot green) while the primary is asleep.
+    for host in (OLLAMA_HOST, OLLAMA_FALLBACK_HOST):
+        if host and _probe_ollama_host(host):
+            return True
+    return False
+
+
+def ollama_host_status():
+    """Which Ollama host is currently reachable, for the admin status surface.
+    Probes the primary first so the reported role matches what real calls use."""
+    if OLLAMA_HOST and _probe_ollama_host(OLLAMA_HOST):
+        return {"online": True, "host": OLLAMA_HOST, "role": "primary"}
+    if OLLAMA_FALLBACK_HOST and _probe_ollama_host(OLLAMA_FALLBACK_HOST):
+        return {"online": True, "host": OLLAMA_FALLBACK_HOST, "role": "fallback"}
+    return {"online": False, "host": None, "role": None}
+
+
+def llm_status_detail():
+    """Provider-aware status for the /ollama-status route: keeps the `online`
+    boolean the sidebar JS already depends on, plus host/role for Ollama."""
+    if LLM_PROVIDER == "gemini":
+        return {"online": bool(GEMINI_API_KEY), "provider": "gemini", "host": None, "role": None}
+    if LLM_PROVIDER == "groq":
+        return {"online": bool(GROQ_API_KEY), "provider": "groq", "host": None, "role": None}
+    info = ollama_host_status()
+    info["provider"] = "ollama"
+    return info

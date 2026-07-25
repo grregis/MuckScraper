@@ -345,6 +345,7 @@
             <div class="tool-card">
                 <div class="tool-card-title">Wake Ollama</div>
                 <p>Sends the Wake-on-LAN packet to the Ollama machine so AI tasks can resume if the box is asleep.</p>
+                <p id="ollama-active-host" style="font-size: 0.85em; color: var(--text-muted);">Checking Ollama host&hellip;</p>
                 <div class="meta-row">
                     <span class="badge">Safe</span>
                 </div>
@@ -669,8 +670,30 @@
         });
     }
 
+    // Show which Ollama host is actually serving (primary vs. fallback) next to
+    // the Wake button, so a sleeping GPU box covered by the fallback is visible.
+    function pollOllamaActiveHost() {
+        const el = document.getElementById('ollama-active-host');
+        if (!el) return;
+        fetch('/ollama-status')
+            .then(r => r.json())
+            .then(data => {
+                if (data.provider && data.provider !== 'ollama') {
+                    el.textContent = `LLM provider: ${data.provider}`;
+                } else if (data.online && data.host) {
+                    const role = data.role === 'fallback' ? 'fallback — primary unreachable' : 'primary';
+                    el.textContent = `Active Ollama: ${data.host} (${role})`;
+                } else {
+                    el.textContent = 'Ollama: no host reachable';
+                }
+            })
+            .catch(() => { el.textContent = 'Ollama: status unavailable'; });
+    }
+
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     applyTheme(savedTheme);
+    pollOllamaActiveHost();
+    setInterval(pollOllamaActiveHost, 30000);
     pollSearchReindexStatus();
     setInterval(pollSearchReindexStatus, 5000);
     pollBulkTaskStatuses();

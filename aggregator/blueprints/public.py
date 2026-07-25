@@ -5,6 +5,7 @@ from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
 from news_fetcher.llm_client import check_llm_status as check_ollama_status
+from news_fetcher.llm_client import llm_status_detail
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def view_article(article_id):
 
 @public.route("/ollama-status")
 def ollama_status():
-    return jsonify({"online": check_ollama_status()})
+    return jsonify(llm_status_detail())
 
 
 @public.route("/meili-status")
