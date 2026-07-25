@@ -128,6 +128,46 @@ def _try_claim_task_status(key, running_payload):
     return claimed
 
 
+# AppSetting key prefixes/keys whose value is a background-task status blob.
+_TASK_STATUS_KEY_PREFIXES = ("bulk_task_status_v1:", "ai_task_status_v1:")
+
+
+def reconcile_orphaned_task_statuses():
+    """Mark any task-status still 'running' at startup as interrupted.
+
+    Background tasks run in threads that cannot survive a process restart, so a
+    'running' status found at boot can only be a leftover from a previous
+    process that died mid-task (restart, crash, OOM). Left alone it shows a
+    phantom running task in the UI and -- because _start_bulk_task refuses to
+    start an action whose status is 'running' -- permanently blocks that action
+    from being re-run. Rewrite those to a terminal 'error' status so the UI is
+    truthful and the action becomes runnable again.
+    """
+    rows = AppSetting.query.filter(
+        or_(
+            *[AppSetting.key.like(prefix + "%") for prefix in _TASK_STATUS_KEY_PREFIXES],
+            AppSetting.key == SEARCH_REINDEX_STATUS_KEY,
+        )
+    ).all()
+    reconciled = 0
+    for row in rows:
+        try:
+            payload = json.loads(row.value) if row.value else None
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(payload, dict) or payload.get("status") != "running":
+            continue
+        payload["status"] = "error"
+        payload["finished_at"] = datetime.utcnow().isoformat()
+        payload["message"] = "Interrupted by an app restart; no result was produced. Re-run to retry."
+        row.value = json.dumps(payload)
+        reconciled += 1
+    if reconciled:
+        db.session.commit()
+        logger.info("[Startup] Reconciled %d orphaned 'running' task status(es).", reconciled)
+    return reconciled
+
+
 def _search_reindex_status_payload():
     payload = _load_json_setting(SEARCH_REINDEX_STATUS_KEY)
     if payload:

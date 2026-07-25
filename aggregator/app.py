@@ -12,6 +12,19 @@ logging.getLogger("werkzeug").addFilter(HealthCheckFilter())
 
 app = create_app()
 
+# On startup, clear any background-task statuses left 'running' by a previous
+# process that died mid-task -- threads don't survive a restart, so a leftover
+# 'running' is always stale and would otherwise block re-running that action.
+# Guarded so a reconciliation failure can never prevent the app from booting.
+with app.app_context():
+    try:
+        from aggregator.blueprints.admin import reconcile_orphaned_task_statuses
+        reconcile_orphaned_task_statuses()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Startup task-status reconciliation failed"
+        )
+
 def init_db():
     with app.app_context():
         db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS vector"))
