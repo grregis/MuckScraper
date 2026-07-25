@@ -675,7 +675,7 @@
     function pollOllamaActiveHost() {
         const el = document.getElementById('ollama-active-host');
         if (!el) return;
-        fetch('/ollama-status')
+        fetch('{{ url_for("admin.ollama_status_detail") }}')
             .then(r => r.json())
             .then(data => {
                 if (data.provider && data.provider !== 'ollama') {

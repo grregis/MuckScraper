@@ -5,7 +5,6 @@ from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
 from news_fetcher.llm_client import check_llm_status as check_ollama_status
-from news_fetcher.llm_client import llm_status_detail
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +102,10 @@ def view_article(article_id):
 
 @public.route("/ollama-status")
 def ollama_status():
-    return jsonify(llm_status_detail())
+    # Unauthenticated route -- only the boolean, never the host/role, which
+    # would otherwise leak internal network details (e.g. a LAN IP) to anyone.
+    # The full detail is available to admins at admin.ollama_status_detail.
+    return jsonify({"online": check_ollama_status()})
 
 
 @public.route("/meili-status")
