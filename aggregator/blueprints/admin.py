@@ -16,58 +16,34 @@ logger = logging.getLogger(__name__)
 admin = Blueprint("admin", __name__)
 SEARCH_REINDEX_STATUS_KEY = "search_reindex_status_v1"
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
-FETCH_PRESETS = [
-    {
-        "label": "US Politics",
-        "description": "Congress, White House, courts, elections",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "US politics congress white house senate supreme court",
-        "gnews_query": "US politics congress white house",
-        "gnews_category": "",
-    },
-    {
-        "label": "Business & Economy",
-        "description": "Top business headlines",
-        "mode": "top",
-        "country": "us",
-        "category": "business",
-        "query": "",
-        "gnews_query": "",
-        "gnews_category": "business",
-    },
-    {
-        "label": "Science & Health",
-        "description": "Research, medicine, technology",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "scientific breakthroughs medical research healthcare tech",
-        "gnews_query": "science health research",
-        "gnews_category": "science",
-    },
-    {
-        "label": "Sports",
-        "description": "Top sports headlines",
-        "mode": "top",
-        "country": "us",
-        "category": "sports",
-        "query": "",
-        "gnews_query": "",
-        "gnews_category": "sports",
-    },
-    {
-        "label": "World News",
-        "description": "International news, conflict, diplomacy",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "international world global news conflicts diplomacy",
-        "gnews_query": "world global news",
-        "gnews_category": "world",
-    },
-]
+
+
+def _fetch_presets_from_db():
+    """Build fetch-preset dicts from DB topics for the fetch page template.
+
+    Mirrors the old hardcoded FETCH_PRESETS shape (label/description/mode/
+    country/category/query/gnews_query/gnews_category) so fetch.html stays
+    unchanged. Only active topics with a fetch_mode are offered as presets.
+    """
+    topics = (
+        Topic.query
+        .filter(Topic.is_active == True, Topic.fetch_mode.isnot(None))
+        .order_by(Topic.sort_order.asc().nullslast(), Topic.name.asc())
+        .all()
+    )
+    return [
+        {
+            "label":          t.name,
+            "description":    t.description or "",
+            "mode":           t.fetch_mode or "",
+            "country":        t.fetch_country or "",
+            "category":       t.fetch_category or "",
+            "query":          t.fetch_query or "",
+            "gnews_query":    t.gnews_query or "",
+            "gnews_category": t.gnews_category or "",
+        }
+        for t in topics
+    ]
 
 
 def _load_json_setting(key):
@@ -510,7 +486,7 @@ def apply_scrape_result(article, result):
 def fetch_page():
     return render_template(
         "fetch.html",
-        fetch_presets=FETCH_PRESETS,
+        fetch_presets=_fetch_presets_from_db(),
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_nav="fetch",
     )
@@ -1199,21 +1175,62 @@ def topics_page():
     return render_template("topics.html", topics=topics)
 
 
+@admin.route("/topics/new")
+@login_required
+def topic_new():
+    return render_template("admin_topic_form.html", topic=None)
+
+
+@admin.route("/topics/<int:topic_id>/edit")
+@login_required
+def topic_edit(topic_id):
+    topic = Topic.query.get_or_404(topic_id)
+    return render_template("admin_topic_form.html", topic=topic)
+
+
+def _read_topic_form_data():
+    """Read all editable topic fields from the request form."""
+    def _opt(name):
+        v = request.form.get(name, "").strip()
+        return v or None
+    icon_raw = request.form.get("icon", "").strip()
+    return {
+        "name": request.form.get("name", "").strip(),
+        "icon": icon_raw[:4] if icon_raw else None,
+        "sort_order": request.form.get("sort_order", type=int),
+        "description": _opt("description"),
+        "fetch_mode": _opt("fetch_mode"),
+        "fetch_country": _opt("fetch_country"),
+        "fetch_category": _opt("fetch_category"),
+        "fetch_query": _opt("fetch_query"),
+        "gnews_query": _opt("gnews_query"),
+        "gnews_category": _opt("gnews_category"),
+        "is_active": request.form.get("is_active") == "on",
+    }
+
+
+_FETCH_FIELDS = (
+    "description", "fetch_mode", "fetch_country", "fetch_category",
+    "fetch_query", "gnews_query", "gnews_category",
+)
+
+
 @admin.route("/topics/add", methods=["POST"])
 @login_required
 def add_topic():
-    name = request.form.get("name", "").strip()
-    icon = request.form.get("icon", "").strip()[:4] or None
-    sort_order = request.form.get("sort_order", type=int)
-
+    data = _read_topic_form_data()
+    name = data["name"]
     if name and not Topic.query.filter_by(name=name).first():
         max_order = db.session.query(func.max(Topic.sort_order)).scalar()
-        db.session.add(Topic(
+        topic = Topic(
             name=name,
-            icon=icon,
-            sort_order=sort_order if sort_order is not None else (max_order or 0) + 1,
+            icon=data["icon"],
+            sort_order=data["sort_order"] if data["sort_order"] is not None else (max_order or 0) + 1,
             is_active=True,
-        ))
+        )
+        for field in _FETCH_FIELDS:
+            setattr(topic, field, data.get(field))
+        db.session.add(topic)
         db.session.commit()
         logger.info(f"[Topics] Added topic: {name}")
     return redirect(url_for("admin.topics_page"))
@@ -1223,14 +1240,62 @@ def add_topic():
 @login_required
 def update_topic(topic_id):
     topic = Topic.query.get_or_404(topic_id)
-    icon = request.form.get("icon", "").strip()[:4]
-    sort_order = request.form.get("sort_order", type=int)
+    data = _read_topic_form_data()
 
-    topic.icon = icon or None
-    if sort_order is not None:
-        topic.sort_order = sort_order
-    topic.is_active = request.form.get("is_active") == "on"
+    # Rename with conflict check.
+    new_name = data["name"]
+    if new_name and new_name != topic.name:
+        clash = Topic.query.filter_by(name=new_name).first()
+        if clash and clash.id != topic.id:
+            logger.warning(f"[Topics] Rename {topic.name!r} -> {new_name!r} blocked: name in use.")
+        else:
+            topic.name = new_name
+
+    topic.icon = data["icon"]
+    if data["sort_order"] is not None:
+        topic.sort_order = data["sort_order"]
+    topic.is_active = data["is_active"]
+    for field in _FETCH_FIELDS:
+        setattr(topic, field, data.get(field))
     db.session.commit()
+    return redirect(url_for("admin.topics_page"))
+
+
+@admin.route("/topics/<int:topic_id>/toggle-active", methods=["POST"])
+@login_required
+def toggle_topic_active(topic_id):
+    topic = Topic.query.get_or_404(topic_id)
+    topic.is_active = not topic.is_active
+    db.session.commit()
+    logger.info(f"[Topics] Toggled {topic.name} is_active={topic.is_active}")
+    return redirect(url_for("admin.topics_page"))
+
+
+@admin.route("/topics/<int:topic_id>/delete", methods=["POST"])
+@login_required
+def delete_topic(topic_id):
+    """Soft-delete: retire the topic but keep historical story/article tags.
+
+    Hard-deleting would orphan story_topics/article_topics rows and lose
+    classification history, so we only flip is_active.
+    """
+    topic = Topic.query.get_or_404(topic_id)
+    topic.is_active = False
+    db.session.commit()
+    logger.info(f"[Topics] Soft-deleted (is_active=False): {topic.name}")
+    return redirect(url_for("admin.topics_page"))
+
+
+@admin.route("/topics/reseed", methods=["POST"])
+@login_required
+def reseed_topics():
+    """Re-run seed_topics.py to restore the canonical DE topic set + RSS feeds."""
+    try:
+        import seed_topics
+        result = seed_topics.run()
+        logger.info(f"[Topics] Reseed result: {result}")
+    except Exception as exc:
+        logger.error(f"[Topics] Reseed failed: {exc}")
     return redirect(url_for("admin.topics_page"))
 
 

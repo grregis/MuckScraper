@@ -68,6 +68,21 @@ BLOCKED_TITLE_KEYWORDS = [
     "Fortnite",
     "Minecraft",
     "Pokemon",
+    # DE low-value / non-news title keywords
+    "Lottozahlen",
+    "Lotto am Mittwoch",
+    "Lotto am Samstag",
+    "Horoskop",
+    "Tageshoroskop",
+    "Gewinnspiel",
+    "Newsletter-Anmeldung",
+    "Jetzt abonnieren",
+    "TV-Programm",
+    "TV-Spielfilm",
+    "Werbung",
+    "Anzeige:",
+    "Sponsored",
+    "Liveblog:",
 ]
 
 GROUPING_LOOKBACK_DAYS = int(os.getenv("MUCKSCRAPER_GROUPING_LOOKBACK_DAYS", "7"))

@@ -62,6 +62,15 @@ def bootstrap_admin():
         db.session.commit()
         print(f"Admin user '{username}' {action}.")
 
+        # Seed the canonical DE topic set + RSS feeds (idempotent). Safe to run
+        # on every bootstrap; existing rows are updated in place.
+        try:
+            import seed_topics
+            result = seed_topics.run()
+            print(f"Seed topics: {result}")
+        except Exception as exc:
+            print(f"Seed topics skipped: {exc}", file=sys.stderr)
+
 
 if __name__ == "__main__":
     try:

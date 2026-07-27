@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <title>{{ 'Edit Topic' if topic else 'New Topic' }} — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52; --accent-dark: #464b40;
+            --bg: #f8f9fa; --surface: #ffffff;
+            --topbar-bg: #1e1e2e; --topbar-text: #cdd6f4;
+            --text: #1a1a1a; --text-muted: #555; --text-faint: #888;
+            --border: #eef0f2; --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17; --surface: #1a1a26;
+            --text: #e2e8f0; --text-muted: #a0aec0; --text-faint: #718096;
+            --border: #2d2d3f; --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar { background: var(--topbar-bg); padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 760px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .card { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 24px; box-shadow: var(--shadow); }
+        .field { margin-bottom: 18px; }
+        .field label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-faint); margin-bottom: 6px; }
+        .field .help { color: var(--text-faint); font-size: 12px; margin-top: 4px; }
+        .field input, .field select, .field textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit;
+        }
+        .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        .btn { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+        .btn:hover { background: var(--accent-dark); }
+        .btn-link { background: transparent; color: var(--text-muted); border: 1px solid var(--border); text-decoration: none; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+        .actions { display: flex; gap: 12px; margin-top: 8px; }
+        .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); margin: 24px 0 12px; }
+        @media (max-width: 700px) { .row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('admin.topics_page') }}" style="margin-left: 24px;">← Back to Topics</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>{{ 'Edit Topic' if topic else 'New Topic' }}</h1>
+    <p class="subtitle">A topic is both a classification target and (when fetch_mode is set) a scheduled fetch. fetch_mode None means classification-only.</p>
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('admin.update_topic', topic_id=topic.id) if topic else url_for('admin.add_topic') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="field">
+                <label for="name">Name (unique)</label>
+                <input id="name" name="name" value="{{ topic.name if topic else '' }}" required>
+            </div>
+
+            <div class="row">
+                <div class="field">
+                    <label for="icon">Icon (max 4)</label>
+                    <input id="icon" name="icon" maxlength="4" value="{{ topic.icon if topic and topic.icon else '' }}">
+                </div>
+                <div class="field">
+                    <label for="sort_order">Sort order</label>
+                    <input id="sort_order" name="sort_order" type="number" value="{{ topic.sort_order if topic and topic.sort_order is not none else '' }}">
+                </div>
+                <div class="field">
+                    <label for="is_active">Active</label>
+                    <div style="padding-top:8px;">
+                        <input id="is_active" name="is_active" type="checkbox" {{ 'checked' if (topic and topic.is_active) or not topic else '' }}>
+                        <span class="help" style="display:inline;">show in classifier + nav</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="description">Description</label>
+                <input id="description" name="description" value="{{ topic.description if topic and topic.description else '' }}">
+            </div>
+
+            <div class="section-title">Fetch configuration</div>
+
+            <div class="row">
+                <div class="field">
+                    <label for="fetch_mode">fetch_mode</label>
+                    <select id="fetch_mode" name="fetch_mode">
+                        <option value="" {{ 'selected' if not topic or not topic.fetch_mode else '' }}>— (classification only)</option>
+                        <option value="top" {{ 'selected' if topic and topic.fetch_mode == 'top' else '' }}>top (top headlines)</option>
+                        <option value="query" {{ 'selected' if topic and topic.fetch_mode == 'query' else '' }}>query (search)</option>
+                    </select>
+                    <div class="help">top = category headlines; query = keyword search.</div>
+                </div>
+                <div class="field">
+                    <label for="fetch_country">fetch_country</label>
+                    <input id="fetch_country" name="fetch_country" placeholder="de, us, or blank for global" value="{{ topic.fetch_country if topic and topic.fetch_country else '' }}">
+                </div>
+                <div class="field">
+                    <label for="fetch_category">fetch_category</label>
+                    <input id="fetch_category" name="fetch_category" placeholder="general, business, sports, ..." value="{{ topic.fetch_category if topic and topic.fetch_category else '' }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="fetch_query">fetch_query (NewsAPI search query)</label>
+                <input id="fetch_query" name="fetch_query" placeholder="Used when fetch_mode=query, e.g. Bundestag OR Regierung" value="{{ topic.fetch_query if topic and topic.fetch_query else '' }}">
+            </div>
+
+            <div class="row">
+                <div class="field">
+                    <label for="gnews_query">gnews_query</label>
+                    <input id="gnews_query" name="gnews_query" placeholder="optional separate GNews query" value="{{ topic.gnews_query if topic and topic.gnews_query else '' }}">
+                </div>
+                <div class="field">
+                    <label for="gnews_category">gnews_category</label>
+                    <input id="gnews_category" name="gnews_category" placeholder="nation, world, business, ..." value="{{ topic.gnews_category if topic and topic.gnews_category else '' }}">
+                </div>
+                <div class="field"></div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn">{{ 'Save changes' if topic else 'Create topic' }}</button>
+                <a href="{{ url_for('admin.topics_page') }}" class="btn-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

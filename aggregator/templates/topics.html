@@ -106,8 +106,19 @@
 </div>
 
 <div class="container">
-    <h1>Topics</h1>
-    <p class="subtitle">Topics used for classification and the sidebar filter. Inactive topics are hidden from the classifier and nav, but historical tags on existing articles/stories are kept.</p>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+        <div>
+            <h1>Topics</h1>
+            <p class="subtitle">Topics used for classification, the sidebar filter, and (when fetch_mode is set) the scheduled fetch runs. Inactive topics are hidden from the classifier and nav; historical tags on articles/stories are kept.</p>
+        </div>
+        <div style="display:flex;gap:12px;">
+            <form method="POST" action="{{ url_for('admin.reseed_topics') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="add-btn" title="Re-run seed_topics.py to restore the canonical DE topic set + RSS feeds">↻ Reseed DE</button>
+            </form>
+            <a href="{{ url_for('admin.topic_new') }}" class="add-btn" style="text-decoration:none;display:inline-block;">+ New Topic</a>
+        </div>
+    </div>
 
     <div class="card">
         {% if topics %}
@@ -117,6 +128,7 @@
                     <th>Name</th>
                     <th>Icon</th>
                     <th>Order</th>
+                    <th>Fetch</th>
                     <th>Active</th>
                     <th></th>
                 </tr>
@@ -124,31 +136,38 @@
             <tbody>
                 {% for topic in topics %}
                 <tr class="{{ 'inactive' if not topic.is_active else '' }}">
-                    <form method="POST" action="{{ url_for('admin.update_topic', topic_id=topic.id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <td>{{ topic.name }}</td>
-                        <td><input type="text" class="icon-input" name="icon" maxlength="4" value="{{ topic.icon or '' }}"></td>
-                        <td><input type="number" class="sort-input" name="sort_order" value="{{ topic.sort_order if topic.sort_order is not none else '' }}"></td>
-                        <td><input type="checkbox" name="is_active" {{ 'checked' if topic.is_active else '' }}></td>
-                        <td><button type="submit" class="save-btn">Save</button></td>
-                    </form>
+                    <td>
+                        <strong>{{ topic.name }}</strong>
+                        {% if topic.description %}<div style="font-size:12px;color:var(--text-faint);">{{ topic.description }}</div>{% endif %}
+                    </td>
+                    <td>{{ topic.icon or '' }}</td>
+                    <td>{{ topic.sort_order if topic.sort_order is not none else '' }}</td>
+                    <td>
+                        {% if topic.fetch_mode %}
+                            <span style="font-size:12px;">{{ topic.fetch_mode }} · {{ topic.fetch_country or 'global' }}{% if topic.fetch_category %} / {{ topic.fetch_category }}{% endif %}</span>
+                        {% else %}
+                            <span style="color:var(--text-faint);font-size:12px;">classification only</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ '✓' if topic.is_active else '—' }}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('admin.topic_edit', topic_id=topic.id) }}" style="font-size:12px;margin-right:10px;">Edit</a>
+                        <form method="POST" action="{{ url_for('admin.toggle_topic_active', topic_id=topic.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="save-btn" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);">{{ 'Deactivate' if topic.is_active else 'Activate' }}</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin.delete_topic', topic_id=topic.id) }}" style="display:inline;" onsubmit="return confirm('Retire topic \'{{ topic.name }}\'? Historical tags are kept; the topic is just hidden.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="save-btn" style="background:transparent;color:#c0392b;border:1px solid var(--border);">Delete</button>
+                        </form>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <div class="empty">No topics yet.</div>
+        <div class="empty">No topics yet. Hit "Reseed DE" to load the German default set.</div>
         {% endif %}
-    </div>
-
-    <div class="card">
-        <form method="POST" action="{{ url_for('admin.add_topic') }}" class="add-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" class="name-input" name="name" placeholder="New topic name" required>
-            <input type="text" class="icon-input" name="icon" placeholder="Icon" maxlength="4">
-            <input type="number" class="sort-input" name="sort_order" placeholder="Order">
-            <button type="submit" class="add-btn">+ Add Topic</button>
-        </form>
     </div>
 </div>
 </body>

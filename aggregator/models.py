@@ -44,6 +44,17 @@ class Topic(db.Model):
     sort_order = db.Column(db.Integer, nullable=True)
     is_active  = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
 
+    # Admin-editable fetch configuration. When fetch_mode is set, the scheduler
+    # runs this topic as a scheduled fetch (see news_fetcher/scheduler.get_scheduled_fetches).
+    # fetch_mode is "query" or "top"; None means the topic is classification-only.
+    description    = db.Column(db.String, nullable=True)
+    fetch_mode     = db.Column(db.String(8), nullable=True)
+    fetch_country  = db.Column(db.String(8), nullable=True)
+    fetch_category = db.Column(db.String(32), nullable=True)
+    fetch_query    = db.Column(db.String, nullable=True)
+    gnews_query    = db.Column(db.String, nullable=True)
+    gnews_category = db.Column(db.String(32), nullable=True)
+
     stories  = db.relationship("Story",   secondary=story_topics,  back_populates="topics")
     articles = db.relationship("Article", secondary=article_topics, back_populates="topics")
 

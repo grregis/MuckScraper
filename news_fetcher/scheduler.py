@@ -5,7 +5,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score
-from aggregator.models import AppSetting
+from aggregator.models import AppSetting, Topic
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.rss_fetcher import (
     fetch_and_store_rss,
@@ -34,7 +34,12 @@ FETCH_SCHEDULE_HOURS = os.environ.get("FETCH_SCHEDULE_HOURS") or "7,12,17,22"
 FULL_PIPELINE_HOURS = os.environ.get("FULL_PIPELINE_HOURS") or "7,17"
 TIMEZONE = os.environ.get("TIMEZONE") or "America/New_York"
 
-SCHEDULED_FETCHES = [
+# Hardcoded US fetch set kept as a fallback only. The live scheduled fetches
+# are read from the database (Topic rows with fetch_mode set) by
+# get_scheduled_fetches() below, so they are admin-editable. This list is used
+# only when the DB has no configured fetch-topics yet (e.g. before
+# seed_topics.py ran on a fresh install).
+SCHEDULED_FETCHES_US_FALLBACK = [
     # === NATIONAL / POLITICS ===
     {
         "label":          "US Politics",
@@ -90,6 +95,38 @@ SCHEDULED_FETCHES = [
 app = create_app()
 SCRAPE_OUTCOME_HISTORY_KEY = "scrape_outcome_history_v1"
 SCRAPE_OUTCOME_HISTORY_MAX_RUNS = 40
+
+
+def get_scheduled_fetches():
+    """Return the scheduled fetch specs from the database.
+
+    Reads active Topic rows that have a fetch_mode set, ordered by sort_order.
+    Falls back to SCHEDULED_FETCHES_US_FALLBACK when the DB has no configured
+    fetch-topics (fresh install before seed_topics.py ran).
+
+    Must be called within an app context (the scheduler's run_all_fetches and
+    the admin fetch page both provide one).
+    """
+    topics = (
+        Topic.query
+        .filter(Topic.is_active == True, Topic.fetch_mode.isnot(None))
+        .order_by(Topic.sort_order.asc().nullslast(), Topic.name.asc())
+        .all()
+    )
+    if not topics:
+        return list(SCHEDULED_FETCHES_US_FALLBACK)
+    return [
+        {
+            "label":          t.name,
+            "mode":           t.fetch_mode,
+            "country":        t.fetch_country,
+            "category":       t.fetch_category,
+            "query":          t.fetch_query,
+            "gnews_query":    t.gnews_query,
+            "gnews_category": t.gnews_category,
+        }
+        for t in topics
+    ]
 
 
 def run_optional_headline_ranking():
@@ -723,8 +760,9 @@ def run_all_fetches(run_full_pipeline=True):
         }
         ollama_state["up_at_start"] = _check_ollama_status_for_report(ollama_state, "run_start")
 
-        # Fetch all categories
-        for fetch in SCHEDULED_FETCHES:
+        # Fetch all categories - driven by the DB (Topic rows with fetch_mode).
+        scheduled = get_scheduled_fetches()
+        for fetch in scheduled:
             logging.info(f"--- Fetching: {fetch['label']} ---")
             try:
                 topic_metrics = fetch_and_store_articles(
