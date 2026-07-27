@@ -19,6 +19,7 @@ services:
     restart: unless-stopped
 
   scheduler:
+    extra_hosts: ["host.docker.internal:host-gateway"]
     build:
       context: .
       dockerfile: news_fetcher/Dockerfile
@@ -53,6 +54,7 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
       FETCH_SCHEDULE_HOURS: ${FETCH_SCHEDULE_HOURS:-7,12,17,22}
       FULL_PIPELINE_HOURS: ${FULL_PIPELINE_HOURS:-7,17}
+      TIMEZONE: ${TIMEZONE:-America/New_York}
       OLLAMA_MAC: ${OLLAMA_MAC}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
       N8N_FETCH_REPORT_WEBHOOK_URL: ${N8N_FETCH_REPORT_WEBHOOK_URL}
@@ -66,9 +68,10 @@ services:
       - .:/app
 
   app:
+    extra_hosts: ["host.docker.internal:host-gateway"]
     build: .
     ports:
-      - "127.0.0.1:5000:5000"
+      - "0.0.0.0:5000:5000"
     depends_on:
       - postgres
       - meilisearch

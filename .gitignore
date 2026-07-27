@@ -42,3 +42,7 @@ scripts
 # Internal working docs — not for the public repo
 PROJECT_MAP.md
 TROUBLESHOOTING.md
+
+# local secret backups (never commit)
+.env.backup*
+.env.local

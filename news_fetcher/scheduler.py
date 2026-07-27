@@ -32,7 +32,7 @@ logging.basicConfig(
 # Fetch runs can be more frequent than full edition publishing.
 FETCH_SCHEDULE_HOURS = os.environ.get("FETCH_SCHEDULE_HOURS") or "7,12,17,22"
 FULL_PIPELINE_HOURS = os.environ.get("FULL_PIPELINE_HOURS") or "7,17"
-TIMEZONE = "America/New_York"
+TIMEZONE = os.environ.get("TIMEZONE") or "America/New_York"
 
 SCHEDULED_FETCHES = [
     # === NATIONAL / POLITICS ===
