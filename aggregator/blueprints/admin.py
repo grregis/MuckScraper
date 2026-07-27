@@ -131,18 +131,31 @@ def _try_claim_task_status(key, running_payload):
 # AppSetting key prefixes/keys whose value is a background-task status blob.
 _TASK_STATUS_KEY_PREFIXES = ("bulk_task_status_v1:", "ai_task_status_v1:")
 
+# How long a task-status can plausibly stay 'running' before it's treated as
+# orphaned rather than just slow. Generous on purpose -- some of these
+# (force_regroup_all, reclassify_all_articles) can legitimately run for a long
+# time on a full DB; this only needs to catch tasks that are truly dead, not
+# flag slow-but-alive ones.
+ORPHANED_TASK_STALE_AFTER = timedelta(hours=3)
+
 
 def reconcile_orphaned_task_statuses():
-    """Mark any task-status still 'running' at startup as interrupted.
+    """Mark any task-status stuck 'running' well past a plausible runtime as
+    interrupted, so a task whose process died mid-run doesn't permanently
+    block that action from being re-run (_start_bulk_task/etc. all refuse to
+    start an action whose status is already 'running').
 
-    Background tasks run in threads that cannot survive a process restart, so a
-    'running' status found at boot can only be a leftover from a previous
-    process that died mid-task (restart, crash, OOM). Left alone it shows a
-    phantom running task in the UI and -- because _start_bulk_task refuses to
-    start an action whose status is 'running' -- permanently blocks that action
-    from being re-run. Rewrite those to a terminal 'error' status so the UI is
-    truthful and the action becomes runnable again.
+    Deliberately keyed on staleness (started_at age), not "found running at
+    this process's boot": with multiple gunicorn worker processes (see
+    GUNICORN_WORKERS), a 'running' status can be perfectly legitimate work
+    happening in a *different* worker than the one currently starting up, so
+    "I just (re)started, therefore every running status is dead" is not a
+    safe assumption once there's more than one worker. Age-based staleness
+    is correct regardless of how many workers or processes are involved, so
+    this can run at any worker's startup (or be called periodically) without
+    risk of killing a task that's actually still alive elsewhere.
     """
+    cutoff = datetime.utcnow() - ORPHANED_TASK_STALE_AFTER
     rows = AppSetting.query.filter(
         or_(
             *[AppSetting.key.like(prefix + "%") for prefix in _TASK_STATUS_KEY_PREFIXES],
@@ -157,14 +170,29 @@ def reconcile_orphaned_task_statuses():
             continue
         if not isinstance(payload, dict) or payload.get("status") != "running":
             continue
+
+        started_at = payload.get("started_at")
+        try:
+            started_dt = datetime.fromisoformat(started_at) if started_at else None
+        except (TypeError, ValueError):
+            started_dt = None
+        if started_dt is None or started_dt > cutoff:
+            # No parseable start time, or still within a plausible runtime --
+            # leave it alone; it may genuinely still be running, possibly in
+            # a different worker process than this one.
+            continue
+
         payload["status"] = "error"
         payload["finished_at"] = datetime.utcnow().isoformat()
-        payload["message"] = "Interrupted by an app restart; no result was produced. Re-run to retry."
+        payload["message"] = (
+            f"No update in over {int(ORPHANED_TASK_STALE_AFTER.total_seconds() // 3600)}h; "
+            "treated as interrupted (process likely died mid-task). Re-run to retry."
+        )
         row.value = json.dumps(payload)
         reconciled += 1
     if reconciled:
         db.session.commit()
-        logger.info("[Startup] Reconciled %d orphaned 'running' task status(es).", reconciled)
+        logger.info("[Startup] Reconciled %d stale 'running' task status(es).", reconciled)
     return reconciled
 
 
