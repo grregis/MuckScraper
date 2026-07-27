@@ -2029,6 +2029,28 @@ def publish_edition():
         Story.created_at >= story_cutoff
     ).order_by(Story.headline_score.desc()).limit(100).all()
 
+    # Fallback for deployments running without the private headline-ranking
+    # plugin: nothing in the open-source code assigns Story.headline_score, so
+    # every story stays at 0 and the score gate above returns no candidates --
+    # which leaves the edition (and therefore all automatic summary/deep-report
+    # generation, which only runs over the latest edition) empty forever. When
+    # that happens, fall back to recent stories ordered by recency and let the
+    # multi-article preference and bias balancing below rank them, so the
+    # open-source app can still publish editions on its own. When the ranking
+    # plugin IS active, at least one story scores > 0 and this branch is skipped,
+    # leaving the scored behavior unchanged.
+    if not candidates:
+        candidates = Story.query.filter(
+            Story.created_at >= story_cutoff
+        ).order_by(Story.created_at.desc()).limit(100).all()
+        if candidates:
+            logger.info(
+                "[Edition] No stories have a positive headline_score "
+                "(headline-ranking plugin inactive); falling back to %d recent "
+                "stories ordered by recency.",
+                len(candidates),
+            )
+
     # Exclude stories with no scraped content on any article, and
     # single-article stories with generic roundup titles.
     filtered_candidates = []
