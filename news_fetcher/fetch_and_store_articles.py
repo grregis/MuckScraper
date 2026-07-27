@@ -782,7 +782,7 @@ def store_articles(articles_data, topic_name, provider=None):
             metrics["skipped"][low_value_reason if low_value_reason in metrics["skipped"] else "low_value_url"] += 1
             continue
 
-        if any(kw in title.lower() for kw in BLOCKED_TITLE_KEYWORDS):
+        if any(kw.lower() in title.lower() for kw in BLOCKED_TITLE_KEYWORDS):
             logger.debug(f"Skipping blocked title: {title}")
             metrics["skipped"]["blocked_title"] += 1
             continue
