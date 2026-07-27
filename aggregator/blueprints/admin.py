@@ -380,7 +380,7 @@ def story_bias_totals(story):
 
 def redirect_to_articles(label=None, scrape_status=None):
     next_url = request.form.get("next", "").strip()
-    if next_url.startswith("/"):
+    if next_url.startswith("/") and urlparse(next_url).netloc == "":
         return redirect(next_url)
     params = {}
     if label:
