@@ -12,6 +12,22 @@ logging.getLogger("werkzeug").addFilter(HealthCheckFilter())
 
 app = create_app()
 
+# On startup, clear any background-task statuses stuck 'running' well past a
+# plausible runtime -- almost certainly a leftover from a process that died
+# mid-task (restart, crash, OOM), which would otherwise block that action from
+# ever being re-run. Safe to run at every worker's boot with GUNICORN_WORKERS
+# > 1: reconcile_orphaned_task_statuses() only touches stale rows, so it can't
+# clobber a task that's legitimately still running in a different worker.
+# Guarded so a reconciliation failure can never prevent the app from booting.
+with app.app_context():
+    try:
+        from aggregator.blueprints.admin import reconcile_orphaned_task_statuses
+        reconcile_orphaned_task_statuses()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Startup task-status reconciliation failed"
+        )
+
 def init_db():
     with app.app_context():
         db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS vector"))

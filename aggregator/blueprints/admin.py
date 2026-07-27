@@ -128,6 +128,74 @@ def _try_claim_task_status(key, running_payload):
     return claimed
 
 
+# AppSetting key prefixes/keys whose value is a background-task status blob.
+_TASK_STATUS_KEY_PREFIXES = ("bulk_task_status_v1:", "ai_task_status_v1:")
+
+# How long a task-status can plausibly stay 'running' before it's treated as
+# orphaned rather than just slow. Generous on purpose -- some of these
+# (force_regroup_all, reclassify_all_articles) can legitimately run for a long
+# time on a full DB; this only needs to catch tasks that are truly dead, not
+# flag slow-but-alive ones.
+ORPHANED_TASK_STALE_AFTER = timedelta(hours=3)
+
+
+def reconcile_orphaned_task_statuses():
+    """Mark any task-status stuck 'running' well past a plausible runtime as
+    interrupted, so a task whose process died mid-run doesn't permanently
+    block that action from being re-run (_start_bulk_task/etc. all refuse to
+    start an action whose status is already 'running').
+
+    Deliberately keyed on staleness (started_at age), not "found running at
+    this process's boot": with multiple gunicorn worker processes (see
+    GUNICORN_WORKERS), a 'running' status can be perfectly legitimate work
+    happening in a *different* worker than the one currently starting up, so
+    "I just (re)started, therefore every running status is dead" is not a
+    safe assumption once there's more than one worker. Age-based staleness
+    is correct regardless of how many workers or processes are involved, so
+    this can run at any worker's startup (or be called periodically) without
+    risk of killing a task that's actually still alive elsewhere.
+    """
+    cutoff = datetime.utcnow() - ORPHANED_TASK_STALE_AFTER
+    rows = AppSetting.query.filter(
+        or_(
+            *[AppSetting.key.like(prefix + "%") for prefix in _TASK_STATUS_KEY_PREFIXES],
+            AppSetting.key == SEARCH_REINDEX_STATUS_KEY,
+        )
+    ).all()
+    reconciled = 0
+    for row in rows:
+        try:
+            payload = json.loads(row.value) if row.value else None
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(payload, dict) or payload.get("status") != "running":
+            continue
+
+        started_at = payload.get("started_at")
+        try:
+            started_dt = datetime.fromisoformat(started_at) if started_at else None
+        except (TypeError, ValueError):
+            started_dt = None
+        if started_dt is None or started_dt > cutoff:
+            # No parseable start time, or still within a plausible runtime --
+            # leave it alone; it may genuinely still be running, possibly in
+            # a different worker process than this one.
+            continue
+
+        payload["status"] = "error"
+        payload["finished_at"] = datetime.utcnow().isoformat()
+        payload["message"] = (
+            f"No update in over {int(ORPHANED_TASK_STALE_AFTER.total_seconds() // 3600)}h; "
+            "treated as interrupted (process likely died mid-task). Re-run to retry."
+        )
+        row.value = json.dumps(payload)
+        reconciled += 1
+    if reconciled:
+        db.session.commit()
+        logger.info("[Startup] Reconciled %d stale 'running' task status(es).", reconciled)
+    return reconciled
+
+
 def _search_reindex_status_payload():
     payload = _load_json_setting(SEARCH_REINDEX_STATUS_KEY)
     if payload:
