@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 
 admin = Blueprint("admin", __name__)
 SEARCH_REINDEX_STATUS_KEY = "search_reindex_status_v1"
-search_reindex_lock = threading.Lock()
-ai_task_lock = threading.Lock()
-bulk_task_lock = threading.Lock()
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
 FETCH_PRESETS = [
     {
@@ -94,6 +91,41 @@ def _save_json_setting(key, payload):
     else:
         db.session.add(AppSetting(key=key, value=json.dumps(payload)))
     db.session.commit()
+
+
+def _try_claim_task_status(key, running_payload):
+    """
+    Atomically claim a task-status row for 'running', safe across multiple
+    gunicorn worker processes (not just threads within one process).
+
+    A plain "check status, then save 'running'" -- even guarded by an
+    in-process threading.Lock -- only prevents a double-start from threads in
+    the SAME process. With multiple worker processes, two requests landing on
+    different workers would each pass the check independently (each process
+    has its own lock and Python globals) and both start the same action.
+
+    This does the check-and-set as one atomic SQL statement instead: the
+    UPDATE (or INSERT, if the row doesn't exist yet) only takes effect if no
+    other process already has the row marked 'running', and the database's
+    row-level locking makes that atomic regardless of how many processes are
+    asking at once. Returns True if this call won the claim, False if the
+    action is already running (started by any process/thread).
+    """
+    payload_json = json.dumps(running_payload)
+    result = db.session.execute(
+        db.text("""
+            INSERT INTO app_settings (key, value)
+            VALUES (:key, :value)
+            ON CONFLICT (key) DO UPDATE
+                SET value = :value
+                WHERE (app_settings.value::json ->> 'status') IS DISTINCT FROM 'running'
+            RETURNING key
+        """),
+        {"key": key, "value": payload_json},
+    )
+    claimed = result.fetchone() is not None
+    db.session.commit()
+    return claimed
 
 
 def _search_reindex_status_payload():
@@ -315,27 +347,25 @@ def _start_bulk_task(action, fn):
     worker timeout and killing the request mid-run (GitHub issue #3).
 
     Returns (started, status) — started is False (with the current running
-    status) if this action is already in progress.
+    status) if this action is already in progress on any worker process.
     """
-    with bulk_task_lock:
-        current_status = _bulk_task_status_payload(action)
-        if current_status.get("status") == "running":
-            return False, current_status
+    started_at = datetime.utcnow().isoformat()
+    claimed = _try_claim_task_status(
+        _bulk_task_status_key(action),
+        {
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "message": f"{action} is running.",
+        },
+    )
+    if not claimed:
+        return False, _bulk_task_status_payload(action)
 
-        started_at = datetime.utcnow().isoformat()
-        _save_json_setting(
-            _bulk_task_status_key(action),
-            {
-                "status": "running",
-                "started_at": started_at,
-                "finished_at": None,
-                "message": f"{action} is running.",
-            },
-        )
-        app = current_app._get_current_object()
-        thread = threading.Thread(target=_run_bulk_task, args=(app, action, fn), daemon=True)
-        thread.start()
-        return True, _bulk_task_status_payload(action)
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=_run_bulk_task, args=(app, action, fn), daemon=True)
+    thread.start()
+    return True, _bulk_task_status_payload(action)
 
 
 def article_domain(url):
@@ -787,29 +817,27 @@ def wake_ollama():
 @admin.route("/reindex-search", methods=["POST"])
 @login_required
 def reindex_search():
-    with search_reindex_lock:
-        current_status = _search_reindex_status_payload()
-        if current_status.get("status") == "running":
-            return jsonify({
-                "started": False,
-                "status": current_status,
-            }), 409
+    started_at = datetime.utcnow().isoformat()
+    claimed = _try_claim_task_status(
+        SEARCH_REINDEX_STATUS_KEY,
+        {
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "message": "Reindexing stories and articles into Meilisearch.",
+            "story_documents": None,
+            "article_documents": None,
+        },
+    )
+    if not claimed:
+        return jsonify({
+            "started": False,
+            "status": _search_reindex_status_payload(),
+        }), 409
 
-        started_at = datetime.utcnow().isoformat()
-        _save_json_setting(
-            SEARCH_REINDEX_STATUS_KEY,
-            {
-                "status": "running",
-                "started_at": started_at,
-                "finished_at": None,
-                "message": "Reindexing stories and articles into Meilisearch.",
-                "story_documents": None,
-                "article_documents": None,
-            },
-        )
-        app = current_app._get_current_object()
-        thread = threading.Thread(target=_run_search_reindex, args=(app,), daemon=True)
-        thread.start()
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=_run_search_reindex, args=(app,), daemon=True)
+    thread.start()
 
     return jsonify({
         "started": True,
@@ -859,32 +887,31 @@ def start_ai_task():
             "message": "Invalid AI task type.",
         }), 400
 
-    with ai_task_lock:
-        current_status = _ai_task_status_payload(task_type, resource_id)
-        if current_status.get("status") == "running":
-            return jsonify({
-                "started": False,
-                "status": current_status,
-            }), 409
+    started_at = datetime.utcnow().isoformat()
+    claimed = _try_claim_task_status(
+        _ai_task_status_key(task_type, resource_id),
+        {
+            "task_type": task_type,
+            "resource_id": resource_id,
+            "status": "running",
+            "started_at": started_at,
+            "finished_at": None,
+            "message": "AI task is running.",
+        },
+    )
+    if not claimed:
+        return jsonify({
+            "started": False,
+            "status": _ai_task_status_payload(task_type, resource_id),
+        }), 409
 
-        started_at = datetime.utcnow().isoformat()
-        _save_ai_task_status(
-            task_type,
-            resource_id,
-            {
-                "status": "running",
-                "started_at": started_at,
-                "finished_at": None,
-                "message": "AI task is running.",
-            },
-        )
-        app = current_app._get_current_object()
-        thread = threading.Thread(
-            target=_run_ai_task,
-            args=(app, task_type, resource_id),
-            daemon=True,
-        )
-        thread.start()
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_run_ai_task,
+        args=(app, task_type, resource_id),
+        daemon=True,
+    )
+    thread.start()
 
     return jsonify({
         "started": True,
