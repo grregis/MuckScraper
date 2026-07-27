@@ -421,7 +421,26 @@ def fetch_page():
 @admin.route("/tools")
 @login_required
 def tools_page():
-    return render_template("admin_tools.html")
+    from news_fetcher.fetch_and_store_articles import (
+        AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY,
+    )
+    auto_deep = bool(_load_json_setting(AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY))
+    return render_template(
+        "admin_tools.html",
+        auto_article_deep_analysis_enabled=auto_deep,
+    )
+
+
+@admin.route("/toggle-auto-article-deep-analysis", methods=["POST"])
+@login_required
+def toggle_auto_article_deep_analysis():
+    from news_fetcher.fetch_and_store_articles import (
+        AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY,
+    )
+    enabled = request.form.get("enabled") == "true"
+    _save_json_setting(AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY, enabled)
+    logger.info(f"[Settings] auto_article_deep_analysis_enabled set to {enabled}")
+    return redirect(url_for("admin.tools_page"))
 
 
 @admin.route("/articles")
