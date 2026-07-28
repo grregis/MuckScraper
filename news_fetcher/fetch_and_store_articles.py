@@ -1156,8 +1156,13 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
         }
 
 
-def fetch_gnews(topic_name, query=None, category=None):
-    """Fetch articles from GNews API and store them."""
+def fetch_gnews(topic_name, query=None, category=None, country=None, lang=None):
+    """Fetch articles from GNews API and store them.
+
+    `country`/`lang` default to the GNEWS_COUNTRY/GNEWS_LANG env vars (which
+    default to "de"/"de" for this DE downstream) so GNews pulls German news
+    instead of the upstream hardcoded US/EN. Callers may override per-topic.
+    """
     api_key = os.environ.get("GNEWS_API_KEY", "")
     if not api_key:
         logger.warning("GNEWS_API_KEY not set, skipping GNews fetch.")
@@ -1170,13 +1175,16 @@ def fetch_gnews(topic_name, query=None, category=None):
             "stored": 0,
         }
 
+    country = country or os.environ.get("GNEWS_COUNTRY") or "de"
+    lang = lang or os.environ.get("GNEWS_LANG") or "de"
+
     try:
         if query:
             logger.info(f"[GNews] Fetching query: {query}")
             url = "https://gnews.io/api/v4/search"
             params = {
                 "q":      query,
-                "lang":   "en",
+                "lang":   lang,
                 "max":    20,
                 "apikey": api_key,
             }
@@ -1185,8 +1193,8 @@ def fetch_gnews(topic_name, query=None, category=None):
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
                 "category": category,
-                "lang":     "en",
-                "country":  "us",
+                "lang":     lang,
+                "country":  country,
                 "max":      20,
                 "apikey":   api_key,
             }
@@ -1194,8 +1202,8 @@ def fetch_gnews(topic_name, query=None, category=None):
             logger.info(f"[GNews] Fetching top headlines")
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
-                "lang":    "en",
-                "country": "us",
+                "lang":    lang,
+                "country": country,
                 "max":     20,
                 "apikey":  api_key,
             }
@@ -1729,13 +1737,16 @@ def cleanup_old_payloads():
 
 def fetch_and_store_articles(topic_name, mode="top", query=None,
                               country="us", category=None,
-                              gnews_query=None, gnews_category=None):
+                              gnews_query=None, gnews_category=None,
+                              gnews_country=None, gnews_lang=None):
     """
     Main entry point. Fetches from both NewsAPI and GNews for a given topic.
     """
     newsapi_metrics = fetch_newsapi(topic_name, mode=mode, query=query,
                                     country=country, category=category)
-    gnews_metrics = fetch_gnews(topic_name, query=gnews_query, category=gnews_category)
+    gnews_metrics = fetch_gnews(topic_name, query=gnews_query,
+                                 category=gnews_category,
+                                 country=gnews_country, lang=gnews_lang)
     cleanup_old_payloads()
     return {
         "topic_name": topic_name,
