@@ -63,7 +63,7 @@ Rules:
         input=prompt,
         metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    headline = llm_client.generate_text(prompt, timeout=30)
+    headline = llm_client.generate_text(prompt)
     if headline is None:
         logger.error(f"Error generating headline for '{story.title}'")
         return None

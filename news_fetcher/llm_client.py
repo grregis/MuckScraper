@@ -45,6 +45,14 @@ GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedd
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 
+# Default request timeout (seconds) for short LLM calls - classification, bias
+# rating, story grouping, headline generation. Configurable via env so slower
+# backends (local large model, Ollama Cloud with higher latency) don't get
+# silently degraded by a hardcoded 30s ceiling. Callers that need longer
+# (summarizer: 120/180/150) pass an explicit timeout and bypass this default.
+# See issue #1.
+LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "60"))
+
 _gemini_client = None
 
 
@@ -66,7 +74,9 @@ def is_configured():
     return bool(OLLAMA_HOST and OLLAMA_MODEL)
 
 
-def generate_text(prompt, timeout=30):
+def generate_text(prompt, timeout=None):
+    if timeout is None:
+        timeout = LLM_TIMEOUT
     if LLM_PROVIDER == "gemini":
         return _generate_text_gemini(prompt, timeout)
     if LLM_PROVIDER == "groq":

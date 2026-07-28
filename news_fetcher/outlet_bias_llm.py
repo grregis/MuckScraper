@@ -32,7 +32,7 @@ def _ask_ollama(prompt):
         input=prompt,
         metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt)
     langfuse_context.update_current_observation(output=result)
     return result
 

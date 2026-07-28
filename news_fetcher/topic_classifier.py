@@ -105,7 +105,7 @@ Rules:
         input=prompt,
         metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt)
     if result is None:
         logger.info("  [Classifier] No response, using Other")
         return ["Other"]

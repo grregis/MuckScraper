@@ -530,7 +530,7 @@ def ask_ollama_for_match(article_title, candidate_stories, article_content=None,
         input=prompt,
         metadata={"provider": llm_client.LLM_PROVIDER}
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt)
     if result is None:
         return None
     langfuse_context.update_current_observation(output=result)
