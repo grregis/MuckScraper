@@ -34,30 +34,35 @@ DE_TOPICS = [
         "fetch_mode": "query", "fetch_country": "de", "fetch_category": "general",
         "fetch_query": "Bundestag OR Regierung OR Kanzler OR Parteien",
         "gnews_query": "Bundestag Regierung Kanzler", "gnews_category": "nation",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "DE Inland", "icon": "DN", "sort_order": 1,
         "description": "Top-Schlagzeilen aus Deutschland",
         "fetch_mode": "top", "fetch_country": "de", "fetch_category": "general",
         "fetch_query": None, "gnews_query": None, "gnews_category": "nation",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Welt", "icon": "IN", "sort_order": 2,
         "description": "Internationale Nachrichten",
         "fetch_mode": "top", "fetch_country": None, "fetch_category": "general",
         "fetch_query": None, "gnews_query": None, "gnews_category": "world",
+        "gnews_country": None, "gnews_lang": None,
     },
     {
         "name": "Wirtschaft & Finanzen", "icon": "WF", "sort_order": 3,
         "description": "Börse, Unternehmen, Konjunktur",
         "fetch_mode": "top", "fetch_country": "de", "fetch_category": "business",
         "fetch_query": None, "gnews_query": None, "gnews_category": "business",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Wissenschaft & Gesundheit", "icon": "WG", "sort_order": 4,
         "description": "Forschung, Medizin, Gesundheit",
         "fetch_mode": "top", "fetch_country": "de", "fetch_category": "science",
         "fetch_query": None, "gnews_query": None, "gnews_category": "science",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Technologie & KI", "icon": "TC", "sort_order": 5,
@@ -65,12 +70,14 @@ DE_TOPICS = [
         "fetch_mode": "query", "fetch_country": "de", "fetch_category": "technology",
         "fetch_query": "Technologie OR KI OR \"Künstliche Intelligenz\"",
         "gnews_query": "Technologie KI", "gnews_category": "technology",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Sport", "icon": "SP", "sort_order": 6,
         "description": "Top-Sport aus Deutschland",
         "fetch_mode": "top", "fetch_country": "de", "fetch_category": "sports",
         "fetch_query": None, "gnews_query": None, "gnews_category": "sports",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Kultur", "icon": "KU", "sort_order": 7,
@@ -78,12 +85,14 @@ DE_TOPICS = [
         "fetch_mode": "query", "fetch_country": "de", "fetch_category": "general",
         "fetch_query": "Kultur OR Literatur OR Film OR Musik",
         "gnews_query": "Kultur Literatur Film", "gnews_category": "nation",
+        "gnews_country": "de", "gnews_lang": "de",
     },
     {
         "name": "Sonstiges", "icon": "OT", "sort_order": 99,
         "description": "Fallback für alles, woanders nicht eingeordnet",
         "fetch_mode": None, "fetch_country": None, "fetch_category": None,
         "fetch_query": None, "gnews_query": None, "gnews_category": None,
+        "gnews_country": None, "gnews_lang": None,
     },
 ]
 
@@ -108,6 +117,7 @@ DE_RSS_FEEDS = [
 _TOPIC_OWNED_FIELDS = (
     "icon", "sort_order", "fetch_mode", "fetch_country", "fetch_category",
     "fetch_query", "gnews_query", "gnews_category",
+    "gnews_country", "gnews_lang",
 )
 _TOPIC_FILL_IF_EMPTY = ("description",)
 

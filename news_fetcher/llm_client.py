@@ -24,6 +24,17 @@ OLLAMA_FALLBACK_HOST = os.environ.get("OLLAMA_FALLBACK_HOST", "")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 
+# Output locale directive. Sent as a system message (provider system-slot) so
+# the LLM answers in this language even when the upstream prompt is English
+# (soft-fork: core prompts stay untouched, only a system output-language line
+# is added). Default "de" for this DE downstream. Set LLM_OUTPUT_LANG="" to
+# disable (upstream behavior). See LLM-Output-Locale directive.
+# Delivered as a system message, NOT prepended to the user prompt, so
+# structured-output callers (grouper single-number, classifier topic-name list,
+# bias 'unknown'/digit parsers) keep their exact-token instructions unmutated.
+LLM_OUTPUT_LANG = os.environ.get("LLM_OUTPUT_LANG", "de").strip().lower()
+_LOCALE_SYSTEM = f"Respond in {LLM_OUTPUT_LANG}." if LLM_OUTPUT_LANG else None
+
 # How long to keep serving from the fallback host before re-probing whether the
 # primary has come back online (issue #7's "detects that it comes online").
 OLLAMA_PRIMARY_RECHECK_SECONDS = int(
@@ -75,6 +86,9 @@ def is_configured():
 
 
 def generate_text(prompt, timeout=None):
+    # The output-locale directive is delivered as a system message by each
+    # provider's _generate_text_* (not prepended here), so structured-output
+    # callers keep their exact-token instructions unmutated.
     if timeout is None:
         timeout = LLM_TIMEOUT
     if LLM_PROVIDER == "gemini":
@@ -175,9 +189,12 @@ def _generate_text_ollama(prompt, timeout):
         return None
 
     def _call(host):
+        payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
+        if _LOCALE_SYSTEM:
+            payload["system"] = _LOCALE_SYSTEM
         response = requests.post(
             f"{host}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            json=payload,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -191,10 +208,12 @@ def _generate_text_gemini(prompt, timeout):
         return None
     try:
         client = _get_gemini_client()
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
+        kwargs = {"model": GEMINI_MODEL, "contents": prompt}
+        if _LOCALE_SYSTEM:
+            # system_instruction as a system-slot (google-genai SDK accepts it
+            # in the config dict). Keeps the upstream user prompt unmutated.
+            kwargs["config"] = {"system_instruction": _LOCALE_SYSTEM}
+        response = client.models.generate_content(**kwargs)
         text = (response.text or "").strip()
         return text or None
     except Exception as e:
@@ -215,7 +234,11 @@ def _generate_text_groq(prompt, timeout, _attempt=0):
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
                 "model": GROQ_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": (
+                    [{"role": "system", "content": _LOCALE_SYSTEM}, {"role": "user", "content": prompt}]
+                    if _LOCALE_SYSTEM
+                    else [{"role": "user", "content": prompt}]
+                ),
             },
             timeout=timeout,
         )

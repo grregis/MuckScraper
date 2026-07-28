@@ -1205,6 +1205,8 @@ def _read_topic_form_data():
         "fetch_query": _opt("fetch_query"),
         "gnews_query": _opt("gnews_query"),
         "gnews_category": _opt("gnews_category"),
+        "gnews_country": _opt("gnews_country"),
+        "gnews_lang": _opt("gnews_lang"),
         "is_active": request.form.get("is_active") == "on",
     }
 
@@ -1212,6 +1214,7 @@ def _read_topic_form_data():
 _FETCH_FIELDS = (
     "description", "fetch_mode", "fetch_country", "fetch_category",
     "fetch_query", "gnews_query", "gnews_category",
+    "gnews_country", "gnews_lang",
 )
 
 

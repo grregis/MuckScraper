@@ -33,6 +33,11 @@ logging.basicConfig(
 FETCH_SCHEDULE_HOURS = os.environ.get("FETCH_SCHEDULE_HOURS") or "7,12,17,22"
 FULL_PIPELINE_HOURS = os.environ.get("FULL_PIPELINE_HOURS") or "7,17"
 TIMEZONE = os.environ.get("TIMEZONE") or "America/New_York"
+# DEV_MODE drosselt den Dev-Betrieb: Startup-Fetch wird skipped und nur das
+# erste aktive Topic wird gefetcht, damit free-tier API-Limits geschont werden.
+# Siehe Dev-Drosselung-Plan. Truthy only for explicit opt-in values ("1","true",
+# "yes","on"); "0"/"false"/"" stay OFF (bool("0") would be True - code-review 2).
+DEV_MODE = os.environ.get("DEV_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 
 # Hardcoded US fetch set kept as a fallback only. The live scheduled fetches
 # are read from the database (Topic rows with fetch_mode set) by
@@ -115,7 +120,7 @@ def get_scheduled_fetches():
     )
     if not topics:
         return list(SCHEDULED_FETCHES_US_FALLBACK)
-    return [
+    fetches = [
         {
             "label":          t.name,
             "mode":           t.fetch_mode,
@@ -124,9 +129,15 @@ def get_scheduled_fetches():
             "query":          t.fetch_query,
             "gnews_query":    t.gnews_query,
             "gnews_category": t.gnews_category,
+            "gnews_country":  t.gnews_country,
+            "gnews_lang":     t.gnews_lang,
         }
         for t in topics
     ]
+    if DEV_MODE:
+        logging.info("[DEV_MODE] Limiting scheduled fetches to first topic.")
+        fetches = fetches[:1]
+    return fetches
 
 
 def run_optional_headline_ranking():
@@ -772,7 +783,13 @@ def run_all_fetches(run_full_pipeline=True):
                     country=fetch["country"],
                     category=fetch["category"],
                     gnews_query=fetch["gnews_query"],
-                    gnews_category=fetch["gnews_category"]
+                    gnews_category=fetch["gnews_category"],
+                    # .get() not []: the SCHEDULED_FETCHES_US_FALLBACK dicts
+                    # (fresh-install path) predate these keys and return None,
+                    # which fetch_gnews treats as "no filter" - avoiding a
+                    # KeyError that would fail all fallback fetches (code-review 3).
+                    gnews_country=fetch.get("gnews_country"),
+                    gnews_lang=fetch.get("gnews_lang"),
                 )
                 run_metrics["topics"][fetch["label"]] = topic_metrics
                 for provider_metrics in topic_metrics.get("providers", {}).values():
@@ -979,8 +996,11 @@ if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
-        # Only fetch on startup if enough time has passed
-        if should_fetch_now():
+        # Only fetch on startup if enough time has passed (and not in DEV_MODE,
+        # which skips the startup fetch to spare free-tier API limits).
+        if DEV_MODE:
+            logging.info("[DEV_MODE] Skipping startup fetch.")
+        elif should_fetch_now():
             run_all_fetches(
                 run_full_pipeline=should_run_full_pipeline(
                     last_fetch=get_last_fetch_time(),

@@ -23,6 +23,14 @@ from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
+# DEV_MODE drosselt die API-Abfragegroesse, damit free-tier Limits beim
+# Entwickeln/Verifizieren nicht ausgereizt werden. NewsAPI 100 -> 5, GNews 20 -> 3.
+# Siehe Dev-Drosselung-Plan. Truthy only for explicit opt-in values ("1","true",
+# "yes","on"); "0"/"false"/"" stay OFF (bool("0") would be True - see code-review).
+DEV_MODE = os.environ.get("DEV_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+NEWSAPI_PAGE_SIZE = 5 if DEV_MODE else 100
+GNEWS_MAX = 3 if DEV_MODE else 20
+
 app = create_app()
 
 BLOCKED_SOURCES = [
@@ -1071,8 +1079,16 @@ def review_ambiguous_grouping_matches(max_articles=300):
     return {"status": "ok", "reviewed": reviewed, "reassigned": reassigned}
 
 
-def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=None):
-    """Fetch articles from NewsAPI and store them."""
+def fetch_newsapi(topic_name, mode="top", query=None, country=None, category=None):
+    """Fetch articles from NewsAPI and store them.
+
+    `country`/`language` default to the NEWSAPI_COUNTRY/NEWSAPI_LANGUAGE env
+    vars (which default to "de"/"de" for this DE downstream) so NewsAPI pulls
+    German news. NewsAPI `/everything` (query mode) supports `language` but not
+    `country`; `/top-headlines` (top mode) supports `country` but not
+    `language` - so query mode uses the env language, top mode uses the env
+    country. Explicit args override the env defaults.
+    """
     api_key = os.environ.get("NEWS_API_KEY", "")
     if not api_key:
         logger.warning("NEWS_API_KEY not set, skipping NewsAPI fetch.")
@@ -1085,22 +1101,28 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
             "stored": 0,
         }
 
+    # country: None means "no country filter" (international), passed straight
+    # through from the Topic's fetch_country. DE topics seed "de"; Welt seeds
+    # None. Do NOT collapse None to an env default - that would make the Welt
+    # section show German domestic news (see code-review finding 5).
+    language = os.environ.get("NEWSAPI_LANGUAGE") or "de"
+
     newsapi = NewsApiClient(api_key=api_key)
 
     try:
         if mode == "query" and query:
-            logger.info(f"[NewsAPI] Fetching query: {query}")
+            logger.info(f"[NewsAPI] Fetching query: {query} (language={language})")
             results = newsapi.get_everything(
                 q=query,
-                language="en",
+                language=language,
                 sort_by="publishedAt",
-                page_size=100,
+                page_size=NEWSAPI_PAGE_SIZE,
             )
         else:
             label = f"country={country}" if country else ""
             label += f" category={category}" if category else ""
             logger.info(f"[NewsAPI] Fetching top headlines ({label.strip()})")
-            kwargs = {"page_size": 100}
+            kwargs = {"page_size": NEWSAPI_PAGE_SIZE}
             if country:
                 kwargs["country"] = country
             if category:
@@ -1159,9 +1181,13 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
 def fetch_gnews(topic_name, query=None, category=None, country=None, lang=None):
     """Fetch articles from GNews API and store them.
 
-    `country`/`lang` default to the GNEWS_COUNTRY/GNEWS_LANG env vars (which
-    default to "de"/"de" for this DE downstream) so GNews pulls German news
-    instead of the upstream hardcoded US/EN. Callers may override per-topic.
+    `country` is passed straight through from the Topic's gnews_country. None
+    means "no country filter" (international news) - it is NOT collapsed to an
+    env default, so the "Welt" topic (seeded None) pulls international GNews
+    instead of German domestic (see code-review finding 4). `lang` defaults to
+    the GNEWS_LANG env var ("de" for this DE downstream) because language is
+    orthogonal to region - the DE downstream wants German-language coverage of
+    world news. Callers may override both per-topic.
     """
     api_key = os.environ.get("GNEWS_API_KEY", "")
     if not api_key:
@@ -1175,38 +1201,43 @@ def fetch_gnews(topic_name, query=None, category=None, country=None, lang=None):
             "stored": 0,
         }
 
-    country = country or os.environ.get("GNEWS_COUNTRY") or "de"
+    # lang: env-default de (language is orthogonal to region). country: None
+    # means no country filter (international) - do NOT fallback to env default.
     lang = lang or os.environ.get("GNEWS_LANG") or "de"
 
     try:
         if query:
-            logger.info(f"[GNews] Fetching query: {query}")
+            logger.info(f"[GNews] Fetching query: {query} (lang={lang})")
             url = "https://gnews.io/api/v4/search"
             params = {
                 "q":      query,
                 "lang":   lang,
-                "max":    20,
+                "max":    GNEWS_MAX,
                 "apikey": api_key,
             }
         elif category:
-            logger.info(f"[GNews] Fetching category: {category}")
+            label = f"country={country}" if country else ""
+            logger.info(f"[GNews] Fetching category: {category} ({label.strip() or 'international'})")
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
                 "category": category,
                 "lang":     lang,
-                "country":  country,
-                "max":      20,
+                "max":      GNEWS_MAX,
                 "apikey":   api_key,
             }
+            if country:
+                params["country"] = country
         else:
-            logger.info(f"[GNews] Fetching top headlines")
+            label = f"country={country}" if country else "international"
+            logger.info(f"[GNews] Fetching top headlines ({label})")
             url = "https://gnews.io/api/v4/top-headlines"
             params = {
                 "lang":    lang,
-                "country": country,
-                "max":     20,
+                "max":     GNEWS_MAX,
                 "apikey":  api_key,
             }
+            if country:
+                params["country"] = country
 
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
@@ -1736,11 +1767,17 @@ def cleanup_old_payloads():
 
 
 def fetch_and_store_articles(topic_name, mode="top", query=None,
-                              country="us", category=None,
+                              country=None, category=None,
                               gnews_query=None, gnews_category=None,
                               gnews_country=None, gnews_lang=None):
     """
     Main entry point. Fetches from both NewsAPI and GNews for a given topic.
+
+    gnews_country/gnews_lang are passed straight through to fetch_gnews. None
+    means "no filter" (international for country) / "env-default de" (for
+    lang) - the Topic columns own the per-topic values, this layer does not
+    re-default them (see code-review finding 4/9: the outer env-fallback here
+    collapsed Welt's None to "de" and made the new per-topic columns dead code).
     """
     newsapi_metrics = fetch_newsapi(topic_name, mode=mode, query=query,
                                     country=country, category=category)
@@ -2408,4 +2445,7 @@ def publish_edition():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        fetch_and_store_articles("US Politics")
+        # Smoke test: explicit US locale (the signature default is now None =
+        # no-filter/international, so pass country explicitly to keep the
+        # historical US-politics smoke behavior). See code-review finding 8.
+        fetch_and_store_articles("US Politics", country="us")

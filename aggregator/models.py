@@ -54,6 +54,10 @@ class Topic(db.Model):
     fetch_query    = db.Column(db.String, nullable=True)
     gnews_query    = db.Column(db.String, nullable=True)
     gnews_category = db.Column(db.String(32), nullable=True)
+    # GNews locale, per-topic override. Analog to fetch_country for NewsAPI.
+    # None => env default (GNEWS_COUNTRY/GNEWS_LANG, "de" for this DE downstream).
+    gnews_country  = db.Column(db.String(8), nullable=True)
+    gnews_lang     = db.Column(db.String(8), nullable=True)
 
     stories  = db.relationship("Story",   secondary=story_topics,  back_populates="topics")
     articles = db.relationship("Article", secondary=article_topics, back_populates="topics")
