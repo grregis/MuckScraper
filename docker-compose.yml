@@ -18,6 +18,18 @@ services:
       - ./meili_data:/meili_data
     restart: unless-stopped
 
+  # Holds the Docker socket so the admin app never has to -- exposes only
+  # container-list/restart over an internal-only HTTP API. See
+  # docker_restart_proxy/app.py for exactly what's reachable.
+  docker-restart-proxy:
+    build:
+      context: ./docker_restart_proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      COMPOSE_PROJECT_NAME: muckscraper
+    restart: unless-stopped
+
   scheduler:
     build:
       context: .
@@ -70,6 +82,7 @@ services:
     depends_on:
       - postgres
       - meilisearch
+      - docker-restart-proxy
     environment:
       FLASK_APP: aggregator.app
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
@@ -104,6 +117,7 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_HOST}
       MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
+      DOCKER_RESTART_PROXY_URL: http://docker-restart-proxy:5001
     restart: unless-stopped
     volumes:
       - .:/app

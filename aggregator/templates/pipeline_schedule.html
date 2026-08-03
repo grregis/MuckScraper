@@ -52,6 +52,17 @@
             box-shadow: var(--shadow);
         }
         .card + .card { margin-top: 24px; }
+        .restart-banner {
+            background: rgba(220, 38, 38, 0.10);
+            border: 1px solid rgba(220, 38, 38, 0.25);
+            color: #b91c1c;
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        [data-theme="dark"] .restart-banner { color: #fca5a5; background: rgba(220, 38, 38, 0.15); }
+        .restart-banner a { color: inherit; font-weight: 700; }
         table { width: 100%; border-collapse: collapse; }
         th {
             text-align: left;
@@ -119,6 +130,13 @@
 <div class="container">
     <h1>Pipeline Schedule</h1>
     <p class="subtitle">When the scheduler runs, in America/New_York time. A full pipeline run fetches, groups, summarizes, and publishes an edition. A fetch-only run just ingests new articles. Restart the scheduler after changes for the new schedule to take effect.</p>
+
+    {% if restart_needed %}
+    <div class="restart-banner">
+        The schedule has changed since the scheduler last started — restart it from
+        <a href="{{ url_for('admin.tools_page') }}">Container Restart</a> for the new times to take effect.
+    </div>
+    {% endif %}
 
     <div class="card">
         {% if entries %}

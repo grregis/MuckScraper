@@ -89,6 +89,7 @@ SCHEDULED_FETCHES = [
 app = create_app()
 SCRAPE_OUTCOME_HISTORY_KEY = "scrape_outcome_history_v1"
 SCRAPE_OUTCOME_HISTORY_MAX_RUNS = 40
+FETCH_RUN_STATUS_KEY = "fetch_run_status_v1"
 
 
 def run_optional_headline_ranking():
@@ -480,6 +481,22 @@ def set_last_allsides_sync():
     db.session.commit()
 
 
+def set_scheduler_started_at():
+    """
+    Record when the scheduler process last (re)started -- used by the admin
+    Container Restart page to tell whether a PipelineSchedule edit happened
+    after the scheduler last picked up its jobs (i.e. whether a restart is
+    still needed for the new schedule to take effect).
+    """
+    setting = AppSetting.query.filter_by(key="scheduler_started_at").first()
+    if setting:
+        setting.value = datetime.utcnow().isoformat()
+    else:
+        setting = AppSetting(key="scheduler_started_at", value=datetime.utcnow().isoformat())
+        db.session.add(setting)
+    db.session.commit()
+
+
 def _scheduled_hours():
     return sorted({e.hour for e in PipelineSchedule.query.filter_by(is_active=True).all()})
 
@@ -718,6 +735,11 @@ def run_all_fetches(run_full_pipeline=True):
             },
             "steps": {},
         }
+        _save_json_setting(FETCH_RUN_STATUS_KEY, {
+            "status": "running",
+            "started_at": run_metrics["started_at"],
+            "run_full_pipeline": run_full_pipeline,
+        })
         ollama_state["up_at_start"] = _check_ollama_status_for_report(ollama_state, "run_start")
 
         # Fetch all categories
@@ -930,6 +952,13 @@ def run_all_fetches(run_full_pipeline=True):
         # Notify n8n pipeline is done — triggers Ollama machine suspend
         _notify_n8n()
 
+        _save_json_setting(FETCH_RUN_STATUS_KEY, {
+            "status": "idle",
+            "started_at": run_metrics["started_at"],
+            "run_full_pipeline": run_full_pipeline,
+            "finished_at": run_metrics.get("finished_at"),
+        })
+
     logging.info("=== Scheduled fetch run complete ===")
 
 
@@ -959,6 +988,7 @@ if __name__ == "__main__":
         # so the live cron path never needs to re-check "is this hour a full
         # pipeline hour" the way the startup catch-up path above still does.
         schedule_snapshot = [(e.hour, e.run_full_pipeline) for e in schedule_entries]
+        set_scheduler_started_at()
 
     scheduler = BlockingScheduler()
     for hour, run_full_pipeline in schedule_snapshot:
