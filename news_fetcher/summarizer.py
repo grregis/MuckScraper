@@ -200,6 +200,13 @@ def detect_analysis_type(obj):
     if topics_lower == ['us politics']:
         return 'politics'
 
+    # A story tagged both US Politics and Sports (e.g. a stadium workers'
+    # strike vote) is fundamentally political activity that happens to
+    # involve a sports venue/team -- treat it as political, not sports,
+    # rather than letting the sports check below win by default.
+    if 'us politics' in topics_lower and 'sports' in topics_lower:
+        return 'politics'
+
     if _contains_any(text, PUBLIC_SAFETY_ANALYSIS_KEYWORDS):
         return 'default'
     if any(t == 'us politics' for t in topics_lower) and _contains_any(text, POLITICAL_ANALYSIS_KEYWORDS):

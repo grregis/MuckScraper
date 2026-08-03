@@ -96,6 +96,7 @@ Rules:
 - Sci/Tech means technology, science, research, AI, space — NOT general business news about tech companies (use Buss/Fin for stock/earnings stories)
 - Buss/Fin means financial markets, economics, corporate earnings, mergers — NOT general commerce
 - Sports contracts and player signings belong to Sports only, not Buss/Fin
+- Labor disputes, strikes, unionization votes, protests, or other political/regulatory action are US Politics, not Sports, even when they take place at or involve a sports venue, team, or event — the venue is incidental to a fundamentally political story
 - Pick the most specific category — if it's clearly Sports, do not also add other categories
 - Maximum 2 categories per article unless truly necessary
 - If none apply, respond with only: Other
