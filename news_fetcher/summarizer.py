@@ -244,6 +244,10 @@ def summarize_story(story):
         return None
 
     if not check_ollama_status():
+        logger.warning(
+            "  [Summarizer] Skipping story summary for '%s': Ollama unavailable.",
+            story.title[:80],
+        )
         return None
 
     analysis_type = detect_analysis_type(story)
@@ -332,6 +336,10 @@ def generate_deep_report(story):
         return None
 
     if not check_ollama_status():
+        logger.warning(
+            "  [Summarizer] Skipping deep report for '%s': Ollama unavailable.",
+            story.title[:80],
+        )
         return None
 
     analysis_type = detect_analysis_type(story)
@@ -622,6 +630,10 @@ def summarize_article(article):
         return None
 
     if not check_ollama_status():
+        logger.warning(
+            "  [Summarizer] Skipping article summary for '%s': Ollama unavailable.",
+            article.title[:80],
+        )
         return None
 
     analysis_type = detect_analysis_type(article)
@@ -682,6 +694,10 @@ def generate_article_deep_analysis(article):
         return None
 
     if not check_ollama_status():
+        logger.warning(
+            "  [Summarizer] Skipping article deep analysis for '%s': Ollama unavailable.",
+            article.title[:80],
+        )
         return None
 
     analysis_type = detect_analysis_type(article)
