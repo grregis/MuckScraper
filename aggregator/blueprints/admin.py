@@ -549,6 +549,7 @@ def tools_page():
         fetch_running_ops=fetch_ops,
         other_running_ops=other_ops,
         restart_blocked_reason=request.args.get("blocked_reason"),
+        restart_blocked_target=request.args.get("blocked_target"),
     )
 
 
@@ -567,11 +568,17 @@ def toggle_auto_article_deep_analysis():
 @admin.route("/containers/<name>/restart", methods=["POST"])
 @login_required
 def restart_container(name):
+    force = request.form.get("force") == "true"
     blocking = _blocking_operations_for(name)
-    if blocking:
+    if blocking and not force:
         reason = f"Can't restart '{name}' right now — still running: {_describe_blocking(blocking)}"
         logger.warning("[ContainerRestart] Refused restart of %s: %s", name, reason)
-        return redirect(url_for("admin.tools_page", blocked_reason=reason))
+        return redirect(url_for("admin.tools_page", blocked_reason=reason, blocked_target=name))
+    if blocking and force:
+        logger.warning(
+            "[ContainerRestart] Forcing restart of %s despite running: %s",
+            name, _describe_blocking(blocking),
+        )
 
     try:
         response = requests.post(f"{DOCKER_RESTART_PROXY_URL}/containers/{name}/restart", timeout=35)
@@ -587,11 +594,17 @@ def restart_container(name):
 @admin.route("/containers/restart-all", methods=["POST"])
 @login_required
 def restart_all_containers():
+    force = request.form.get("force") == "true"
     blocking = _running_operations()
-    if blocking:
+    if blocking and not force:
         reason = f"Can't restart all — still running: {_describe_blocking(blocking)}"
         logger.warning("[ContainerRestart] Refused restart-all: %s", reason)
-        return redirect(url_for("admin.tools_page", blocked_reason=reason))
+        return redirect(url_for("admin.tools_page", blocked_reason=reason, blocked_target="all"))
+    if blocking and force:
+        logger.warning(
+            "[ContainerRestart] Forcing restart-all despite running: %s",
+            _describe_blocking(blocking),
+        )
 
     try:
         response = requests.post(f"{DOCKER_RESTART_PROXY_URL}/restart-all", timeout=120)

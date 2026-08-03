@@ -470,6 +470,15 @@
             <div class="warning-banner restart-error">
                 <strong>Restart refused</strong>
                 <p>{{ restart_blocked_reason }}</p>
+                {% if restart_blocked_target %}
+                <form method="POST" action="{{ url_for('admin.restart_all_containers') if restart_blocked_target == 'all' else url_for('admin.restart_container', name=restart_blocked_target) }}"
+                      onsubmit="return confirm('This will interrupt what\'s currently running. Restart anyway?');"
+                      style="margin-top: 10px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="force" value="true">
+                    <button type="submit" class="btn btn-danger">Restart Anyway</button>
+                </form>
+                {% endif %}
             </div>
             {% endif %}
         </div>
