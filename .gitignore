@@ -5,7 +5,7 @@ meili_data/
 __pycache__/
 *.pyc
 destroy.sh
-GEMINI.md
+CLAUDE.md
 printouts
 .gitignore
 .claude
