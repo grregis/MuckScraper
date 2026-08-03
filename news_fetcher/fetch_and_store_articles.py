@@ -20,6 +20,7 @@ from news_fetcher.topic_classifier import classify_article
 from news_fetcher.headline_generator import generate_story_headline, generate_missing_headlines
 import logging
 from sqlalchemy.orm import selectinload
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -510,6 +511,27 @@ def detect_duplicate_outlet_content(content, outlet_id, exclude_article_id=None)
     return False, None
 
 
+# Domain -> canonical outlet name overrides. Used when a feed's channel
+# <title> can't be trusted to identify the outlet -- e.g. the Washington
+# Post's world-section RSS feed has a channel title of literally "World",
+# which normalize_source_name() has no way to map back to "Washington Post".
+# The article's own URL is a much more reliable signal than a feed-level
+# title, so this takes priority over normalize_source_name() in store_articles().
+DOMAIN_SOURCE_OVERRIDES = {
+    "washingtonpost.com": "Washington Post",
+}
+
+
+def source_name_from_url(url):
+    """Look up a canonical outlet name by the article URL's domain, if known."""
+    if not url:
+        return None
+    domain = urlparse(url).netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+    return DOMAIN_SOURCE_OVERRIDES.get(domain)
+
+
 def normalize_source_name(name):
     """Clean up and standardize outlet names."""
     if not name:
@@ -761,7 +783,7 @@ def store_articles(articles_data, topic_name, provider=None):
         title        = article.get("title")
         content      = article.get("content") or ""
         raw_url      = article.get("url")
-        source_name  = normalize_source_name(article.get("source_name", "Unknown"))
+        source_name  = source_name_from_url(raw_url) or normalize_source_name(article.get("source_name", "Unknown"))
         published_at = article.get("published_at", datetime.utcnow())
         image_url    = article.get("image_url")
 
