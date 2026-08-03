@@ -5,7 +5,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score
-from aggregator.models import AppSetting
+from aggregator.models import AppSetting, PipelineSchedule
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.rss_fetcher import (
     fetch_and_store_rss,
@@ -29,9 +29,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Fetch runs can be more frequent than full edition publishing.
-FETCH_SCHEDULE_HOURS = os.environ.get("FETCH_SCHEDULE_HOURS") or "7,12,17,22"
-FULL_PIPELINE_HOURS = os.environ.get("FULL_PIPELINE_HOURS") or "7,17"
+# When the scheduler fetches/publishes is DB-backed (PipelineSchedule,
+# admin-editable at /admin/pipeline-schedule) rather than env-var hour lists.
 TIMEZONE = "America/New_York"
 
 SCHEDULED_FETCHES = [
@@ -481,16 +480,14 @@ def set_last_allsides_sync():
     db.session.commit()
 
 
-def _parse_schedule_hours(raw_hours):
-    return sorted(int(hour.strip()) for hour in raw_hours.split(",") if hour.strip())
-
-
 def _scheduled_hours():
-    return _parse_schedule_hours(FETCH_SCHEDULE_HOURS)
+    return sorted({e.hour for e in PipelineSchedule.query.filter_by(is_active=True).all()})
 
 
 def _full_pipeline_hours():
-    return _parse_schedule_hours(FULL_PIPELINE_HOURS)
+    return sorted({
+        e.hour for e in PipelineSchedule.query.filter_by(is_active=True, run_full_pipeline=True).all()
+    })
 
 
 def _latest_scheduled_run_before(now=None):
@@ -951,19 +948,32 @@ if __name__ == "__main__":
         else:
             logging.info("Skipping startup fetch.")
 
+        schedule_entries = (
+            PipelineSchedule.query
+            .filter_by(is_active=True)
+            .order_by(PipelineSchedule.hour.asc())
+            .all()
+        )
+        # Snapshot (hour, run_full_pipeline) pairs now, before the app context
+        # closes -- each job below is registered with its own type baked in,
+        # so the live cron path never needs to re-check "is this hour a full
+        # pipeline hour" the way the startup catch-up path above still does.
+        schedule_snapshot = [(e.hour, e.run_full_pipeline) for e in schedule_entries]
+
     scheduler = BlockingScheduler()
-    scheduler.add_job(
-        lambda: run_all_fetches(run_full_pipeline=should_run_full_pipeline()),
-        trigger=CronTrigger(hour=FETCH_SCHEDULE_HOURS, minute=0, timezone=TIMEZONE),
-        id="fetch_job",
-        name="Scheduled news fetch (America/New_York)",
-        replace_existing=True
-    )
+    for hour, run_full_pipeline in schedule_snapshot:
+        scheduler.add_job(
+            (lambda full=run_full_pipeline: run_all_fetches(run_full_pipeline=full)),
+            trigger=CronTrigger(hour=hour, minute=0, timezone=TIMEZONE),
+            id=f"pipeline_schedule_{hour}",
+            name=f"Scheduled {'full pipeline' if run_full_pipeline else 'fetch-only'} run at {hour}:00 ({TIMEZONE})",
+            replace_existing=True,
+        )
 
     logging.info(
-        "Scheduler running. Fetching at %s and running full pipeline at %s in %s.",
-        FETCH_SCHEDULE_HOURS,
-        FULL_PIPELINE_HOURS,
+        "Scheduler running with %s scheduled run(s) in %s: %s",
+        len(schedule_snapshot),
         TIMEZONE,
+        ", ".join(f"{hour}:00={'full' if full else 'fetch-only'}" for hour, full in schedule_snapshot),
     )
     scheduler.start()

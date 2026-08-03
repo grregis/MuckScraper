@@ -7,9 +7,10 @@ from flask import Blueprint, current_app, render_template, request, redirect, ur
 from flask_login import login_required
 from sqlalchemy import case, func, or_
 from aggregator import db
-from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed
+from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
+from news_fetcher.prompt_registry import validate_prompt_text, invalidate_cache as invalidate_prompt_cache, KNOWN_VARS as PROMPT_KNOWN_VARS
 
 logger = logging.getLogger(__name__)
 
@@ -1278,3 +1279,106 @@ def delete_rss_feed(feed_id):
     db.session.delete(feed)
     db.session.commit()
     return redirect(url_for("admin.rss_feeds_page"))
+
+
+@admin.route("/prompts")
+@login_required
+def prompts_page():
+    prompts = PromptTemplate.query.order_by(PromptTemplate.key.asc()).all()
+    return render_template("prompts.html", prompts=prompts)
+
+
+@admin.route("/prompts/<key>/edit")
+@login_required
+def edit_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    saved = request.args.get("saved") == "1"
+    return render_template(
+        "prompt_edit.html", prompt=prompt, submitted_text=prompt.current_text,
+        error=None, warning=None, saved=saved, known_vars=sorted(PROMPT_KNOWN_VARS.get(key, set())),
+    )
+
+
+@admin.route("/prompts/<key>/update", methods=["POST"])
+@login_required
+def update_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    text = request.form.get("current_text", "")
+    known_vars = sorted(PROMPT_KNOWN_VARS.get(key, set()))
+
+    error, warning = validate_prompt_text(key, text)
+    if error:
+        return render_template(
+            "prompt_edit.html", prompt=prompt, submitted_text=text,
+            error=error, warning=None, saved=False, known_vars=known_vars,
+        )
+
+    prompt.current_text = text
+    prompt.updated_at = datetime.utcnow()
+    db.session.commit()
+    invalidate_prompt_cache(key)
+
+    if warning:
+        return render_template(
+            "prompt_edit.html", prompt=prompt, submitted_text=prompt.current_text,
+            error=None, warning=warning, saved=True, known_vars=known_vars,
+        )
+    return redirect(url_for("admin.edit_prompt", key=key, saved=1))
+
+
+@admin.route("/prompts/<key>/reset", methods=["POST"])
+@login_required
+def reset_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    prompt.current_text = prompt.default_text
+    prompt.updated_at = None
+    db.session.commit()
+    invalidate_prompt_cache(key)
+    return redirect(url_for("admin.edit_prompt", key=key, saved=1))
+
+
+@admin.route("/pipeline-schedule")
+@login_required
+def pipeline_schedule_page():
+    entries = PipelineSchedule.query.order_by(PipelineSchedule.hour.asc()).all()
+    return render_template("pipeline_schedule.html", entries=entries)
+
+
+@admin.route("/pipeline-schedule/add", methods=["POST"])
+@login_required
+def add_pipeline_schedule():
+    hour = request.form.get("hour", type=int)
+    run_full_pipeline = request.form.get("run_full_pipeline") == "on"
+
+    if hour is not None and 0 <= hour <= 23 and not PipelineSchedule.query.filter_by(hour=hour).first():
+        db.session.add(PipelineSchedule(
+            hour=hour,
+            run_full_pipeline=run_full_pipeline,
+            is_active=True,
+        ))
+        db.session.commit()
+        logger.info(f"[PipelineSchedule] Added scheduled run at {hour}:00 (full_pipeline={run_full_pipeline})")
+    return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+@admin.route("/pipeline-schedule/<int:entry_id>/update", methods=["POST"])
+@login_required
+def update_pipeline_schedule(entry_id):
+    entry = PipelineSchedule.query.get_or_404(entry_id)
+    hour = request.form.get("hour", type=int)
+
+    if hour is not None and 0 <= hour <= 23:
+        entry.hour = hour
+    entry.run_full_pipeline = request.form.get("run_full_pipeline") == "on"
+    entry.is_active = request.form.get("is_active") == "on"
+    db.session.commit()
+    return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+@admin.route("/pipeline-schedule/<int:entry_id>/delete", methods=["POST"])
+@login_required
+def delete_pipeline_schedule(entry_id):
+    entry = PipelineSchedule.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    return redirect(url_for("admin.pipeline_schedule_page"))

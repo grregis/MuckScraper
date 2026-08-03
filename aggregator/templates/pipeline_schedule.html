@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
+    <title>Pipeline Schedule — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 800px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .card + .card { margin-top: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            padding: 12px 20px; font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+        }
+        td { padding: 10px 20px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr.disabled { opacity: 0.5; }
+        input[type="number"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        input.hour-input { width: 70px; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .badge-full { background: #dbeafe; color: #1e40af; }
+        [data-theme="dark"] .badge-full { background: #1e3a5f; color: #93c5fd; }
+        .badge-fetch { background: #f3f4f6; color: #4b5563; }
+        [data-theme="dark"] .badge-fetch { background: #2d2d3f; color: #a0aec0; }
+        .save-btn, .add-btn { background: var(--accent); }
+        .save-btn, .add-btn, .delete-btn {
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .delete-btn { background: #b51a1a; }
+        .add-form {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+        .check-label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .empty { padding: 24px; text-align: center; color: var(--text-faint); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('admin.list_articles') }}" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Pipeline Schedule</h1>
+    <p class="subtitle">When the scheduler runs, in America/New_York time. A full pipeline run fetches, groups, summarizes, and publishes an edition. A fetch-only run just ingests new articles. Restart the scheduler after changes for the new schedule to take effect.</p>
+
+    <div class="card">
+        {% if entries %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Hour (0-23)</th>
+                    <th>Run Type</th>
+                    <th>Active</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr class="{{ 'disabled' if not entry.is_active else '' }}">
+                    <form method="POST" action="{{ url_for('admin.update_pipeline_schedule', entry_id=entry.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <td><input type="number" class="hour-input" name="hour" min="0" max="23" value="{{ entry.hour }}"></td>
+                        <td>
+                            <label class="check-label">
+                                <input type="checkbox" name="run_full_pipeline" {{ 'checked' if entry.run_full_pipeline else '' }}>
+                                {% if entry.run_full_pipeline %}<span class="badge badge-full">Full Pipeline</span>{% else %}<span class="badge badge-fetch">Fetch Only</span>{% endif %}
+                            </label>
+                        </td>
+                        <td><input type="checkbox" name="is_active" {{ 'checked' if entry.is_active else '' }}></td>
+                        <td><button type="submit" class="save-btn">Save</button></td>
+                    </form>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin.delete_pipeline_schedule', entry_id=entry.id) }}" style="display:inline;" onsubmit="return confirm('Delete this scheduled run time?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="delete-btn">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No scheduled run times configured.</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('admin.add_pipeline_schedule') }}" class="add-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="number" class="hour-input" name="hour" min="0" max="23" placeholder="Hour" required>
+            <label class="check-label">
+                <input type="checkbox" name="run_full_pipeline">
+                Full pipeline (unchecked = fetch only)
+            </label>
+            <button type="submit" class="add-btn">+ Add Run Time</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

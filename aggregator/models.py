@@ -215,6 +215,34 @@ class RssFeed(db.Model):
     added_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class PromptTemplate(db.Model):
+    __tablename__ = "prompt_templates"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    key          = db.Column(db.String, unique=True, nullable=False)
+    description  = db.Column(db.String, nullable=False)
+    default_text = db.Column(db.Text, nullable=False)  # immutable original, for "reset to default"
+    current_text = db.Column(db.Text, nullable=False)  # live/editable version actually used
+    updated_at   = db.Column(db.DateTime, nullable=True)  # null = never customized
+
+
+class PipelineSchedule(db.Model):
+    """
+    When the scheduler fetches/publishes. Each row is one cron-style firing
+    time (hour, America/New_York) tagged as either a full pipeline run
+    (fetch + grouping + summaries + edition publish) or a fetch-only run.
+    """
+    __tablename__ = "pipeline_schedule"
+    __table_args__ = (
+        db.UniqueConstraint("hour", name="uq_pipeline_schedule_hour"),
+    )
+
+    id                = db.Column(db.Integer, primary_key=True)
+    hour              = db.Column(db.Integer, nullable=False)  # 0-23, America/New_York
+    run_full_pipeline = db.Column(db.Boolean, default=False, nullable=False)
+    is_active         = db.Column(db.Boolean, default=True, nullable=False)
+
+
 class Edition(db.Model):
     __tablename__ = 'editions'
 
