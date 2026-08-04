@@ -1,0 +1,75 @@
+name: Build & Push Images
+
+# Builds the three images your docker-compose actually builds locally
+# (app, scheduler, docker-restart-proxy) and pushes them to your fork's
+# GitHub Container Registry (GHCR). postgres and meilisearch are pulled
+# from public registries, so they are NOT built here.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:   # lets you run it manually from the Actions tab
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write      # required to push to GHCR
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            context: .
+            dockerfile: Dockerfile
+          - name: scheduler
+            context: .
+            dockerfile: news_fetcher/Dockerfile
+          - name: docker-restart-proxy
+            context: ./docker_restart_proxy
+            dockerfile: ./docker_restart_proxy/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only log in / push on branch pushes — PRs from forks can't push packages.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags & labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
