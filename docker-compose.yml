@@ -8,6 +8,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
   meilisearch:
@@ -29,11 +34,98 @@ services:
       COMPOSE_PROJECT_NAME: muckscraper
     restart: unless-stopped
 
+  # One-shot: creates the pgvector extension, all tables, stamps Alembic to head,
+  # and creates/updates the admin user, then exits. app/scheduler wait for this to
+  # finish (service_completed_successfully) so a fresh database volume is always
+  # initialized before they start.
+  #
+  # This reproduces the logic of the repo's bootstrap_admin.py inline (using the
+  # application's own modules) so the stack no longer depends on that script file.
+  # It is idempotent — safe to run on every `up`.
+  db-init:
+    image: ghcr.io/gitlogos/muckscraper-app:${IMAGE_TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["python", "-c"]
+    command:
+      - |
+        import os, sys, time
+        from sqlalchemy.exc import OperationalError
+        from flask_migrate import stamp
+        from aggregator import db
+        from aggregator.app import app, init_db
+        from aggregator.models import User
+
+        def required_env(name):
+            value = os.environ.get(name, "").strip()
+            if not value:
+                raise RuntimeError(f"{name} must be set in .env")
+            return value
+
+        username = required_env("ADMIN_USERNAME")
+        email = required_env("ADMIN_EMAIL")
+        password = required_env("ADMIN_PASSWORD")
+
+        # Wait for Postgres, then create the pgvector extension + all tables.
+        last_error = None
+        for attempt in range(1, 31):
+            try:
+                init_db()
+                break
+            except OperationalError as exc:
+                last_error = exc
+                print(f"Database not ready yet, retrying ({attempt}/30)...")
+                time.sleep(2)
+        else:
+            raise RuntimeError(f"Database did not become ready: {last_error}")
+
+        with app.app_context():
+            # Fresh installs created via db.create_all() need Alembic marked current
+            # so later `flask db upgrade` runs only future migrations.
+            stamp(revision="head")
+
+            user = User.query.filter_by(username=username).first()
+            email_owner = User.query.filter_by(email=email).first()
+            if email_owner and email_owner.username != username:
+                raise RuntimeError(
+                    f"ADMIN_EMAIL is already used by user '{email_owner.username}'. "
+                    "Choose a different ADMIN_EMAIL or update that user manually."
+                )
+            if user:
+                user.email = email
+                user.is_admin = True
+                user.set_password(password)
+                action = "updated"
+            else:
+                user = User(username=username, email=email, is_admin=True)
+                user.set_password(password)
+                db.session.add(user)
+                action = "created"
+            db.session.commit()
+            print(f"Admin user '{username}' {action}.")
+    environment:
+      FLASK_APP: aggregator.app
+      SECRET_KEY: ${SECRET_KEY}
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    restart: "no"
+
   scheduler:
     image: ghcr.io/gitlogos/muckscraper-scheduler:${IMAGE_TAG:-latest}
     depends_on:
-      - postgres
-      - meilisearch
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+      db-init:
+        condition: service_completed_successfully
     command: sh -c "sleep 15 && python -m news_fetcher.scheduler"
     environment:
       FLASK_APP: aggregator.app
@@ -75,9 +167,14 @@ services:
     ports:
       - "127.0.0.1:5000:5000"
     depends_on:
-      - postgres
-      - meilisearch
-      - docker-restart-proxy
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+      docker-restart-proxy:
+        condition: service_started
+      db-init:
+        condition: service_completed_successfully
     environment:
       FLASK_APP: aggregator.app
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
