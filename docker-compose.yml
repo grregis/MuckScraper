@@ -1,0 +1,124 @@
+# muckscraperHeadlinesGoogleNEW/docker-compose.yml
+services:
+  postgres:
+    image: pgvector/pgvector:pg14
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.8
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
+    volumes:
+      - meili_data:/meili_data
+    restart: unless-stopped
+
+  # Holds the Docker socket so the admin app never has to -- exposes only
+  # container-list/restart over an internal-only HTTP API. See
+  # docker_restart_proxy/app.py for exactly what's reachable.
+  docker-restart-proxy:
+    image: ghcr.io/gitlogos/muckscraper-docker-restart-proxy:${IMAGE_TAG:-latest}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      COMPOSE_PROJECT_NAME: muckscraper
+    restart: unless-stopped
+
+  scheduler:
+    image: ghcr.io/gitlogos/muckscraper-scheduler:${IMAGE_TAG:-latest}
+    depends_on:
+      - postgres
+      - meilisearch
+    command: sh -c "sleep 15 && python -m news_fetcher.scheduler"
+    environment:
+      FLASK_APP: aggregator.app
+      SECRET_KEY: ${SECRET_KEY}
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      NEWS_API_KEY: ${NEWS_API_KEY}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_FALLBACK_HOST: ${OLLAMA_FALLBACK_HOST:-}
+      OLLAMA_PRIMARY_RECHECK_SECONDS: ${OLLAMA_PRIMARY_RECHECK_SECONDS:-60}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      OLLAMA_MAC: ${OLLAMA_MAC}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+      N8N_FETCH_REPORT_WEBHOOK_URL: ${N8N_FETCH_REPORT_WEBHOOK_URL}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/gitlogos/muckscraper-app:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      - postgres
+      - meilisearch
+      - docker-restart-proxy
+    environment:
+      FLASK_APP: aggregator.app
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      SECRET_KEY: ${SECRET_KEY}
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      NEWS_API_KEY: ${NEWS_API_KEY}
+      GNEWS_API_KEY: ${GNEWS_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_FALLBACK_HOST: ${OLLAMA_FALLBACK_HOST:-}
+      OLLAMA_PRIMARY_RECHECK_SECONDS: ${OLLAMA_PRIMARY_RECHECK_SECONDS:-60}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      OLLAMA_MAC: ${OLLAMA_MAC}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+      N8N_FETCH_REPORT_WEBHOOK_URL: ${N8N_FETCH_REPORT_WEBHOOK_URL}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
+      DOCKER_RESTART_PROXY_URL: http://docker-restart-proxy:5001
+    restart: unless-stopped
+
+networks:
+  default:
+    name: app-network
+
+volumes:
+  postgres_data:
+  meili_data:
