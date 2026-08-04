@@ -82,8 +82,14 @@ services:
 
         with app.app_context():
             # Fresh installs created via db.create_all() need Alembic marked current
-            # so later `flask db upgrade` runs only future migrations.
-            stamp(revision="head")
+            # so later `flask db upgrade` runs only future migrations. This requires
+            # the migrations/ folder to be present in the image; if it isn't, skip
+            # stamping rather than aborting -- the schema already exists via
+            # create_all(), and the admin user below MUST still be created.
+            try:
+                stamp(revision="head")
+            except Exception as exc:
+                print(f"Skipping Alembic stamp (migrations folder not available): {exc}")
 
             user = User.query.filter_by(username=username).first()
             email_owner = User.query.filter_by(email=email).first()
@@ -165,7 +171,7 @@ services:
   app:
     image: ghcr.io/gitlogos/muckscraper-app:${IMAGE_TAG:-latest}
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
