@@ -83,13 +83,20 @@ services:
         with app.app_context():
             # Fresh installs created via db.create_all() need Alembic marked current
             # so later `flask db upgrade` runs only future migrations. This requires
-            # the migrations/ folder to be present in the image; if it isn't, skip
-            # stamping rather than aborting -- the schema already exists via
-            # create_all(), and the admin user below MUST still be created.
-            try:
-                stamp(revision="head")
-            except Exception as exc:
-                print(f"Skipping Alembic stamp (migrations folder not available): {exc}")
+            # the migrations/ folder to be present in the image. If it isn't, skip
+            # stamping -- the schema already exists via create_all(), and the admin
+            # user below MUST still be created.
+            #
+            # NOTE: flask_migrate's stamp() calls sys.exit(1) on failure (raising
+            # SystemExit, which is NOT caught by `except Exception`), so we guard on
+            # the folder's existence first AND catch SystemExit as a safety net.
+            if os.path.isdir("migrations"):
+                try:
+                    stamp(revision="head")
+                except (SystemExit, Exception) as exc:
+                    print(f"Alembic stamp failed, continuing without it: {exc}")
+            else:
+                print("migrations/ folder not present in image; skipping Alembic stamp.")
 
             user = User.query.filter_by(username=username).first()
             email_owner = User.query.filter_by(email=email).first()
