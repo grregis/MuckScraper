@@ -165,7 +165,7 @@ services:
   app:
     image: ghcr.io/gitlogos/muckscraper-app:${IMAGE_TAG:-latest}
     ports:
-      - "127.0.0.1:5000:5000"
+      - "5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
