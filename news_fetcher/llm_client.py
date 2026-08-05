@@ -24,6 +24,14 @@ OLLAMA_FALLBACK_HOST = os.environ.get("OLLAMA_FALLBACK_HOST", "")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 
+# Optional smaller/faster model for the pipeline's high-volume mechanical calls
+# (story-grouping confirmation, topic classification, headline generation,
+# outlet bias) -- see generate_text()'s `tier` argument. A full pipeline run
+# makes ~1,100 of those against ~65 summary/deep-report calls, so this is where
+# nearly all the wall-clock goes. Leave blank to use OLLAMA_MODEL for
+# everything, which is exactly the old single-model behavior.
+OLLAMA_FAST_MODEL = os.environ.get("OLLAMA_FAST_MODEL", "") or OLLAMA_MODEL
+
 # How long to keep serving from the fallback host before re-probing whether the
 # primary has come back online (issue #7's "detects that it comes online").
 OLLAMA_PRIMARY_RECHECK_SECONDS = int(
@@ -40,10 +48,17 @@ _ollama_state = {"active": None, "next_primary_probe": 0.0}
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+GEMINI_FAST_MODEL = os.environ.get("GEMINI_FAST_MODEL", "") or GEMINI_MODEL
 GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_FAST_MODEL = os.environ.get("GROQ_FAST_MODEL", "") or GROQ_MODEL
+
+# Tiers accepted by generate_text(). "quality" is the default so any existing
+# call site keeps using the main model until it is explicitly opted in.
+TIER_QUALITY = "quality"
+TIER_FAST = "fast"
 
 _gemini_client = None
 
@@ -66,12 +81,34 @@ def is_configured():
     return bool(OLLAMA_HOST and OLLAMA_MODEL)
 
 
-def generate_text(prompt, timeout=30):
+def model_for_tier(tier=TIER_QUALITY):
+    """Which model name the active provider uses for a given tier.
+
+    Falls back to the quality model for an unrecognized tier so a typo degrades
+    to the old behavior (slower but correct) instead of sending a bad model
+    name the provider would reject."""
+    fast = tier == TIER_FAST
     if LLM_PROVIDER == "gemini":
-        return _generate_text_gemini(prompt, timeout)
+        return GEMINI_FAST_MODEL if fast else GEMINI_MODEL
     if LLM_PROVIDER == "groq":
-        return _generate_text_groq(prompt, timeout)
-    return _generate_text_ollama(prompt, timeout)
+        return GROQ_FAST_MODEL if fast else GROQ_MODEL
+    return OLLAMA_FAST_MODEL if fast else OLLAMA_MODEL
+
+
+def generate_text(prompt, timeout=30, tier=TIER_QUALITY):
+    """Generate text with the active provider.
+
+    `tier` selects between the main model and the optional faster one:
+    TIER_FAST for high-volume mechanical calls whose output is a label, a
+    yes/no, or a short headline; TIER_QUALITY (the default) for summaries and
+    deep reports, where the larger model's output is what readers actually see.
+    """
+    model = model_for_tier(tier)
+    if LLM_PROVIDER == "gemini":
+        return _generate_text_gemini(prompt, timeout, model)
+    if LLM_PROVIDER == "groq":
+        return _generate_text_groq(prompt, timeout, model)
+    return _generate_text_ollama(prompt, timeout, model)
 
 
 def _probe_ollama_host(host):
@@ -160,14 +197,16 @@ def _ollama_request(kind, fn):
     return None
 
 
-def _generate_text_ollama(prompt, timeout):
+def _generate_text_ollama(prompt, timeout, model=None):
     if not OLLAMA_HOST and not OLLAMA_FALLBACK_HOST:
         return None
+
+    model = model or OLLAMA_MODEL
 
     def _call(host):
         response = requests.post(
             f"{host}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            json={"model": model, "prompt": prompt, "stream": False},
             timeout=timeout,
         )
         response.raise_for_status()
@@ -176,13 +215,13 @@ def _generate_text_ollama(prompt, timeout):
     return _ollama_request("generate", _call)
 
 
-def _generate_text_gemini(prompt, timeout):
+def _generate_text_gemini(prompt, timeout, model=None):
     if not GEMINI_API_KEY:
         return None
     try:
         client = _get_gemini_client()
         response = client.models.generate_content(
-            model=GEMINI_MODEL,
+            model=model or GEMINI_MODEL,
             contents=prompt,
         )
         text = (response.text or "").strip()
@@ -196,15 +235,16 @@ GROQ_MAX_RETRIES = 2
 GROQ_MAX_RETRY_WAIT_SECONDS = 65
 
 
-def _generate_text_groq(prompt, timeout, _attempt=0):
+def _generate_text_groq(prompt, timeout, model=None, _attempt=0):
     if not GROQ_API_KEY:
         return None
+    model = model or GROQ_MODEL
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
-                "model": GROQ_MODEL,
+                "model": model,
                 "messages": [{"role": "user", "content": prompt}],
             },
             timeout=timeout,
@@ -220,7 +260,7 @@ def _generate_text_groq(prompt, timeout, _attempt=0):
             )
             logger.info(f"  [llm_client] Groq rate-limited, retrying in {wait_seconds:.0f}s")
             time.sleep(wait_seconds)
-            return _generate_text_groq(prompt, timeout, _attempt=_attempt + 1)
+            return _generate_text_groq(prompt, timeout, model, _attempt=_attempt + 1)
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
         return (text or "").strip() or None

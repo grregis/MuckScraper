@@ -528,9 +528,12 @@ def ask_ollama_for_match(article_title, candidate_stories, article_content=None,
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={
+            "provider": llm_client.LLM_PROVIDER,
+            "model": llm_client.model_for_tier(llm_client.TIER_FAST),
+        }
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt, timeout=30, tier=llm_client.TIER_FAST)
     if result is None:
         return None
     langfuse_context.update_current_observation(output=result)

@@ -31,9 +31,12 @@ def _ask_ollama(prompt):
     """Send a prompt to the configured LLM provider and return the raw response string or None."""
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={
+            "provider": llm_client.LLM_PROVIDER,
+            "model": llm_client.model_for_tier(llm_client.TIER_FAST),
+        }
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt, timeout=30, tier=llm_client.TIER_FAST)
     langfuse_context.update_current_observation(output=result)
     return result
 
