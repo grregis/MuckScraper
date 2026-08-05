@@ -1,4 +1,9 @@
 .env
+# Also cover .env backups/variants (.env.bak.*, .env.local, ...) -- only plain
+# ".env" was ignored, so a stray backup holding the same secrets could be
+# committed by a `git add -A`. .env.sample is the one that must stay tracked.
+.env.*
+!.env.sample
 postgres_data/
 meili_data/
 .pytest_cache/
