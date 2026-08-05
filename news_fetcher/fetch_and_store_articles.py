@@ -919,7 +919,10 @@ def store_articles(articles_data, topic_name, provider=None):
             content=final_content,
             source=source_name,
             outlet_id=outlet.id,
-            story_id=story.id,
+            # story_id is deliberately NOT set here -- the append below establishes
+            # it. Setting the FK here as well makes the collection's first lazy
+            # load autoflush this row, so the load returns it AND the append adds
+            # the same object again, double-counting len(story.articles).
             url=url,
             date=published_at,
             fetched_at=datetime.utcnow(),
@@ -938,10 +941,14 @@ def store_articles(articles_data, topic_name, provider=None):
             grouping_needs_review=bool(getattr(match, "needs_review", False)),
         )
 
-        db.session.add(new_article)
-        # IMPORTANT: Append to story.articles so it's visible to find_matching_story
-        # for subsequent articles in this SAME loop iteration.
+        # IMPORTANT: append BEFORE session.add, and keep the FK out of the
+        # constructor above. Appending is what makes the new article visible to
+        # find_matching_story for subsequent articles in this SAME loop iteration;
+        # doing it while the article is still transient means the collection's
+        # first lazy load has nothing pending to flush, so the article lands in
+        # story.articles exactly once and the >= 2 guard below is honest.
         story.articles.append(new_article)
+        db.session.add(new_article)
 
         # Tag article with same topics as story
         for t in story.topics:
