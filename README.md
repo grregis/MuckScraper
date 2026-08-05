@@ -217,20 +217,32 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 - Story regrouping and topic reclassification
 - Outlet merge tooling
 - Ollama wake and catch-up helpers
+- Topic and RSS feed management
+- Editable LLM prompts, each resettable back to its original default
+- Pipeline run schedule management (add/edit/delete when fetch-only vs. full-pipeline runs happen)
+- Container restart from the admin UI, blocked automatically while a fetch or other background task is running
 
 ---
 
 ## Customization
 
-### Topics and schedules
+### Topics, RSS feeds, prompts, and schedule
 
-Edit:
-- `aggregator/constants.py`
-- `news_fetcher/scheduler.py`
+These are DB-backed and admin-editable, no code change needed:
+- Topics: `/admin/topics`
+- RSS feeds: `/admin/rss-feeds`
+- LLM prompts: `/admin/prompts` (each resettable back to its original default)
+- Pipeline run schedule (when fetch-only vs. full-pipeline runs happen): `/admin/pipeline-schedule`
+
+Still hardcoded, requiring a code change:
+- Which NewsAPI/GNews categories get queried on each scheduled run:
+  `SCHEDULED_FETCHES` in `news_fetcher/scheduler.py`
 
 ### LLM behavior
 
-Most model-facing logic lives in:
+Prompt wording itself is editable at `/admin/prompts` (see above) with no
+code change needed. The surrounding logic — persona/analysis-type
+selection, story-grouping thresholds, etc. — still lives in:
 - `news_fetcher/summarizer.py`
 - `news_fetcher/topic_classifier.py`
 - `news_fetcher/story_grouper.py`

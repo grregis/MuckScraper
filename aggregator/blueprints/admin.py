@@ -1,20 +1,31 @@
 import logging
 import json
+import os
 import threading
+import requests
 from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
 from sqlalchemy import case, func, or_
 from aggregator import db
-from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed
+from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
+from news_fetcher.prompt_registry import validate_prompt_text, invalidate_cache as invalidate_prompt_cache, KNOWN_VARS as PROMPT_KNOWN_VARS
 
 logger = logging.getLogger(__name__)
 
 admin = Blueprint("admin", __name__)
 SEARCH_REINDEX_STATUS_KEY = "search_reindex_status_v1"
+MANUAL_FETCH_STATUS_KEY = "manual_fetch_status_v1"
+# Matches news_fetcher/scheduler.py's FETCH_RUN_STATUS_KEY -- duplicated
+# rather than imported to avoid pulling the scheduler module (and its own
+# app/db wiring) into the admin app just for one string constant.
+FETCH_RUN_STATUS_KEY = "fetch_run_status_v1"
+
+DOCKER_RESTART_PROXY_URL = os.environ.get("DOCKER_RESTART_PROXY_URL", "http://docker-restart-proxy:5001")
+CONTAINER_SERVICE_NAMES = ["postgres", "meilisearch", "scheduler", "app"]
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
 
 
@@ -499,9 +510,22 @@ def tools_page():
         AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY,
     )
     auto_deep = bool(_load_json_setting(AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY))
+
+    running_ops = _running_operations()
+    fetch_ops = [op for op in running_ops if op["kind"] == "fetch"]
+    other_ops = [op for op in running_ops if op["kind"] == "other"]
+
     return render_template(
         "admin_tools.html",
         auto_article_deep_analysis_enabled=auto_deep,
+        containers=_list_containers(),
+        container_service_order=CONTAINER_SERVICE_NAMES,
+        pipeline_schedule_restart_needed=pipeline_schedule_restart_needed(),
+        fetch_running=bool(fetch_ops),
+        fetch_running_ops=fetch_ops,
+        other_running_ops=other_ops,
+        restart_blocked_reason=request.args.get("blocked_reason"),
+        restart_blocked_target=request.args.get("blocked_target"),
     )
 
 
@@ -514,6 +538,59 @@ def toggle_auto_article_deep_analysis():
     enabled = request.form.get("enabled") == "true"
     _save_json_setting(AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY, enabled)
     logger.info(f"[Settings] auto_article_deep_analysis_enabled set to {enabled}")
+    return redirect(url_for("admin.tools_page"))
+
+
+@admin.route("/containers/<name>/restart", methods=["POST"])
+@login_required
+def restart_container(name):
+    force = request.form.get("force") == "true"
+    blocking = _blocking_operations_for(name)
+    if blocking and not force:
+        reason = f"Can't restart '{name}' right now — still running: {_describe_blocking(blocking)}"
+        logger.warning("[ContainerRestart] Refused restart of %s: %s", name, reason)
+        return redirect(url_for("admin.tools_page", blocked_reason=reason, blocked_target=name))
+    if blocking and force:
+        logger.warning(
+            "[ContainerRestart] Forcing restart of %s despite running: %s",
+            name, _describe_blocking(blocking),
+        )
+
+    try:
+        response = requests.post(f"{DOCKER_RESTART_PROXY_URL}/containers/{name}/restart", timeout=35)
+        response.raise_for_status()
+        logger.info("[ContainerRestart] Restarted %s", name)
+    except requests.RequestException as e:
+        logger.error("[ContainerRestart] Failed to restart %s: %s", name, e)
+        return redirect(url_for("admin.tools_page", blocked_reason=f"Failed to restart '{name}': {e}"))
+
+    return redirect(url_for("admin.tools_page"))
+
+
+@admin.route("/containers/restart-all", methods=["POST"])
+@login_required
+def restart_all_containers():
+    force = request.form.get("force") == "true"
+    blocking = _running_operations()
+    if blocking and not force:
+        reason = f"Can't restart all — still running: {_describe_blocking(blocking)}"
+        logger.warning("[ContainerRestart] Refused restart-all: %s", reason)
+        return redirect(url_for("admin.tools_page", blocked_reason=reason, blocked_target="all"))
+    if blocking and force:
+        logger.warning(
+            "[ContainerRestart] Forcing restart-all despite running: %s",
+            _describe_blocking(blocking),
+        )
+
+    try:
+        response = requests.post(f"{DOCKER_RESTART_PROXY_URL}/restart-all", timeout=120)
+        response.raise_for_status()
+        logger.info("[ContainerRestart] Restart-all results: %s", response.json())
+    except requests.RequestException as e:
+        # Expected once the app container itself gets restarted mid-call --
+        # the response never makes it back. Log and move on either way.
+        logger.info("[ContainerRestart] Restart-all request ended (%s) -- expected if 'app' was restarted.", e)
+
     return redirect(url_for("admin.tools_page"))
 
 
@@ -643,6 +720,12 @@ def fetch_articles():
     gnews_query = request.form.get("gnews_query", "").strip() or None
     gnews_category = request.form.get("gnews_category", "").strip() or None
 
+    started_at = datetime.utcnow().isoformat()
+    _save_json_setting(MANUAL_FETCH_STATUS_KEY, {
+        "status": "running",
+        "started_at": started_at,
+        "label": label or "Custom",
+    })
     try:
         from news_fetcher.fetch_and_store_articles import fetch_and_store_articles
         fetch_and_store_articles(
@@ -656,6 +739,13 @@ def fetch_articles():
         )
     except Exception as e:
         logger.error(f"Fetch error: {e}")
+    finally:
+        _save_json_setting(MANUAL_FETCH_STATUS_KEY, {
+            "status": "idle",
+            "started_at": started_at,
+            "label": label or "Custom",
+            "finished_at": datetime.utcnow().isoformat(),
+        })
 
     return redirect_to_articles(label, scrape_status)
 
@@ -1346,3 +1436,241 @@ def delete_rss_feed(feed_id):
     db.session.delete(feed)
     db.session.commit()
     return redirect(url_for("admin.rss_feeds_page"))
+
+
+@admin.route("/prompts")
+@login_required
+def prompts_page():
+    prompts = PromptTemplate.query.order_by(PromptTemplate.key.asc()).all()
+    return render_template("prompts.html", prompts=prompts)
+
+
+@admin.route("/prompts/<key>/edit")
+@login_required
+def edit_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    saved = request.args.get("saved") == "1"
+    return render_template(
+        "prompt_edit.html", prompt=prompt, submitted_text=prompt.current_text,
+        error=None, warning=None, saved=saved, known_vars=sorted(PROMPT_KNOWN_VARS.get(key, set())),
+    )
+
+
+@admin.route("/prompts/<key>/update", methods=["POST"])
+@login_required
+def update_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    text = request.form.get("current_text", "")
+    known_vars = sorted(PROMPT_KNOWN_VARS.get(key, set()))
+
+    error, warning = validate_prompt_text(key, text)
+    if error:
+        return render_template(
+            "prompt_edit.html", prompt=prompt, submitted_text=text,
+            error=error, warning=None, saved=False, known_vars=known_vars,
+        )
+
+    prompt.current_text = text
+    prompt.updated_at = datetime.utcnow()
+    db.session.commit()
+    invalidate_prompt_cache(key)
+
+    if warning:
+        return render_template(
+            "prompt_edit.html", prompt=prompt, submitted_text=prompt.current_text,
+            error=None, warning=warning, saved=True, known_vars=known_vars,
+        )
+    return redirect(url_for("admin.edit_prompt", key=key, saved=1))
+
+
+@admin.route("/prompts/<key>/reset", methods=["POST"])
+@login_required
+def reset_prompt(key):
+    prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
+    prompt.current_text = prompt.default_text
+    prompt.updated_at = None
+    db.session.commit()
+    invalidate_prompt_cache(key)
+    return redirect(url_for("admin.edit_prompt", key=key, saved=1))
+
+
+def _mark_pipeline_schedule_changed():
+    """Record that PipelineSchedule was edited -- compared against
+    scheduler_started_at (set by scheduler.py on boot) to tell whether the
+    scheduler still needs a restart to pick up the change."""
+    now = datetime.utcnow().isoformat()
+    setting = AppSetting.query.filter_by(key="pipeline_schedule_changed_at").first()
+    if setting:
+        setting.value = now
+    else:
+        db.session.add(AppSetting(key="pipeline_schedule_changed_at", value=now))
+    db.session.commit()
+
+
+def pipeline_schedule_restart_needed():
+    changed = AppSetting.query.filter_by(key="pipeline_schedule_changed_at").first()
+    if not changed or not changed.value:
+        return False
+    started = AppSetting.query.filter_by(key="scheduler_started_at").first()
+    if not started or not started.value:
+        # Schedule has been edited but the scheduler has never recorded a
+        # start (e.g. this migration/feature is newer than its last boot).
+        return True
+    return changed.value > started.value
+
+
+@admin.route("/pipeline-schedule")
+@login_required
+def pipeline_schedule_page():
+    entries = PipelineSchedule.query.order_by(PipelineSchedule.hour.asc()).all()
+    return render_template(
+        "pipeline_schedule.html", entries=entries, restart_needed=pipeline_schedule_restart_needed(),
+    )
+
+
+@admin.route("/pipeline-schedule/add", methods=["POST"])
+@login_required
+def add_pipeline_schedule():
+    hour = request.form.get("hour", type=int)
+    run_full_pipeline = request.form.get("run_full_pipeline") == "on"
+
+    if hour is not None and 0 <= hour <= 23 and not PipelineSchedule.query.filter_by(hour=hour).first():
+        db.session.add(PipelineSchedule(
+            hour=hour,
+            run_full_pipeline=run_full_pipeline,
+            is_active=True,
+        ))
+        db.session.commit()
+        _mark_pipeline_schedule_changed()
+        logger.info(f"[PipelineSchedule] Added scheduled run at {hour}:00 (full_pipeline={run_full_pipeline})")
+    return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+@admin.route("/pipeline-schedule/<int:entry_id>/update", methods=["POST"])
+@login_required
+def update_pipeline_schedule(entry_id):
+    entry = PipelineSchedule.query.get_or_404(entry_id)
+    hour = request.form.get("hour", type=int)
+
+    if hour is not None and 0 <= hour <= 23:
+        entry.hour = hour
+    entry.run_full_pipeline = request.form.get("run_full_pipeline") == "on"
+    entry.is_active = request.form.get("is_active") == "on"
+    db.session.commit()
+    _mark_pipeline_schedule_changed()
+    return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+@admin.route("/pipeline-schedule/<int:entry_id>/delete", methods=["POST"])
+@login_required
+def delete_pipeline_schedule(entry_id):
+    entry = PipelineSchedule.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    _mark_pipeline_schedule_changed()
+    return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+def _is_running_and_fresh(payload):
+    """True if a task-status payload is 'running' and still within a
+    plausible runtime -- reuses ORPHANED_TASK_STALE_AFTER so a process that
+    died mid-task (no restart involved at all) doesn't block restarts
+    forever; the next real run overwrites the flag anyway."""
+    if not payload or payload.get("status") != "running":
+        return False
+    started_at = payload.get("started_at")
+    try:
+        started_dt = datetime.fromisoformat(started_at) if started_at else None
+    except (TypeError, ValueError):
+        started_dt = None
+    if started_dt is None:
+        return True
+    return started_dt > datetime.utcnow() - ORPHANED_TASK_STALE_AFTER
+
+
+def _running_operations():
+    """
+    Every background/long-running operation currently active that a
+    container restart could interrupt, each tagged with which of this
+    project's containers restarting would interrupt (`affects`). Covers:
+    scheduled fetch/pipeline runs, manual on-demand fetches, the six bulk
+    admin actions, per-resource AI tasks, and search reindexing.
+    """
+    ops = []
+
+    fetch_status = _load_json_setting(FETCH_RUN_STATUS_KEY)
+    if _is_running_and_fresh(fetch_status):
+        kind = "full pipeline" if fetch_status.get("run_full_pipeline") else "fetch-only"
+        ops.append({
+            "kind": "fetch",
+            "label": f"Scheduled {kind} run",
+            "affects": {"scheduler", "postgres"},
+            "started_at": fetch_status.get("started_at"),
+        })
+
+    manual_status = _load_json_setting(MANUAL_FETCH_STATUS_KEY)
+    if _is_running_and_fresh(manual_status):
+        ops.append({
+            "kind": "fetch",
+            "label": f"Manual fetch ({manual_status.get('label') or 'Custom'})",
+            "affects": {"app", "postgres"},
+            "started_at": manual_status.get("started_at"),
+        })
+
+    for action in BULK_TASK_ACTIONS:
+        payload = _bulk_task_status_payload(action)
+        if _is_running_and_fresh(payload):
+            ops.append({
+                "kind": "other",
+                "label": action.replace("_", " ").title(),
+                "affects": {"app", "postgres"},
+                "started_at": payload.get("started_at"),
+            })
+
+    ai_rows = AppSetting.query.filter(AppSetting.key.like("ai_task_status_v1:%")).all()
+    for row in ai_rows:
+        try:
+            payload = json.loads(row.value) if row.value else None
+        except (TypeError, ValueError):
+            continue
+        if _is_running_and_fresh(payload):
+            ops.append({
+                "kind": "other",
+                "label": f"AI task: {payload.get('task_type')} #{payload.get('resource_id')}",
+                "affects": {"app", "postgres"},
+                "started_at": payload.get("started_at"),
+            })
+
+    reindex_status = _search_reindex_status_payload()
+    if _is_running_and_fresh(reindex_status):
+        ops.append({
+            "kind": "other",
+            "label": "Search reindex",
+            "affects": {"app", "postgres", "meilisearch"},
+            "started_at": reindex_status.get("started_at"),
+        })
+
+    return ops
+
+
+def _blocking_operations_for(container_name):
+    return [op for op in _running_operations() if container_name in op["affects"]]
+
+
+def _list_containers():
+    """Container status via the docker-restart-proxy. Returns [] (and logs
+    a warning) rather than raising if the proxy is unreachable, so a proxy
+    hiccup doesn't take down the whole Admin Tools page."""
+    try:
+        response = requests.get(f"{DOCKER_RESTART_PROXY_URL}/containers", timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.warning("[ContainerRestart] Could not reach docker-restart-proxy: %s", e)
+        return []
+
+
+def _describe_blocking(ops):
+    return "; ".join(
+        f"{op['label']} (started {op['started_at']})" for op in ops
+    )

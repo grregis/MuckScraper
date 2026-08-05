@@ -269,6 +269,79 @@
             line-height: 1.45;
             margin-top: 6px;
         }
+        .fetch-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .fetch-status .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .fetch-status.is-running {
+            background: rgba(220, 38, 38, 0.10);
+            color: #b91c1c;
+            border: 1px solid rgba(220, 38, 38, 0.25);
+        }
+        .fetch-status.is-running .dot { background: #dc2626; }
+        [data-theme="dark"] .fetch-status.is-running { color: #fca5a5; background: rgba(220, 38, 38, 0.15); }
+        .fetch-status.is-idle {
+            background: rgba(22, 163, 74, 0.10);
+            color: #15803d;
+            border: 1px solid rgba(22, 163, 74, 0.25);
+        }
+        .fetch-status.is-idle .dot { background: #16a34a; }
+        [data-theme="dark"] .fetch-status.is-idle { color: #86efac; background: rgba(22, 163, 74, 0.15); }
+        .other-running-list {
+            list-style: none;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .other-running-list li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+        }
+        .other-running-list .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dc2626;
+            flex-shrink: 0;
+        }
+        .restart-error {
+            border-color: rgba(154, 114, 91, 0.4) !important;
+        }
+        .restart-error strong { color: var(--danger-dark); }
+        .container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            padding: 20px 22px;
+        }
+        .container-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+        .container-card .name {
+            font-weight: 800;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .container-card form { margin-top: 10px; }
+        .restart-all-row {
+            padding: 0 22px 20px;
+        }
         @media (max-width: 980px) {
             .tool-card:nth-child(3n) { border-right: 1px solid var(--border); }
             .tool-card:nth-child(2n) { border-right: none; }
@@ -329,6 +402,16 @@
                 <a href="{{ url_for('admin.rss_feeds_page') }}" class="btn btn-secondary">Open RSS Feeds</a>
             </div>
             <div class="tool-card">
+                <div class="tool-card-title">Prompts</div>
+                <p>Edit the LLM prompts used for summaries, deep reports, classification, and bias scoring. Each can be reset back to its original default.</p>
+                <a href="{{ url_for('admin.prompts_page') }}" class="btn btn-secondary">Open Prompts</a>
+            </div>
+            <div class="tool-card">
+                <div class="tool-card-title">Pipeline Schedule</div>
+                <p>Add, edit, or remove when fetch-only and full-pipeline runs happen.</p>
+                <a href="{{ url_for('admin.pipeline_schedule_page') }}" class="btn btn-secondary">Open Pipeline Schedule</a>
+            </div>
+            <div class="tool-card">
                 <div class="tool-card-title">Headlines</div>
                 <p>View the latest published edition's headlines and analysis as a plain list.</p>
                 <a href="{{ url_for('public.headlines_feed') }}" class="btn btn-secondary">Open Headlines</a>
@@ -346,6 +429,85 @@
                 </form>
             </div>
         </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <div class="section-title">Container Restart</div>
+            <div class="section-copy">Restart individual containers, or everything at once. Blocked automatically while a fetch or other background task is running so a restart can't silently kill it.</div>
+        </div>
+        <div style="padding: 20px 22px 0;">
+            {% if fetch_running %}
+            <div class="fetch-status is-running">
+                <span class="dot"></span>
+                {% for op in fetch_running_ops %}
+                {{ op.label }} (started {{ op.started_at }}){% if not loop.last %}; {% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="fetch-status is-idle">
+                <span class="dot"></span>
+                No fetch or pipeline run in progress
+            </div>
+            {% endif %}
+
+            {% if other_running_ops %}
+            <ul class="other-running-list">
+                {% for op in other_running_ops %}
+                <li><span class="dot"></span>{{ op.label }} (started {{ op.started_at }})</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if pipeline_schedule_restart_needed %}
+            <div class="warning-banner">
+                <strong>Scheduler restart needed</strong>
+                <p>The pipeline schedule was changed after the scheduler last started. Restart <code>scheduler</code> below for the new run times to take effect.</p>
+            </div>
+            {% endif %}
+
+            {% if restart_blocked_reason %}
+            <div class="warning-banner restart-error">
+                <strong>Restart refused</strong>
+                <p>{{ restart_blocked_reason }}</p>
+                {% if restart_blocked_target %}
+                <form method="POST" action="{{ url_for('admin.restart_all_containers') if restart_blocked_target == 'all' else url_for('admin.restart_container', name=restart_blocked_target) }}"
+                      onsubmit="return confirm('This will interrupt what\'s currently running. Restart anyway?');"
+                      style="margin-top: 10px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="force" value="true">
+                    <button type="submit" class="btn btn-danger">Restart Anyway</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if containers %}
+        <div class="container-grid">
+            {% for service in container_service_order %}
+            {% set c = containers | selectattr('service', 'equalto', service) | first %}
+            {% if c %}
+            <div class="container-card">
+                <div class="name">{{ service }}</div>
+                <span class="badge {{ 'badge-danger' if c.status != 'running' else '' }}">{{ c.status }}</span>
+                <form method="POST" action="{{ url_for('admin.restart_container', name=service) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-secondary">Restart</button>
+                </form>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        <div class="restart-all-row">
+            <form method="POST" action="{{ url_for('admin.restart_all_containers') }}" onsubmit="return confirm('Restart every container? This briefly stops the whole app, including this page.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger">Restart All</button>
+            </form>
+        </div>
+        {% else %}
+        <div style="padding: 0 22px 20px; color: var(--text-faint); font-style: italic;">Could not reach the container restart service.</div>
+        {% endif %}
     </div>
 
     <div class="section">

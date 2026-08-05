@@ -8,6 +8,7 @@ from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
 
 from news_fetcher import llm_client
+from news_fetcher.prompt_registry import render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -80,26 +81,9 @@ def classify_article(title, content_snippet=""):
 
     categories_list = "\n".join(f"- {t}" for t in valid_topics if t != "Other")
 
-    prompt = f"""You are a news editor categorizing articles. You must respond with ONLY category names from the list below, one per line. No other text, no notes, no explanations, no parentheses.
-
-Article: "{text}"
-
-Categories (choose only from these exact names):
-{categories_list}
-
-Rules:
-- Use EXACT category names only — do not create new categories
-- US Politics means US federal government, Congress, White House, elections, federal courts/policy, or any US government action or statement toward another country (diplomacy, sanctions, tariffs, military orders)
-- International News means events, governments, conflicts, or disasters in other countries. If a story is about a US government action toward another country, use BOTH US Politics and International News
-- US News means domestic US news that is NOT about government or politics — crime, accidents, disasters, lawsuits, local/state news, transportation, weather
-- Entertainment, celebrity, lifestyle, and human-interest stories belong to Other, not US News
-- Sci/Tech means technology, science, research, AI, space — NOT general business news about tech companies (use Buss/Fin for stock/earnings stories)
-- Buss/Fin means financial markets, economics, corporate earnings, mergers — NOT general commerce
-- Sports contracts and player signings belong to Sports only, not Buss/Fin
-- Pick the most specific category — if it's clearly Sports, do not also add other categories
-- Maximum 2 categories per article unless truly necessary
-- If none apply, respond with only: Other
-- Your entire response must be category names only — no parentheses, no notes, no commentary"""
+    prompt = render_prompt("topic_classifier", text=text, categories_list=categories_list)
+    if prompt is None:
+        return ["Other"]
 
     langfuse_context.update_current_observation(
         input=prompt,

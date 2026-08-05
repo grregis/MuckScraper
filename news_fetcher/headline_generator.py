@@ -7,6 +7,7 @@ from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
 
 from news_fetcher import llm_client
+from news_fetcher.prompt_registry import render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -43,21 +44,10 @@ def generate_story_headline(story):
         f"- {article.title}" for article in sorted_articles[:10]
     )
 
-    prompt = f"""You are a wire service editor writing a single headline.
-
-Below are multiple news articles covering the same story:
-{titles}
-
-Write ONE headline for this story in wire service style.
-
-Rules:
-- Who/what/where in one line
-- Maximum 15 words
-- Present tense, active voice
-- No punctuation at the end
-- No quotes around the headline
-- Do not include source names or outlet names
-- Respond with ONLY the headline, nothing else"""
+    prompt = render_prompt("headline_generator", titles=titles)
+    if prompt is None:
+        logger.error("No prompt template found for 'headline_generator'")
+        return None
 
     langfuse_context.update_current_observation(
         input=prompt,
