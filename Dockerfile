@@ -2,6 +2,10 @@
 # Use an official Python runtime as a parent image
 FROM python:3.10-slim
 
+# Surface init/bootstrap logs immediately instead of buffering them
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 # Install system dependencies (Debian/Ubuntu)
 RUN apt-get update && apt-get install -y \
     python3-dev \
@@ -46,7 +50,17 @@ RUN playwright install chromium
 # Copy the app code
 COPY aggregator ./aggregator
 COPY news_fetcher ./news_fetcher
+
+# Alembic migration chain — required by the db-init container's stamp(head)
+# call and by any later `flask db upgrade`. Without this the init container
+# falls back to an unstamped create_all() schema.
+COPY migrations ./migrations
+
+# Database + admin bootstrap, invoked by install.sh and the db-init container
+COPY bootstrap_admin.py ./bootstrap_admin.py
+
 COPY boot.sh ./boot.sh
+RUN chmod +x ./boot.sh
 
 # Expose the port the app runs on
 EXPOSE 5000
