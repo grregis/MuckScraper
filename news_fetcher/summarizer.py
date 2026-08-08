@@ -19,6 +19,10 @@ langfuse = Langfuse(
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
 
+# Every generate_text() call in this module deliberately stays on the default
+# quality tier: summaries and deep reports are the text readers actually see,
+# so they keep the main model even when OLLAMA_FAST_MODEL is set for the
+# pipeline's mechanical calls (grouping, classification, headlines).
 MODEL = os.environ.get("OLLAMA_MODEL", "")
 
 if llm_client.LLM_PROVIDER == "ollama" and not MODEL:

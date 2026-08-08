@@ -87,9 +87,12 @@ def classify_article(title, content_snippet=""):
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={
+            "provider": llm_client.LLM_PROVIDER,
+            "model": llm_client.model_for_tier(llm_client.TIER_FAST),
+        }
     )
-    result = llm_client.generate_text(prompt, timeout=30)
+    result = llm_client.generate_text(prompt, timeout=30, tier=llm_client.TIER_FAST)
     if result is None:
         logger.info("  [Classifier] No response, using Other")
         return ["Other"]

@@ -240,6 +240,23 @@ Still hardcoded, requiring a code change:
 
 ### LLM behavior
 
+**Model tiers (`OLLAMA_FAST_MODEL`).** A full pipeline run makes roughly 1,200
+sequential LLM calls, and about 1,140 of them are mechanical — story-grouping
+confirmations, topic classification, headline generation, outlet bias — whose
+output is a label, a yes/no, or a short headline. Only ~65 are the summaries and
+deep reports a reader actually sees. Setting `OLLAMA_FAST_MODEL` to a smaller
+model routes the mechanical calls to it while summaries stay on `OLLAMA_MODEL`.
+
+This matters most when `OLLAMA_MODEL` is too large for your GPU. Compare
+`size_vram` against `size` in `curl $OLLAMA_HOST/api/ps` — if `size_vram` is
+smaller, the rest is running on CPU and every call pays for it. Worse, a model
+that fills the card leaves no room for the embedding model, so Ollama swaps the
+two in and out on every article. A fast model that fits alongside
+`nomic-embed-text` avoids both problems.
+
+Leave it blank to use `OLLAMA_MODEL` for everything (the original behavior).
+`GEMINI_FAST_MODEL` and `GROQ_FAST_MODEL` do the same for those providers.
+
 Prompt wording itself is editable at `/admin/prompts` (see above) with no
 code change needed. The surrounding logic — persona/analysis-type
 selection, story-grouping thresholds, etc. — still lives in:

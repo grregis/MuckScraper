@@ -51,9 +51,12 @@ def generate_story_headline(story):
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={
+            "provider": llm_client.LLM_PROVIDER,
+            "model": llm_client.model_for_tier(llm_client.TIER_FAST),
+        }
     )
-    headline = llm_client.generate_text(prompt, timeout=30)
+    headline = llm_client.generate_text(prompt, timeout=30, tier=llm_client.TIER_FAST)
     if headline is None:
         logger.error(f"Error generating headline for '{story.title}'")
         return None
