@@ -4,7 +4,7 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
-from aggregator.article_signals import bias_bucket_for_score
+from aggregator.article_signals import bias_bucket_for_score, is_independent_source
 from aggregator.models import AppSetting, PipelineSchedule
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.rss_fetcher import (
@@ -363,6 +363,7 @@ def build_headline_site_metrics():
     stories = [edition_story.story for edition_story in edition_stories]
     article_ids = set()
     outlet_ids = set()
+    independent_outlet_ids = set()
     article_bias_counts = {}
     outlet_bias_counts = {}
     outlet_bias_source_counts = {"allsides": 0, "ai": 0, "unrated": 0}
@@ -381,11 +382,21 @@ def build_headline_site_metrics():
     for story in stories:
         story_bias_buckets = set()
         story_outlet_ids = set()
+        # Corroboration claims (multi-source, bias mix) count only outlets that
+        # contributed real scraped content -- see INDEPENDENT_CONTENT_FLOOR.
+        # Raw volume and scrape-health counters below stay unfiltered so the
+        # historical series in scrape_outcome_history_v1 remains comparable.
+        story_independent_outlet_ids = set()
+        story_independent_bias_buckets = set()
 
         for article in story.articles:
             article_ids.add(article.id)
+            independent = is_independent_source(article)
             if article.outlet_id:
                 story_outlet_ids.add(article.outlet_id)
+                if independent:
+                    story_independent_outlet_ids.add(article.outlet_id)
+                    independent_outlet_ids.add(article.outlet_id)
 
             scrape_status = (article.scrape_status or "pending").lower()
             scrape_status_counts[scrape_status] = scrape_status_counts.get(scrape_status, 0) + 1
@@ -393,6 +404,8 @@ def build_headline_site_metrics():
             bucket = bias_bucket_for_score(article.bias_score if article.bias_score is not None else (article.outlet.bias_score if article.outlet else None))
             article_bias_counts[bucket] = article_bias_counts.get(bucket, 0) + 1
             story_bias_buckets.add(bucket)
+            if independent:
+                story_independent_bias_buckets.add(bucket)
 
             if article.outlet and article.outlet.id not in outlet_ids:
                 outlet_ids.add(article.outlet.id)
@@ -401,9 +414,9 @@ def build_headline_site_metrics():
                 bias_source = article.outlet.bias_source or "unrated"
                 outlet_bias_source_counts[bias_source] = outlet_bias_source_counts.get(bias_source, 0) + 1
 
-        if len(story_outlet_ids) > 1:
+        if len(story_independent_outlet_ids) > 1:
             multi_source_story_count += 1
-        if len({bucket for bucket in story_bias_buckets if bucket != "unrated"}) >= 2:
+        if len({bucket for bucket in story_independent_bias_buckets if bucket != "unrated"}) >= 2:
             stories_with_bias_mix += 1
         if "unrated" in story_bias_buckets:
             stories_with_unrated_articles += 1
@@ -420,6 +433,7 @@ def build_headline_site_metrics():
         "story_count": len(stories),
         "article_count": len(article_ids),
         "outlet_count": len(outlet_ids),
+        "independent_outlet_count": len(independent_outlet_ids),
         "multi_source_story_count": multi_source_story_count,
         "stories_with_bias_mix": stories_with_bias_mix,
         "stories_with_unrated_articles": stories_with_unrated_articles,

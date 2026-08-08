@@ -61,6 +61,27 @@ def is_roundup_article(title=None, url=None):
     return any(hint in parsed_path for hint in ROUNDUP_URL_HINTS)
 
 
+# Minimum characters of scraped body text for an article to count as its
+# outlet's independent corroboration of a story.
+#
+# Below this an article is almost always a blocked paywall (stored with 0
+# chars) or an RSS snippet -- it carries the outlet's name but none of its
+# reporting, so counting it inflates "N outlets reported this". In one sampled
+# edition, 8 of 18 stories advertised multiple outlets while having only a
+# single source above the floor; one showed three outlets for a story only one
+# outlet had actually written up (17,114 chars vs 279 vs 138).
+#
+# This gates *corroboration counting only*. Articles below the floor are still
+# stored, still displayed, and still link out to their source.
+INDEPENDENT_CONTENT_FLOOR = 300
+
+
+def is_independent_source(article):
+    """Whether an article carries enough scraped content to count as its
+    outlet's independent corroboration of a story."""
+    return len(article.content or "") >= INDEPENDENT_CONTENT_FLOOR
+
+
 def bias_bucket_for_score(score):
     if score is None:
         return "unrated"
