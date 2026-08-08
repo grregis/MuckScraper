@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 
+from aggregator.article_signals import is_independent_source
 from aggregator.constants import AGGREGATORS
 
 
@@ -25,13 +26,37 @@ def apply_aggregator_filter(story):
     if not has_good_original:
         story.display_articles.sort(key=lambda x: x.date or dt.min, reverse=True)
 
-    # Collect unique outlets for display
+    # Collect unique outlets for display. Only outlets that contributed real
+    # scraped content count -- a blocked paywall or a 112-char RSS stub carries
+    # the outlet's name but none of its reporting, so counting it would claim
+    # corroboration the story does not have. See
+    # article_signals.INDEPENDENT_CONTENT_FLOOR.
+    #
+    # An outlet is not disqualified by one thin article: a later article from
+    # the same outlet that clears the floor still counts, since outlet_id is
+    # only marked as seen once accepted.
     unique_outlets = []
     seen_outlet_ids = set()
     for art in story.display_articles:
-        if art.outlet_id and art.outlet_id not in seen_outlet_ids:
-            unique_outlets.append(art.outlet)
-            seen_outlet_ids.add(art.outlet_id)
+        if not art.outlet_id or art.outlet_id in seen_outlet_ids:
+            continue
+        if not is_independent_source(art):
+            continue
+        unique_outlets.append(art.outlet)
+        seen_outlet_ids.add(art.outlet_id)
+
+    # Never render zero outlets. If nothing clears the floor, fall back to the
+    # best-scraped article's outlet so the story still attributes a source --
+    # the count is then honest about there being exactly one.
+    if not unique_outlets:
+        best = max(
+            (art for art in story.display_articles if art.outlet_id and art.outlet),
+            key=lambda art: len(art.content or ""),
+            default=None,
+        )
+        if best is not None:
+            unique_outlets = [best.outlet]
+
     story.unique_outlets = unique_outlets
 
     status_counts = {
