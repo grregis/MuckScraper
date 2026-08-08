@@ -4,6 +4,83 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [0.6.0] - 2026-08-08
+
+Status: beta. The theme of this release is **configuration moving out of the
+source and into the database**: topics, RSS feeds, LLM prompts, and the pipeline
+run schedule are all editable from the admin UI now, so running your own instance
+no longer means editing Python to change what gets fetched or how it gets
+summarized. This release also adds two more LLM providers, makes the app safe to
+run with multiple workers, and closes several security issues.
+
+### Added
+
+- **Admin-configurable pipeline (GitHub issue #1)** — the largest change in this release:
+  - **Topics** are now a `Topic` model with icon/sort-order/active columns, managed at `/admin/topics`, replacing the hardcoded `constants.py:TOPICS` list
+  - **RSS feeds** are now an `RssFeed` model keyed by `(url, bucket)`, managed at `/admin/rss-feeds`, replacing the three hardcoded feed lists in `rss_fetcher.py`
+  - **LLM prompts** are now a `PromptTemplate` model with an immutable `default_text` and an editable `current_text`, managed at `/admin/prompts` with per-prompt reset-to-default and save-time placeholder validation
+  - **Pipeline run schedule** is now a `PipelineSchedule` model (hour + fetch-only/full-pipeline + active), managed at `/admin/pipeline-schedule`, with a banner warning when the scheduler needs a restart to pick up changes
+- **`install.sh`** — one-command setup: bootstraps `.env`, generates `SECRET_KEY`, warns on placeholder values, brings up postgres/meilisearch/app, runs `bootstrap_admin.py`, starts the scheduler
+- **Additional LLM providers** — `LLM_PROVIDER` now accepts `groq` and `gemini` alongside `ollama`, with provider-specific model/embedding settings and Groq rate-limit retry
+- **Fast model tier** — `OLLAMA_FAST_MODEL` (and the Gemini/Groq equivalents) routes the ~1,100 high-volume mechanical calls per run (grouping confirmation, topic classification, headline generation, outlet bias) to a smaller model, while summaries and deep reports stay on the main model. Defaults to the main model, so leaving it unset preserves the previous single-model behavior
+- **Fallback Ollama host** with automatic recovery back to the primary (`OLLAMA_FALLBACK_HOST`, `OLLAMA_PRIMARY_RECHECK_SECONDS`)
+- **Headlines section** (`/headlines`) — a plain-list view of the current published edition
+- **Persistent sidebar navigation** across all non-settings pages, via shared partials
+- **Container restart from Admin Tools**, backed by a separate small `docker_restart_proxy` service that holds the Docker socket so the public-facing app never has to. Refuses restarts that would interrupt a running operation, with an explicit override
+- **Background execution with status polling for bulk admin actions** (GitHub issue #3), so long-running maintenance no longer hits the worker timeout
+- **Optional automatic article-level deep analysis** during story fill, off by default (community PR #19)
+- **Expanded topic taxonomy** — seven categories, splitting out US News and International News
+
+### Changed
+
+- Gunicorn now runs multiple workers (`GUNICORN_WORKERS`, default 2). Task claiming was made process-safe with an atomic Postgres upsert, replacing in-process locks that only coordinated threads within a single worker
+- Story grouping uses a pgvector query instead of a Python cosine scan
+- Editions collapsed to morning/evening only, with the morning window widened
+- Headline ranking consolidated from up to five passes per pipeline run down to one
+- Consolidated duplicated bias-bucket, aggregator-filter, and RSS-enrichment logic into shared helpers
+- Orphaned `running` task statuses are now reconciled by staleness rather than by "found at boot", which is correct under multiple workers (community PR #20)
+- Editions are published even without the private headline-ranking plugin, falling back to recency-ordered stories (community PR #16)
+
+### Fixed
+
+- **Every stored article generated a headline**, including single-article stories — an ORM relationship was double-counting a story's articles, so the `>= 2` guards were always true. Roughly 295 LLM calls per run, most of them wasted
+- Outlet names taken from RSS channel titles could produce a fake outlet — Washington Post's world feed is titled "World" — so outlet names now resolve from the article URL domain where the feed title is unreliable
+- Summary and deep-report generation failed silently when the LLM was unreachable; all four call sites now log a warning
+- Labor disputes and political action at sports venues were classified as Sports rather than US Politics
+- `story.articles` could silently drop the newest articles when truncated for prompts, because the relationship has no defined order
+- Datetime comparison crash parsing NewsAPI/GNews articles (naive vs. aware)
+- Missing `topics` columns after upgrading a database already stamped past the migration (community PR #10)
+- Single-article view was lost after submitting a bias rating (community PR #12)
+- Invisible button text on the article detail page (GitHub issue #5)
+- Broken "Back to Feed" links across four admin templates
+
+### Security
+
+- **CSRF protection** (`CSRFProtect`) enabled app-wide, with tokens on all admin/auth POST forms and AJAX calls
+- **A real `SECRET_KEY` is now required at startup** instead of silently falling back to a development default — enforced on both the admin app and the read-only public app
+- **Open redirect** fixed in `redirect_to_articles()`, which was missing the `netloc` check the login flow already had
+- **Postgres and the admin app are no longer bound to all interfaces**, so a default install does not expose them to the public internet
+- **`.gitignore` now covers `.env` backups and variants** (`.env.*`, with `.env.sample` negated). Previously only plain `.env` was ignored, so a stray `.env.bak` holding live credentials could be committed by `git add -A`
+- Case-sensitive matching in `BLOCKED_TITLE_KEYWORDS` meant capitalized entries could never match a lowercased title, silently disabling much of the filter
+- Detailed Ollama host/role status moved off the public route
+
+### Upgrade Notes
+
+- For an existing install, pull the update and run migrations:
+
+  ```bash
+  docker compose up -d --build
+  docker compose exec app flask db upgrade
+  ```
+
+- **Restart the `scheduler` container after upgrading.** Pipeline schedule rows become APScheduler jobs at process startup and are not re-read live.
+- All new settings are optional and default to previous behavior. `OLLAMA_FAST_MODEL`, `GEMINI_FAST_MODEL`, and `GROQ_FAST_MODEL` fall back to the main model when unset; `GUNICORN_WORKERS` defaults to 2.
+- Topics and prompts upgrade cleanly. The topics migration matches your existing rows by name and only fills in the new icon/sort-order columns, so custom topics are preserved. Prompts are seeded with their shipped defaults.
+- **If you customized the RSS feed lists in `news_fetcher/rss_fetcher.py`, back them up before upgrading.** The migration seeds the `rss_feeds` table from this project's default lists, and `rss_fetcher.py` now reads feeds only from the database — so your edits to that file will stop taking effect and will not be carried over. Re-add them at `/admin/rss-feeds` after upgrading (they can be re-added at any time; nothing is destroyed in the file itself).
+- More generally, editing `constants.py` or `rss_fetcher.py` to change topics or feeds no longer has any effect. Use `/admin/topics` and `/admin/rss-feeds` instead.
+
+---
+
 ## [0.5.0] - 2026-06-03
 
 Status: beta candidate. MuckScraper is moving from early alpha into beta: the
