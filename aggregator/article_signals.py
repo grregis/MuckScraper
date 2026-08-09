@@ -42,6 +42,36 @@ LOW_VALUE_URL_HINTS = (
     "/opinion/letters/",
 )
 
+# Sports-betting tipster content: odds, picks, parlays, prop bets. It is not
+# news, but it arrives through ordinary sports feeds and has reached published
+# editions (2026-08-08 evening, rank 8).
+#
+# Deliberately multi-word phrases only. Single words are unusable here --
+# BLOCKED_TITLE_KEYWORDS does bare substring matching, so "picks" would kill
+# "Trump picks Supreme Court nominee" and "odds" would kill "odds of a
+# recession". These patterns were checked against every matching article in the
+# database (203 across 20 outlets) with no false positives.
+#
+# URL paths are no help for this: dedicated tipster sites file under generic
+# /mlb/ and /nba/ paths, and mainstream outlets scatter betting content across
+# /sports/, /story/ and section paths rather than a consistent /betting/ prefix.
+BETTING_TITLE_PATTERNS = (
+    re.compile(r"\bbest bets\b", re.IGNORECASE),
+    re.compile(r"\bpicks and predictions\b", re.IGNORECASE),
+    re.compile(r"\bpredictions?,?\s+odds\b", re.IGNORECASE),
+    re.compile(r"\bodds,?\s+picks\b", re.IGNORECASE),
+    re.compile(r"\bparlay\b", re.IGNORECASE),
+    re.compile(r"\bmoneyline\b", re.IGNORECASE),
+    # NB: "against the spread" is deliberately NOT here. It is a real betting
+    # term, but it matched 0 of 70,555 articles (so adds no recall) while
+    # "against the spread of a virus / of misinformation" is ordinary news
+    # phrasing -- pure downside.
+    re.compile(r"\bbetting (?:odds|preview|splits|guide|lines)\b", re.IGNORECASE),
+    re.compile(r"\bexpert picks\b", re.IGNORECASE),
+    re.compile(r"\bdfs lineup\b", re.IGNORECASE),
+    re.compile(r"\bprop bets?\b", re.IGNORECASE),
+)
+
 LOW_VALUE_TITLE_PATTERNS = (
     re.compile(r"^\s*(?:watch|video|listen)\s*:", re.IGNORECASE),
     re.compile(r"\bletters?\s+to\s+the\s+editor\b", re.IGNORECASE),
@@ -96,9 +126,18 @@ def bias_bucket_for_score(score):
     return "right"
 
 
+def is_betting_article(title=None):
+    """Sports-betting tipster content (odds/picks/parlays), which is not news."""
+    normalized_title = (title or "").strip()
+    return any(pattern.search(normalized_title) for pattern in BETTING_TITLE_PATTERNS)
+
+
 def low_value_article_reason(title=None, url=None):
     if is_roundup_article(title, url):
         return "roundup"
+
+    if is_betting_article(title):
+        return "betting"
 
     normalized_title = (title or "").strip()
     if any(pattern.search(normalized_title) for pattern in LOW_VALUE_TITLE_PATTERNS):

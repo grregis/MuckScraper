@@ -34,6 +34,16 @@ BLOCKED_SOURCES = [
     "reddit.com",
     "npmjs.com",
     "pypi.org",
+    # Sports-betting tipster sites -- their entire output is odds and picks, so
+    # block at the domain rather than relying on title matching. Mainstream
+    # outlets that also run betting content are handled by
+    # article_signals.BETTING_TITLE_PATTERNS instead, since only part of their
+    # output qualifies.
+    "actionnetwork.com",
+    "vsin.com",
+    "covers.com",
+    "sportsline.com",
+    "lineups.com",
 ]
 
 BLOCKED_TITLE_KEYWORDS = [
@@ -90,6 +100,7 @@ def empty_store_metrics(topic_name, provider=None, input_articles=0):
             "blocked_title": 0,
             "low_value_url": 0,
             "roundup": 0,
+            "betting": 0,
             "duplicate_url": 0,
             "duplicate_title_outlet": 0,
         },
