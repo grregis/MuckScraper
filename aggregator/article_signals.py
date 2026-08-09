@@ -8,6 +8,12 @@ ROUNDUP_TITLE_PATTERNS = (
     re.compile(r"\b(?:daily|news)\s+(?:rundown|roundup|briefing)\b", re.IGNORECASE),
     re.compile(r"\btop stories\b", re.IGNORECASE),
     re.compile(r"\bwhat to know\b", re.IGNORECASE),
+    # TV-listings pieces ("Sunday shows preview: X; Y; Z"). They arrive as
+    # ~350-char stubs that name several unrelated stories at once, so the
+    # grouper attaches them to whichever one they lead with and the headline
+    # generator then writes the story up from the listing rather than from the
+    # reporting. Cost a rank-7 headline in the 2026-08-09 morning edition.
+    re.compile(r"\b(?:sunday|weekend)\s+shows?\s+preview\b", re.IGNORECASE),
 )
 
 ROUNDUP_URL_HINTS = (
@@ -40,6 +46,12 @@ LOW_VALUE_URL_HINTS = (
     "/newsletter/",
     "/briefings/",
     "/opinion/letters/",
+    # Dedicated betting sections. Unlike the tipster sites this path is a
+    # reliable signal: all 142 articles under it in the database are odds,
+    # picks, or sportsbook promo-code spam ("bet365 bonus code: Bet $10, get
+    # $200"), which BETTING_TITLE_PATTERNS does not match. 129 of the 142 are
+    # New York Post, which files them consistently under /betting/.
+    "/betting/",
 )
 
 # Sports-betting tipster content: odds, picks, parlays, prop bets. It is not
