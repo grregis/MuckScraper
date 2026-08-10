@@ -101,6 +101,7 @@ def empty_store_metrics(topic_name, provider=None, input_articles=0):
             "low_value_url": 0,
             "roundup": 0,
             "betting": 0,
+            "advice_column": 0,
             "duplicate_url": 0,
             "duplicate_title_outlet": 0,
         },

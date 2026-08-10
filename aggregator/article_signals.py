@@ -84,6 +84,35 @@ BETTING_TITLE_PATTERNS = (
     re.compile(r"\bprop bets?\b", re.IGNORECASE),
 )
 
+# Syndicated personal-advice columns. Not news, but they arrive through ordinary
+# outlet feeds and have reached published editions (2026-08-09 morning, rank 18,
+# a Dear Abby about a houseguest's hygiene).
+#
+# Matching is anchored to the column's name followed by a colon, because that
+# colon is what separates the column from *coverage of* the column. Every one of
+# the 82 in the database opens that way -- 78 as "Dear Abby:", the rest as
+# "Miss Manners:" / "Asking Eric:" -- except one, and that one is why the anchor
+# matters: Toronto Sun's "Dear Abby, you will be missed" is a news story about
+# the columnist, and a looser pattern would drop it.
+#
+# The optional "Column | " prefix is The Washington Post's, which files advice
+# under "Column | Asking Eric: ...".
+#
+# Every name here is a distinctive column brand. "Ask a Manager" was considered
+# and deliberately left out: it matches nothing in the corpus (so adds no
+# recall) while "Ask a manager: ..." is a phrasing ordinary business or sports
+# copy could use. Same reasoning that kept "against the spread" out of
+# BETTING_TITLE_PATTERNS -- no upside, real downside.
+ADVICE_COLUMN_TITLE_PATTERNS = (
+    re.compile(
+        r"^\s*(?:column\s*\|\s*)?"
+        r"(?:dear abby|dear annie|dear prudence|dear heloise|dear eric|dear therapist"
+        r"|asking eric|ask amy|ask ellie|miss manners|carolyn hax"
+        r"|annie's mailbox)\s*:",
+        re.IGNORECASE,
+    ),
+)
+
 LOW_VALUE_TITLE_PATTERNS = (
     re.compile(r"^\s*(?:watch|video|listen)\s*:", re.IGNORECASE),
     re.compile(r"\bletters?\s+to\s+the\s+editor\b", re.IGNORECASE),
@@ -144,12 +173,21 @@ def is_betting_article(title=None):
     return any(pattern.search(normalized_title) for pattern in BETTING_TITLE_PATTERNS)
 
 
+def is_advice_column(title=None):
+    """Syndicated personal-advice columns (Dear Abby, Miss Manners), not news."""
+    normalized_title = (title or "").strip()
+    return any(pattern.search(normalized_title) for pattern in ADVICE_COLUMN_TITLE_PATTERNS)
+
+
 def low_value_article_reason(title=None, url=None):
     if is_roundup_article(title, url):
         return "roundup"
 
     if is_betting_article(title):
         return "betting"
+
+    if is_advice_column(title):
+        return "advice_column"
 
     normalized_title = (title or "").strip()
     if any(pattern.search(normalized_title) for pattern in LOW_VALUE_TITLE_PATTERNS):
