@@ -44,6 +44,69 @@ BLOCKED_SOURCES = [
     "covers.com",
     "sportsline.com",
     "lineups.com",
+    # Official league and club media. These are the subject's own press
+    # operation, not journalism -- and because each is stored as its own
+    # outlet, a club write-up counted as independent corroboration of a story
+    # its own team is the subject of. 662 articles, 79 of which reached a
+    # published edition.
+    #
+    # Matching is bare substring against the whole URL, so the league entries
+    # cover their subdomains for free: "nfl.com" catches the
+    # *-frontend.pocket.nfl.com hosts, and "nba.com" catches "wnba.com" and
+    # "fever.wnba.com". Fan blogs are deliberately absent -- elevenwarriors.com
+    # and dailyknicks.com are independent media, however partisan, not PR.
+    "nhl.com",
+    "mlb.com",
+    "nba.com",
+    "nfl.com",
+    "49ers.com",
+    "atlantafalcons.com",
+    "azcardinals.com",
+    "baltimoreravens.com",
+    "bengals.com",
+    "buccaneers.com",
+    "buffalobills.com",
+    "chargers.com",
+    "chicagobears.com",
+    "chiefs.com",
+    "clevelandbrowns.com",
+    "commanders.com",
+    "dallascowboys.com",
+    "denverbroncos.com",
+    "detroitlions.com",
+    "giants.com",
+    "jaguars.com",
+    "miamidolphins.com",
+    "neworleanssaints.com",
+    "newyorkjets.com",
+    "orlandomagic.com",
+    "packers.com",
+    "panthers.com",
+    "patriots.com",
+    "philadelphiaeagles.com",
+    "pistons.com",
+    "raiders.com",
+    "seahawks.com",
+    "steelers.com",
+    "tennesseetitans.com",
+    "therams.com",
+    "timberwolves.com",
+    "vikings.com",
+    # Press-release wires. Corporate announcements carried verbatim, with no
+    # reporting or editorial selection between the subject and the page.
+    "businesswire.com",
+    "prnewswire.com",
+    "prnewswire.co.uk",
+    "globenewswire.com",
+    # Google News is an aggregator, not an outlet. Its links were stored as if
+    # they were original reporting under a "Google News" outlet -- which even
+    # carried a bias_score of 2, so it counted as a left-leaning source in the
+    # edition bias mix. 61 of its 446 articles sat in a story alongside another
+    # article with the identical title: the same piece ingested twice,
+    # inflating outlet counts and showing readers duplicate headlines. None
+    # ever scraped successfully. Ingestion had already tailed off on its own
+    # (190 in April 2026, 3 in August), so this is mostly insurance.
+    "news.google.com",
 ]
 
 BLOCKED_TITLE_KEYWORDS = [
