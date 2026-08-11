@@ -7,6 +7,7 @@ from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score, is_independent_source
 from aggregator.models import AppSetting, PipelineSchedule
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
+from news_fetcher.headline_generator import generate_headlines_for_stale_stories
 from news_fetcher.rss_fetcher import (
     fetch_and_store_rss,
     enrich_skewed_stories_with_right_feeds,
@@ -879,6 +880,23 @@ def run_all_fetches(run_full_pipeline=True):
             else:
                 _run_targeted_rss_enrichment_pass(RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)
                 _run_targeted_rss_enrichment_pass(LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)
+
+            # Every headline for the run is written here, in one pass. Position
+            # matters twice over: it must come after grouping review and both
+            # enrichment passes so story membership has settled, and it must sit
+            # immediately before ranking -> publish -> summaries, which is the
+            # stretch of the run that uses the quality model. Ollama holds one
+            # model at a time, so batching here means it loads once and stays
+            # loaded for the summary phase instead of being swapped in and out
+            # around every grouping and classification call.
+            logging.info("--- Generating headlines ---")
+            try:
+                run_metrics["steps"]["headline_generation"] = generate_headlines_for_stale_stories()
+            except Exception as e:
+                db.session.rollback()
+                logging.error(f"Error generating headlines: {e}")
+                run_metrics["status"] = "partial_error"
+                run_metrics["steps"]["headline_generation"] = {"status": "error", "reason": str(e)}
 
             # Single ranking pass for the whole run, positioned after all
             # enrichment so publish_edition() below sees a fully fresh,

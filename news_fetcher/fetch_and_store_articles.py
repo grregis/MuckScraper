@@ -17,7 +17,7 @@ import re
 from news_fetcher.story_grouper import find_or_create_story, get_embedding, normalize_title_tokens, titles_are_near_duplicates
 from datetime import datetime, timedelta
 from news_fetcher.topic_classifier import classify_article
-from news_fetcher.headline_generator import generate_story_headline, generate_missing_headlines
+from news_fetcher.headline_generator import generate_missing_headlines
 import logging
 from sqlalchemy.orm import selectinload
 from urllib.parse import urlparse
@@ -1030,16 +1030,17 @@ def store_articles(articles_data, topic_name, provider=None):
             if t not in new_article.topics:
                 new_article.topics.append(t)
 
-        # Generate headline if this is a multi-article story (2+ articles)
-        if len(story.articles) >= 2:
-            db.session.flush() # Ensure article is associated for headline generator
-            headline = generate_story_headline(story)
-            if headline:
-                story.headline = headline
-        else:
+        # Headlines are no longer generated here. They run in one batch pass
+        # (generate_headlines_for_stale_stories) after grouping settles, so the
+        # quality model loads once per run instead of being swapped in and out
+        # around every grouping/classification call. This story is now stale by
+        # definition -- it just gained an article -- and the pass finds it via
+        # headline_generated_at being older than the newest article.
+        if len(story.articles) < 2:
             # For single-article stories, ensure story headline is cleared
             # so the UI falls back to story.title (original article title)
             story.headline = None
+            story.headline_generated_at = None
                 
         metrics["stored"] += 1
         metrics["scrape_statuses"][scrape_result.status] = (
@@ -1140,10 +1141,9 @@ def review_ambiguous_grouping_matches(max_articles=300):
             if original_story and not original_story.articles:
                 db.session.delete(original_story)
 
-            if len(matched_story.articles) >= 2:
-                headline = generate_story_headline(matched_story)
-                if headline:
-                    matched_story.headline = headline
+            # Headline regeneration is left to the batch pass, which runs after
+            # this review step precisely so reassignments like this one have
+            # already settled.
 
         article.grouping_match_method = truncate_db_string(decision.method, 32)
         article.grouping_confidence = decision.confidence
@@ -1389,11 +1389,9 @@ def regroup_ungrouped_stories():
                 if topic not in matched.topics:
                     matched.topics.append(topic)
 
-            # Generate/Update headline for the matched story now that it has a new article
-            from news_fetcher.headline_generator import generate_story_headline
-            headline = generate_story_headline(matched)
-            if headline:
-                matched.headline = headline
+            # The merged story's headline is now stale, but regenerating it here
+            # would swap the quality model in mid-merge-loop. ollama_catchup()
+            # runs the batch headline pass after this function for that reason.
 
             # Delete the now-empty story
             db.session.delete(story)
@@ -1795,8 +1793,12 @@ def ollama_catchup():
     logger.info("=== Ollama catchup starting ===")
     audit_existing_scrapes()
     generate_missing_embeddings(batch_size=50)
-    generate_missing_headlines()
+    # Headlines run *after* regrouping, not before: regroup_ungrouped_stories()
+    # merges stories, and a headline written before a merge describes the wrong
+    # article set. It used to regenerate them inline; now the batch pass here
+    # covers both the merged stories and anything that was already missing.
     regroup_ungrouped_stories()
+    generate_missing_headlines()
     retry_unrated_outlets()
     logger.info("=== Ollama catchup complete ===")
 

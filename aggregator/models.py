@@ -62,6 +62,10 @@ class Story(db.Model):
     headline_score = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     summary_generated_at = db.Column(db.DateTime, nullable=True)
+    # When `headline` was last written, so the batch headline pass can tell a
+    # stale headline (story gained an article since) from a current one. NULL
+    # on every pre-existing row, which the pass treats as stale.
+    headline_generated_at = db.Column(db.DateTime, nullable=True)
 
     topics   = db.relationship("Topic",   secondary=story_topics,  back_populates="stories")
     articles = db.relationship("Article", backref="story", lazy=True)
