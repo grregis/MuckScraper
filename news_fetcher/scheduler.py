@@ -958,6 +958,7 @@ def run_all_fetches(run_full_pipeline=True):
             run_metrics["steps"]["targeted_left_rss_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_enrichment_second_pass"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["targeted_left_rss_second_pass_bias_retry"] = {"status": "skipped", "reason": "fetch_only_run"}
+            run_metrics["steps"]["headline_generation"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["headline_ranking"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["publish_edition"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["process_current_edition"] = {"status": "skipped", "reason": "fetch_only_run"}
