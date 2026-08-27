@@ -5,7 +5,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score, is_independent_source
-from aggregator.models import AppSetting, PipelineSchedule
+from aggregator.models import AppSetting, PipelineSchedule, ScheduledFetch
 from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.headline_generator import generate_headlines_for_stale_stories
 from news_fetcher.rss_fetcher import (
@@ -34,58 +34,37 @@ logging.basicConfig(
 # admin-editable at /admin/pipeline-schedule) rather than env-var hour lists.
 TIMEZONE = "America/New_York"
 
-SCHEDULED_FETCHES = [
-    # === NATIONAL / POLITICS ===
-    {
-        "label":          "US Politics",
-        "mode":           "query",
-        "country":        None,
-        "category":       None,
-        "query":          "US politics congress white house senate supreme court",
-        "gnews_query":    "US politics congress white house",
-        "gnews_category": None,
-    },
-    # === BUSINESS / ECONOMY ===
-    {
-        "label":          "Business & Economy",
-        "mode":           "top",
-        "country":        "us",
-        "category":       "business",
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "business",
-    },
-    # === SCIENCE / HEALTH ===
-    {
-        "label":          "Science & Health",
-        "mode":           "query",
-        "country":        None,
-        "category":       None,
-        "query":          "scientific breakthroughs medical research healthcare tech",
-        "gnews_query":    "science health research",
-        "gnews_category": "science",
-    },
-    # === SPORTS ===
-    {
-        "label":          "Sports",
-        "mode":           "top",
-        "country":        "us",
-        "category":       "sports",
-        "query":          None,
-        "gnews_query":    None,
-        "gnews_category": "sports",
-    },
-    # === WORLD NEWS ===
-    {
-        "label":          "World News",
-        "mode":           "query",
-        "country":        None,
-        "category":       None,
-        "query":          "international world global news conflicts diplomacy",
-        "gnews_query":    "world global news",
-        "gnews_category": "world",
-    },
-]
+
+def get_scheduled_fetches():
+    """
+    What each run fetches from the news APIs -- DB-backed (ScheduledFetch,
+    admin-editable at /admin/scheduled-fetches) rather than a hardcoded list.
+
+    Read fresh at the start of every run, so an edit takes effect on the next
+    scheduled run with no restart. This is deliberately unlike
+    PipelineSchedule, where each row becomes an APScheduler job at process
+    boot and a restart *is* required.
+
+    Returns a list of plain dicts rather than ORM instances: the caller's
+    error path rolls back the session, which would expire live instances
+    mid-loop and re-query on the next attribute access.
+    """
+    rows = ScheduledFetch.query.filter_by(is_active=True).order_by(
+        ScheduledFetch.sort_order.asc(), ScheduledFetch.id.asc()
+    ).all()
+    return [
+        {
+            "label":          row.label,
+            "mode":           row.mode,
+            "country":        row.newsapi_country,
+            "category":       row.newsapi_category,
+            "query":          row.newsapi_query,
+            "gnews_query":    row.gnews_query,
+            "gnews_category": row.gnews_category,
+        }
+        for row in rows
+    ]
+
 
 app = create_app()
 SCRAPE_OUTCOME_HISTORY_KEY = "scrape_outcome_history_v1"
@@ -758,7 +737,13 @@ def run_all_fetches(run_full_pipeline=True):
         ollama_state["up_at_start"] = _check_ollama_status_for_report(ollama_state, "run_start")
 
         # Fetch all categories
-        for fetch in SCHEDULED_FETCHES:
+        scheduled_fetches = get_scheduled_fetches()
+        if not scheduled_fetches:
+            logging.warning(
+                "No active scheduled fetches configured -- skipping the NewsAPI/GNews "
+                "stage. Add them at /admin/scheduled-fetches. RSS ingestion still runs."
+            )
+        for fetch in scheduled_fetches:
             logging.info(f"--- Fetching: {fetch['label']} ---")
             try:
                 topic_metrics = fetch_and_store_articles(

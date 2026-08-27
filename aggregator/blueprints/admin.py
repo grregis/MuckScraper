@@ -9,7 +9,7 @@ from flask import Blueprint, current_app, render_template, request, redirect, ur
 from flask_login import login_required
 from sqlalchemy import case, func, or_
 from aggregator import db
-from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule
+from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule, ScheduledFetch
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
 from news_fetcher.prompt_registry import validate_prompt_text, invalidate_cache as invalidate_prompt_cache, KNOWN_VARS as PROMPT_KNOWN_VARS
@@ -27,58 +27,34 @@ FETCH_RUN_STATUS_KEY = "fetch_run_status_v1"
 DOCKER_RESTART_PROXY_URL = os.environ.get("DOCKER_RESTART_PROXY_URL", "http://docker-restart-proxy:5001")
 CONTAINER_SERVICE_NAMES = ["postgres", "meilisearch", "scheduler", "app"]
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
-FETCH_PRESETS = [
-    {
-        "label": "US Politics",
-        "description": "Congress, White House, courts, elections",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "US politics congress white house senate supreme court",
-        "gnews_query": "US politics congress white house",
-        "gnews_category": "",
-    },
-    {
-        "label": "Business & Economy",
-        "description": "Top business headlines",
-        "mode": "top",
-        "country": "us",
-        "category": "business",
-        "query": "",
-        "gnews_query": "",
-        "gnews_category": "business",
-    },
-    {
-        "label": "Science & Health",
-        "description": "Research, medicine, technology",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "scientific breakthroughs medical research healthcare tech",
-        "gnews_query": "science health research",
-        "gnews_category": "science",
-    },
-    {
-        "label": "Sports",
-        "description": "Top sports headlines",
-        "mode": "top",
-        "country": "us",
-        "category": "sports",
-        "query": "",
-        "gnews_query": "",
-        "gnews_category": "sports",
-    },
-    {
-        "label": "World News",
-        "description": "International news, conflict, diplomacy",
-        "mode": "query",
-        "country": "",
-        "category": "",
-        "query": "international world global news conflicts diplomacy",
-        "gnews_query": "world global news",
-        "gnews_category": "world",
-    },
-]
+
+
+def fetch_presets():
+    """
+    The one-click preset buttons on the manual fetch page, derived from the
+    same ScheduledFetch rows the scheduler runs -- the page offers "the same
+    kind of coverage the scheduler uses", so a second hardcoded copy would
+    drift the moment anyone edited their fetches.
+
+    Values are coerced to "" rather than left as None: each one is rendered
+    straight into a hidden form input, and None would post the string "None".
+    """
+    rows = ScheduledFetch.query.filter_by(is_active=True).order_by(
+        ScheduledFetch.sort_order.asc(), ScheduledFetch.id.asc()
+    ).all()
+    return [
+        {
+            "label":          row.label,
+            "description":    row.description or "",
+            "mode":           row.mode,
+            "country":        row.newsapi_country or "",
+            "category":       row.newsapi_category or "",
+            "query":          row.newsapi_query or "",
+            "gnews_query":    row.gnews_query or "",
+            "gnews_category": row.gnews_category or "",
+        }
+        for row in rows
+    ]
 
 
 def _load_json_setting(key):
@@ -521,7 +497,7 @@ def apply_scrape_result(article, result):
 def fetch_page():
     return render_template(
         "fetch.html",
-        fetch_presets=FETCH_PRESETS,
+        fetch_presets=fetch_presets(),
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_nav="fetch",
     )
@@ -1501,6 +1477,97 @@ def delete_pipeline_schedule(entry_id):
     db.session.commit()
     _mark_pipeline_schedule_changed()
     return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+SCHEDULED_FETCH_MODES = ["query", "top"]
+
+
+def _scheduled_fetch_form_values(form):
+    """
+    Pull a ScheduledFetch's editable fields off a submitted form.
+
+    The unused half of the mode pair is blanked rather than kept: leaving a
+    stale `query` on a row switched to "top" mode would be invisible in the
+    UI but still sitting in the DB, ready to confuse the next person who
+    switches it back.
+    """
+    mode = (form.get("mode", "") or "").strip()
+    if mode not in SCHEDULED_FETCH_MODES:
+        mode = "query"
+
+    def field(name):
+        return (form.get(name, "") or "").strip() or None
+
+    values = {
+        "mode":           mode,
+        "description":    field("description"),
+        "gnews_query":    field("gnews_query"),
+        "gnews_category": field("gnews_category"),
+        "newsapi_country":  field("newsapi_country") if mode == "top" else None,
+        "newsapi_category": field("newsapi_category") if mode == "top" else None,
+        "newsapi_query":    field("newsapi_query") if mode == "query" else None,
+    }
+    return values
+
+
+@admin.route("/scheduled-fetches")
+@login_required
+def scheduled_fetches_page():
+    fetches = ScheduledFetch.query.order_by(
+        ScheduledFetch.sort_order.asc(), ScheduledFetch.id.asc()
+    ).all()
+    return render_template(
+        "scheduled_fetches.html", fetches=fetches, modes=SCHEDULED_FETCH_MODES,
+    )
+
+
+@admin.route("/scheduled-fetches/add", methods=["POST"])
+@login_required
+def add_scheduled_fetch():
+    label = request.form.get("label", "").strip()
+
+    if label and not ScheduledFetch.query.filter_by(label=label).first():
+        values = _scheduled_fetch_form_values(request.form)
+        next_order = (db.session.query(func.max(ScheduledFetch.sort_order)).scalar() or 0) + 1
+        db.session.add(ScheduledFetch(
+            label=label, sort_order=next_order, is_active=True, **values
+        ))
+        db.session.commit()
+        logger.info(f"[ScheduledFetches] Added fetch: {label} (mode={values['mode']})")
+    return redirect(url_for("admin.scheduled_fetches_page"))
+
+
+@admin.route("/scheduled-fetches/<int:fetch_id>/update", methods=["POST"])
+@login_required
+def update_scheduled_fetch(fetch_id):
+    fetch = ScheduledFetch.query.get_or_404(fetch_id)
+    label = request.form.get("label", "").strip()
+    sort_order = request.form.get("sort_order", type=int)
+
+    # Labels key per-run metrics, so a collision would silently merge two
+    # fetches' results -- reject the edit and keep the existing label.
+    clash = ScheduledFetch.query.filter(
+        ScheduledFetch.label == label, ScheduledFetch.id != fetch.id
+    ).first()
+    if label and not clash:
+        fetch.label = label
+
+    for key, value in _scheduled_fetch_form_values(request.form).items():
+        setattr(fetch, key, value)
+    if sort_order is not None:
+        fetch.sort_order = sort_order
+    fetch.is_active = request.form.get("is_active") == "on"
+    db.session.commit()
+    return redirect(url_for("admin.scheduled_fetches_page"))
+
+
+@admin.route("/scheduled-fetches/<int:fetch_id>/delete", methods=["POST"])
+@login_required
+def delete_scheduled_fetch(fetch_id):
+    fetch = ScheduledFetch.query.get_or_404(fetch_id)
+    db.session.delete(fetch)
+    db.session.commit()
+    return redirect(url_for("admin.scheduled_fetches_page"))
 
 
 def _is_running_and_fresh(payload):

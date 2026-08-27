@@ -247,6 +247,40 @@ class PipelineSchedule(db.Model):
     is_active         = db.Column(db.Boolean, default=True, nullable=False)
 
 
+class ScheduledFetch(db.Model):
+    """
+    *What* each scheduled run pulls from the news APIs -- the counterpart to
+    PipelineSchedule, which is *when* runs happen.
+
+    One row per category the pipeline queries. `mode` picks the NewsAPI
+    endpoint: "query" hits /everything using `query`, "top" hits
+    /top-headlines using `country` + `category`. The gnews_* columns are the
+    same idea for the GNews provider, kept separate because the two providers
+    have different category vocabularies and phrase-matching behaviour.
+    """
+    __tablename__ = "scheduled_fetches"
+    __table_args__ = (
+        # `label` keys this fetch's slice of the per-run metrics
+        # (run_metrics["topics"]), so duplicate labels would silently
+        # overwrite each other's results.
+        db.UniqueConstraint("label", name="uq_scheduled_fetch_label"),
+    )
+
+    id               = db.Column(db.Integer, primary_key=True)
+    label            = db.Column(db.String, nullable=False)
+    description      = db.Column(db.String, nullable=True)  # blurb for the manual-fetch presets
+    mode             = db.Column(db.String(16), nullable=False, default="query")  # query / top
+    # newsapi_* rather than the bare names: a `query` attribute would shadow
+    # Flask-SQLAlchemy's Model.query, and the prefix pairs with gnews_* below.
+    newsapi_country  = db.Column(db.String(8), nullable=True)   # ISO-2, "top" mode only
+    newsapi_category = db.Column(db.String(32), nullable=True)  # NewsAPI category, "top" mode only
+    newsapi_query    = db.Column(db.String, nullable=True)      # search terms, "query" mode only
+    gnews_query      = db.Column(db.String, nullable=True)
+    gnews_category   = db.Column(db.String(32), nullable=True)
+    sort_order       = db.Column(db.Integer, default=0, nullable=False)
+    is_active        = db.Column(db.Boolean, default=True, nullable=False)
+
+
 class Edition(db.Model):
     __tablename__ = 'editions'
 

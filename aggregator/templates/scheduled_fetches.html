@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
+    <title>Scheduled Fetches — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 1100px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+        .card + .card { margin-top: 24px; }
+        .card-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+        .card-copy { color: var(--text-muted); font-size: 13px; margin-bottom: 18px; }
+        .fetch-row { border-bottom: 1px solid var(--border); padding: 18px 0; }
+        .fetch-row:first-of-type { padding-top: 0; }
+        .fetch-row:last-of-type { border-bottom: none; padding-bottom: 0; }
+        .fetch-row.disabled { opacity: 0.55; }
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px 16px;
+            align-items: end;
+        }
+        label.field { display: flex; flex-direction: column; gap: 5px; }
+        label.field > span {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+        input[type="text"], input[type="number"], select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 7px 9px;
+            font-size: 13px;
+            font-family: inherit;
+            width: 100%;
+        }
+        .row-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .check-label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .save-btn, .add-btn { background: var(--accent); }
+        .save-btn, .add-btn, .delete-btn {
+            color: white;
+            border: none;
+            padding: 7px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .delete-btn { background: #b51a1a; }
+        .hint {
+            font-size: 12px;
+            color: var(--text-faint);
+            margin-top: 14px;
+            line-height: 1.6;
+        }
+        .hint code {
+            background: rgba(0,0,0,0.05);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        [data-theme="dark"] .hint code { background: rgba(255,255,255,0.08); }
+        .empty { padding: 24px; text-align: center; color: var(--text-faint); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('admin.list_articles') }}" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Scheduled Fetches</h1>
+    <p class="subtitle">
+        What each pipeline run pulls from the NewsAPI and GNews providers. This is
+        <em>what</em> gets fetched — <a href="{{ url_for('admin.pipeline_schedule_page') }}">Pipeline Schedule</a>
+        controls <em>when</em>. Changes apply on the next run; no restart needed.
+    </p>
+
+    <div class="card">
+        {% if fetches %}
+        {% for fetch in fetches %}
+        <div class="fetch-row {{ 'disabled' if not fetch.is_active else '' }}">
+            <form method="POST" action="{{ url_for('admin.update_scheduled_fetch', fetch_id=fetch.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="field-grid">
+                    <label class="field">
+                        <span>Label</span>
+                        <input type="text" name="label" value="{{ fetch.label }}" required>
+                    </label>
+                    <label class="field">
+                        <span>Description</span>
+                        <input type="text" name="description" value="{{ fetch.description or '' }}" placeholder="shown on the Fetch page">
+                    </label>
+                    <label class="field">
+                        <span>Mode</span>
+                        <select name="mode">
+                            {% for mode in modes %}
+                            <option value="{{ mode }}" {{ 'selected' if fetch.mode == mode else '' }}>
+                                {{ 'Search (/everything)' if mode == 'query' else 'Top headlines' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>NewsAPI query</span>
+                        <input type="text" name="newsapi_query" value="{{ fetch.newsapi_query or '' }}" placeholder="search mode only">
+                    </label>
+                    <label class="field">
+                        <span>Country</span>
+                        <input type="text" name="newsapi_country" value="{{ fetch.newsapi_country or '' }}" placeholder="top mode only, e.g. us">
+                    </label>
+                    <label class="field">
+                        <span>NewsAPI category</span>
+                        <input type="text" name="newsapi_category" value="{{ fetch.newsapi_category or '' }}" placeholder="top mode only">
+                    </label>
+                    <label class="field">
+                        <span>GNews query</span>
+                        <input type="text" name="gnews_query" value="{{ fetch.gnews_query or '' }}">
+                    </label>
+                    <label class="field">
+                        <span>GNews category</span>
+                        <input type="text" name="gnews_category" value="{{ fetch.gnews_category or '' }}">
+                    </label>
+                    <label class="field" style="max-width: 90px;">
+                        <span>Order</span>
+                        <input type="number" name="sort_order" value="{{ fetch.sort_order }}">
+                    </label>
+                </div>
+                <div class="row-actions">
+                    <label class="check-label">
+                        <input type="checkbox" name="is_active" {{ 'checked' if fetch.is_active else '' }}>
+                        Active
+                    </label>
+                    <button type="submit" class="save-btn">Save</button>
+                </div>
+            </form>
+            <div class="row-actions">
+                <form method="POST" action="{{ url_for('admin.delete_scheduled_fetch', fetch_id=fetch.id) }}" onsubmit="return confirm('Delete the &quot;{{ fetch.label }}&quot; fetch?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="delete-btn">Delete</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty">No scheduled fetches configured — runs will only ingest RSS feeds.</div>
+        {% endif %}
+
+        <div class="hint">
+            <strong>Search</strong> mode queries NewsAPI's <code>/everything</code> endpoint with the query terms.
+            <strong>Top headlines</strong> mode queries <code>/top-headlines</code> with the country and category instead;
+            the unused fields are cleared on save. GNews is queried alongside NewsAPI using its own
+            query/category values, because the two providers don't share a category vocabulary.
+            Labels must be unique — they key each fetch's per-run metrics. Active fetches also appear as one-click presets on the <a href="{{ url_for('admin.fetch_page') }}">Fetch</a> page.
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Add a fetch</div>
+        <div class="card-copy">New fetches are appended to the end of the run order and start active.</div>
+        <form method="POST" action="{{ url_for('admin.add_scheduled_fetch') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-grid">
+                <label class="field">
+                    <span>Label</span>
+                    <input type="text" name="label" placeholder="e.g. Technology" required>
+                </label>
+                <label class="field">
+                    <span>Description</span>
+                    <input type="text" name="description" placeholder="shown on the Fetch page">
+                </label>
+                <label class="field">
+                    <span>Mode</span>
+                    <select name="mode">
+                        {% for mode in modes %}
+                        <option value="{{ mode }}">{{ 'Search (/everything)' if mode == 'query' else 'Top headlines' }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field">
+                    <span>NewsAPI query</span>
+                    <input type="text" name="newsapi_query" placeholder="search mode only">
+                </label>
+                <label class="field">
+                    <span>Country</span>
+                    <input type="text" name="newsapi_country" placeholder="top mode only, e.g. us">
+                </label>
+                <label class="field">
+                    <span>NewsAPI category</span>
+                    <input type="text" name="newsapi_category" placeholder="top mode only">
+                </label>
+                <label class="field">
+                    <span>GNews query</span>
+                    <input type="text" name="gnews_query">
+                </label>
+                <label class="field">
+                    <span>GNews category</span>
+                    <input type="text" name="gnews_category">
+                </label>
+            </div>
+            <div class="row-actions">
+                <button type="submit" class="add-btn">+ Add Fetch</button>
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

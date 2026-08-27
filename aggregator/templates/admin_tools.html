@@ -388,7 +388,7 @@
     <div class="section">
         <div class="section-head">
             <div class="section-title">Configuration</div>
-            <div class="section-copy">Manage the topic taxonomy, RSS feed sources, and the public headlines feed.</div>
+            <div class="section-copy">Manage the topic taxonomy, news sources and queries, LLM prompts, the run schedule, and the public headlines feed.</div>
         </div>
         <div class="tool-list">
             <div class="tool-card">
@@ -410,6 +410,11 @@
                 <div class="tool-card-title">Pipeline Schedule</div>
                 <p>Add, edit, or remove when fetch-only and full-pipeline runs happen.</p>
                 <a href="{{ url_for('admin.pipeline_schedule_page') }}" class="btn btn-secondary">Open Pipeline Schedule</a>
+            </div>
+            <div class="tool-card">
+                <div class="tool-card-title">Scheduled Fetches</div>
+                <p>Edit the NewsAPI/GNews categories and search queries each run pulls from.</p>
+                <a href="{{ url_for('admin.scheduled_fetches_page') }}" class="btn btn-secondary">Open Scheduled Fetches</a>
             </div>
             <div class="tool-card">
                 <div class="tool-card-title">Headlines</div>
