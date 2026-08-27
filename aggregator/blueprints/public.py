@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
-from news_fetcher.llm_client import check_llm_status as check_ollama_status
+from news_fetcher.llm_client import check_llm_status as check_ollama_status, TIER_QUALITY
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def view_story(story_id):
         joinedload(Story.articles).joinedload(Article.outlet)
     ).get_or_404(story_id)
 
-    ollama_online = check_ollama_status()
+    ollama_online = check_ollama_status(TIER_QUALITY)
 
     apply_aggregator_filter(story)
 
@@ -90,7 +90,7 @@ def view_story(story_id):
 @public.route("/article/<int:article_id>")
 def view_article(article_id):
     article = Article.query.get_or_404(article_id)
-    ollama_online = check_ollama_status()
+    ollama_online = check_ollama_status(TIER_QUALITY)
 
     return render_template(
         "article.html",
@@ -102,10 +102,12 @@ def view_article(article_id):
 
 @public.route("/ollama-status")
 def ollama_status():
-    # Unauthenticated route -- only the boolean, never the host/role, which
-    # would otherwise leak internal network details (e.g. a LAN IP) to anyone.
+    # Unauthenticated route -- never the host/role, which would otherwise leak
+    # internal network details (e.g. a LAN IP) to anyone. llm_status_detail_public()
+    # exists to enforce that stripping in one place rather than here.
     # The full detail is available to admins at admin.ollama_status_detail.
-    return jsonify({"online": check_ollama_status()})
+    from news_fetcher.llm_client import llm_status_detail_public
+    return jsonify(llm_status_detail_public())
 
 
 @public.route("/meili-status")

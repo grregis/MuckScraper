@@ -260,7 +260,7 @@ def summarize_story(story):
     if not story.articles:
         return None
 
-    if not check_ollama_status():
+    if not check_ollama_status(llm_client.TIER_QUALITY):
         logger.warning(
             "  [Summarizer] Skipping story summary for '%s': Ollama unavailable.",
             story.title[:80],
@@ -338,7 +338,7 @@ def generate_deep_report(story):
     if not story.articles:
         return None
 
-    if not check_ollama_status():
+    if not check_ollama_status(llm_client.TIER_QUALITY):
         logger.warning(
             "  [Summarizer] Skipping deep report for '%s': Ollama unavailable.",
             story.title[:80],
@@ -501,7 +501,7 @@ def summarize_article(article):
     if not article or not article.content:
         return None
 
-    if not check_ollama_status():
+    if not check_ollama_status(llm_client.TIER_QUALITY):
         logger.warning(
             "  [Summarizer] Skipping article summary for '%s': Ollama unavailable.",
             article.title[:80],
@@ -543,7 +543,7 @@ def generate_article_deep_analysis(article):
     if not article or not article.content or not article_needs_deep_analysis(article):
         return None
 
-    if not check_ollama_status():
+    if not check_ollama_status(llm_client.TIER_QUALITY):
         logger.warning(
             "  [Summarizer] Skipping article deep analysis for '%s': Ollama unavailable.",
             article.title[:80],

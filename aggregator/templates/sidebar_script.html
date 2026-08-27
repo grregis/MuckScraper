@@ -15,27 +15,56 @@
         document.getElementById('sidebar-toggle').textContent = '»';
     }
 
-    // ── Ollama status ──
+    // ── LLM status ──
+    // One row per *distinct* provider, not per tier: LLM_FAST_PROVIDER
+    // defaults to LLM_PROVIDER, so a single-provider install (the default)
+    // renders exactly one row, and two identical rows would be worse than one.
+    function llmProviderLabel(entry, showTier) {
+        const name = entry.provider
+            ? entry.provider.charAt(0).toUpperCase() + entry.provider.slice(1)
+            : 'LLM';
+        let label = entry.online ? `${name} Online` : `${name} Offline`;
+        // Surface a sleeping primary being covered by the fallback host.
+        if (entry.online && entry.role === 'fallback') {
+            label += ' (fallback)';
+        }
+        if (showTier && entry.tier) {
+            label += ` — ${entry.tier}`;
+        }
+        return label;
+    }
+
+    function renderLlmStatus(entries) {
+        const list = document.getElementById('llm-status-list');
+        if (!list) return;
+        const showTier = entries.length > 1;
+        list.innerHTML = '';
+        entries.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'sidebar-status';
+            const dot = document.createElement('div');
+            dot.className = 'status-dot ' + (entry.online ? 'online' : 'offline');
+            const label = document.createElement('span');
+            label.textContent = llmProviderLabel(entry, showTier);
+            row.appendChild(dot);
+            row.appendChild(label);
+            list.appendChild(row);
+        });
+    }
+
     function checkOllamaStatus() {
         fetch('/ollama-status')
             .then(r => r.json())
             .then(data => {
-                const dot   = document.getElementById('ollama-dot');
-                const label = document.getElementById('ollama-label');
-                if (data.online) {
-                    dot.className     = 'status-dot online';
-                    // Flag when the fallback host is serving so a sleeping primary is visible.
-                    label.textContent = (data.role === 'fallback')
-                        ? 'Ollama Online (fallback)'
-                        : 'Ollama Online';
-                } else {
-                    dot.className     = 'status-dot offline';
-                    label.textContent = 'Ollama Offline';
-                }
+                // Fall back to the flat shape if `providers` is ever absent,
+                // so an older cached page still renders something sensible.
+                const entries = (data.providers && data.providers.length)
+                    ? data.providers
+                    : [{provider: data.provider, online: data.online, role: data.role}];
+                renderLlmStatus(entries);
             })
             .catch(() => {
-                document.getElementById('ollama-dot').className = 'status-dot offline';
-                document.getElementById('ollama-label').textContent = 'Ollama Offline';
+                renderLlmStatus([{provider: 'LLM', online: false}]);
             });
     }
 

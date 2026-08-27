@@ -486,12 +486,36 @@ def _get_embedding_gemini(text):
         return None
 
 
-def check_llm_status():
-    if LLM_PROVIDER == "gemini":
+def _check_provider_status(provider):
+    """Liveness for one named provider. Ollama is probed over the network;
+    the cloud providers have no cheap health endpoint, so a configured key is
+    the best available signal."""
+    if provider == "gemini":
         return bool(GEMINI_API_KEY)
-    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
-        return bool(_openai_compatible_config(LLM_PROVIDER)["api_key"])
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
+        return bool(_openai_compatible_config(provider)["api_key"])
     return _check_ollama_status()
+
+
+def check_llm_status(tier=TIER_QUALITY):
+    """Whether the provider serving `tier` is reachable.
+
+    Tier-aware because under split routing a partial outage is the *normal*
+    steady state, not a fault: the Ollama box suspends itself after every run,
+    so "cloud up, local asleep" happens between every pair of runs. A single
+    boolean cannot express "summaries are fine, classification is down", and
+    answering it globally would stop the whole pipeline for a backend that
+    stage never uses.
+
+    Defaults to quality so any caller not yet passing a tier is unchanged.
+    """
+    return _check_provider_status(provider_for_tier(tier))
+
+
+def check_all_llm_status():
+    """{provider: online} for each distinct provider in use -- one entry for a
+    single-provider install, two when the tiers are split."""
+    return {provider: _check_provider_status(provider) for provider in providers_in_use()}
 
 
 def _check_ollama_status():
@@ -513,18 +537,60 @@ def ollama_host_status():
     return {"online": False, "host": None, "role": None}
 
 
+def _provider_status_entry(provider, tier):
+    """One provider's status, tagged with the tier it serves. Ollama carries
+    host/role so a sleeping primary served by the fallback stays visible."""
+    if provider == "ollama":
+        entry = ollama_host_status()
+    else:
+        entry = {"online": _check_provider_status(provider), "host": None, "role": None}
+    entry["provider"] = provider
+    entry["tier"] = tier
+    return entry
+
+
 def llm_status_detail():
-    """Provider-aware status for the /ollama-status route: keeps the `online`
-    boolean the sidebar JS already depends on, plus host/role for Ollama."""
-    if LLM_PROVIDER == "gemini":
-        return {"online": bool(GEMINI_API_KEY), "provider": "gemini", "host": None, "role": None}
-    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
-        return {
-            "online": bool(_openai_compatible_config(LLM_PROVIDER)["api_key"]),
-            "provider": LLM_PROVIDER,
-            "host": None,
-            "role": None,
-        }
-    info = ollama_host_status()
-    info["provider"] = "ollama"
-    return info
+    """Status for the /ollama-status routes.
+
+    `online`, `provider`, `host` and `role` are kept at the top level for the
+    sidebar JS and anything else already reading this shape; `providers` is
+    the per-backend list, one entry per *distinct* provider rather than per
+    tier, so a single-provider install (every existing one) gets exactly one.
+
+    Top-level `online` is the AND across providers: it drives a single
+    summary indicator, where "something the pipeline needs is down" is the
+    useful meaning.
+    """
+    tiers_by_provider = {LLM_PROVIDER: TIER_QUALITY}
+    if LLM_FAST_PROVIDER != LLM_PROVIDER:
+        tiers_by_provider[LLM_FAST_PROVIDER] = TIER_FAST
+
+    providers = [
+        _provider_status_entry(provider, tier)
+        for provider, tier in tiers_by_provider.items()
+    ]
+    primary = providers[0]
+    return {
+        "online": all(entry["online"] for entry in providers),
+        "provider": primary["provider"],
+        "host": primary["host"],
+        "role": primary["role"],
+        "providers": providers,
+    }
+
+
+def llm_status_detail_public():
+    """llm_status_detail() with host/role stripped from every entry.
+
+    The public /ollama-status route is unauthenticated, and host/role would
+    leak internal network details (a LAN IP, and which box is covering for
+    which) to anyone who asks.
+    """
+    detail = llm_status_detail()
+    return {
+        "online": detail["online"],
+        "providers": [
+            {"provider": e["provider"], "tier": e["tier"], "online": e["online"]}
+            for e in detail["providers"]
+        ],
+    }

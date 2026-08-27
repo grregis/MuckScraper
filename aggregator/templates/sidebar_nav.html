@@ -35,9 +35,14 @@
             </div>
 
             <div class="sidebar-footer">
-                <div class="sidebar-status">
-                    <div class="status-dot" id="ollama-dot"></div>
-                    <span id="ollama-label">Ollama Status</span>
+                <!-- Rows are rendered by renderLlmStatus(), one per distinct
+                     provider. This is a pre-poll placeholder only; the ids are
+                     gone because nothing addresses these elements directly. -->
+                <div id="llm-status-list">
+                    <div class="sidebar-status">
+                        <div class="status-dot"></div>
+                        <span>LLM Status</span>
+                    </div>
                 </div>
                 <div class="sidebar-status">
                     <div class="status-dot" id="meili-dot"></div>

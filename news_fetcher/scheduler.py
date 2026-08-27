@@ -614,9 +614,11 @@ def _notify_n8n():
     if not webhook:
         return
     try:
-        from news_fetcher.summarizer import check_ollama_status
-
-        if not check_ollama_status():
+        # Deliberately an Ollama-host probe, not check_llm_status(): this
+        # webhook suspends the physical Ollama box, so it must ask about that
+        # machine rather than about whichever provider serves a tier. On a
+        # cloud-only install there is no box and the probe correctly says no.
+        if not llm_client.ollama_host_status()["online"]:
             logging.info("  [n8n] Ollama already unreachable, skipping suspend webhook")
             return
 
@@ -631,22 +633,38 @@ def _notify_n8n():
 
 
 def _check_ollama_status_for_report(ollama_state, label):
-    from news_fetcher.summarizer import check_ollama_status
+    """Record LLM availability at one point in the run.
 
+    Checks every provider in use, not just one. Under split routing a stage
+    can be skipped for a backend that was never involved, so a single boolean
+    would hide which half was actually down -- and the degrade-don't-stop
+    design means that degraded state needs to be visible in the run metrics
+    rather than only in the logs.
+
+    `up` stays the AND across providers so existing consumers (the n8n report,
+    scrape_outcome_history_v1) keep their meaning: for a single-provider
+    install, which is every install that hasn't set LLM_FAST_PROVIDER, this is
+    byte-identical to the old behavior.
+    """
     try:
-        is_up = check_ollama_status()
+        by_provider = llm_client.check_all_llm_status()
     except Exception as e:
-        logging.warning("  [Ollama] Health check failed during %s (%s)", label, e)
-        is_up = False
+        logging.warning("  [LLM] Health check failed during %s (%s)", label, e)
+        by_provider = {provider: False for provider in llm_client.providers_in_use()}
+
+    is_up = all(by_provider.values()) if by_provider else False
 
     checked_at = datetime.utcnow().isoformat()
     ollama_state["checks"].append({
         "at": checked_at,
         "label": label,
         "up": is_up,
+        "by_provider": by_provider,
     })
     if not is_up:
         ollama_state["went_down_during_run"] = True
+        down = [p for p, ok in by_provider.items() if not ok]
+        logging.info("  [LLM] Provider(s) unavailable at %s: %s", label, ", ".join(down))
     return is_up
 
 

@@ -154,7 +154,7 @@ def generate_headlines_for_stale_stories(lookback_days=STALE_HEADLINE_LOOKBACK_D
     from aggregator import db
     from news_fetcher.summarizer import check_ollama_status
 
-    if not check_ollama_status():
+    if not check_ollama_status(HEADLINE_TIER):
         logger.info("LLM offline, skipping headline generation.")
         return {"status": "skipped", "reason": "llm_offline"}
 

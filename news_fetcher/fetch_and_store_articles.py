@@ -8,6 +8,7 @@ from newsapi import NewsApiClient
 from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
 from news_fetcher.allsides_lookup import get_allsides_score
 from news_fetcher.summarizer import summarize_story, check_ollama_status, generate_deep_report, summarize_article
+from news_fetcher import llm_client as _llm
 from news_fetcher.scraper import scrape_article
 from datetime import datetime
 import requests
@@ -993,8 +994,9 @@ def review_ambiguous_grouping_matches(max_articles=300):
     """
     from news_fetcher.story_grouper import find_matching_story_with_metadata
 
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping ambiguous grouping review.")
+    # Fast tier: the review's only LLM call is ask_ollama_for_match().
+    if not check_ollama_status(_llm.TIER_FAST):
+        logger.info("Fast-tier LLM offline, skipping ambiguous grouping review.")
         return {"status": "skipped_no_ollama", "reviewed": 0, "reassigned": 0}
 
     articles = Article.query.filter(
@@ -1320,8 +1322,8 @@ def regroup_ungrouped_stories():
 
 def generate_missing_deep_reports(batch_size=5):
     """Find multi-article stories picked for headlines that don't have deep reports."""
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping deep report generation.")
+    if not check_ollama_status(_llm.TIER_QUALITY):
+        logger.info("Quality-tier LLM offline, skipping deep report generation.")
         return
 
     from sqlalchemy import func
@@ -1466,8 +1468,8 @@ def force_resummarize_all(batch_size=20):
     Force re-generate summaries and deep reports for all stories and articles
     using the updated specialized journalist personas.
     """
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping force re-summarization.")
+    if not check_ollama_status(_llm.TIER_QUALITY):
+        logger.info("Quality-tier LLM offline, skipping force re-summarization.")
         return
 
     logger.info("=== Force re-summarization starting ===")
@@ -1529,8 +1531,11 @@ def force_regroup_all():
     """
     from news_fetcher.story_grouper import get_embedding, find_matching_story
 
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping force re-group.")
+    # Fast tier: regrouping regenerates embeddings and confirms matches via
+    # ask_ollama_for_match(). Note embeddings follow EMBEDDING_PROVIDER, a
+    # third axis this check has never covered -- see get_embedding().
+    if not check_ollama_status(_llm.TIER_FAST):
+        logger.info("Fast-tier LLM offline, skipping force re-group.")
         return
 
     logger.info("=== Force re-group starting ===")
@@ -1658,8 +1663,8 @@ def reclassify_all_articles(batch_size=50):
     from news_fetcher.topic_classifier import classify_article
     from aggregator.models import Topic as TopicModel
 
-    if not check_ollama_status():
-        logger.info("Ollama offline, skipping reclassification.")
+    if not check_ollama_status(_llm.TIER_FAST):
+        logger.info("Fast-tier LLM offline, skipping reclassification.")
         return
 
     # Clear all existing topic assignments
@@ -1952,7 +1957,8 @@ def process_current_edition(backfill_recent=False):
             "backfilled_edition_ids": [],
         }
 
-    ollama_available = check_ollama_status()
+    # Summaries are the work this gates, so it asks about the quality tier.
+    ollama_available = check_ollama_status(_llm.TIER_QUALITY)
     if not ollama_available:
         logger.warning(
             "[Processor] Ollama unreachable at start of edition processing; "

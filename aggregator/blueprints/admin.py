@@ -12,6 +12,7 @@ from aggregator import db
 from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule, ScheduledFetch, IngestionBlock
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
+from news_fetcher.llm_client import TIER_QUALITY
 from news_fetcher.prompt_registry import validate_prompt_text, invalidate_cache as invalidate_prompt_cache, KNOWN_VARS as PROMPT_KNOWN_VARS
 
 logger = logging.getLogger(__name__)
@@ -245,8 +246,8 @@ def _run_ai_task(app, task_type, resource_id):
                 check_ollama_status,
             )
 
-            if not check_ollama_status():
-                raise RuntimeError("Ollama is offline.")
+            if not check_ollama_status(TIER_QUALITY):
+                raise RuntimeError("The summarization LLM is offline.")
 
             if task_type == "story_summary":
                 story = Story.query.get_or_404(resource_id)
@@ -784,7 +785,7 @@ def summarize_story_route(story_id):
     scrape_status = request.form.get("scrape_status", "").strip() or None
     try:
         from news_fetcher.summarizer import summarize_story, check_ollama_status
-        if check_ollama_status():
+        if check_ollama_status(TIER_QUALITY):
             summary = summarize_story(story)
             if summary:
                 story.summary = summary
@@ -800,7 +801,7 @@ def summarize_article_route(article_id):
     article = Article.query.get_or_404(article_id)
     try:
         from news_fetcher.summarizer import summarize_article, check_ollama_status
-        if check_ollama_status():
+        if check_ollama_status(TIER_QUALITY):
             summary = summarize_article(article)
             if summary:
                 article.summary = summary
@@ -1082,7 +1083,7 @@ def deep_report_route(story_id):
     try:
         if len(story.articles) >= 2:
             from news_fetcher.summarizer import generate_deep_report, check_ollama_status
-            if check_ollama_status():
+            if check_ollama_status(TIER_QUALITY):
                 report = generate_deep_report(story)
                 if report:
                     story.deep_report = report
