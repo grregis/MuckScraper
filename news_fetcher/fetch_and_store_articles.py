@@ -1111,11 +1111,16 @@ def review_ambiguous_grouping_matches(max_articles=300):
             article.grouping_reviewed_at = datetime.utcnow()
             continue
 
+        # exclude_article_id is essential here, not defensive: candidate_stories
+        # includes the article's current story (appended above), so without it
+        # the article matches its own embedding at 1.0 and this pass rubber-
+        # stamps every existing placement instead of reviewing it.
         decision = find_matching_story_with_metadata(
             article.title,
             article.embedding,
             candidate_stories,
             article_content=article.content,
+            exclude_article_id=article.id,
         )
 
         original_story = article.story

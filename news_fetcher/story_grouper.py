@@ -233,7 +233,18 @@ def _candidate_story_ids(stories, max_candidates=3):
     return ids
 
 
-def find_matching_story_with_metadata(article_title, article_embedding, recent_stories, article_content=None, db=None):
+def find_matching_story_with_metadata(article_title, article_embedding, recent_stories, article_content=None, db=None, exclude_article_id=None):
+    """Find the best story match for an article.
+
+    `exclude_article_id` keeps an article from being compared against itself.
+    It matters only when re-matching an article that is *already* attached to
+    one of `recent_stories` -- notably review_ambiguous_grouping_matches(),
+    which appends the article's current story to the candidate pool. Without
+    it the article's own embedding sits in that pool and scores a perfect 1.0,
+    so the match always "confirms" wherever the article already is and the
+    review can never correct a misgrouping. Leave it None on the ingestion
+    path, where the article has no story yet and there is no self to exclude.
+    """
     article_title = strip_video_prefix(article_title)
     if article_embedding is None:
         return MatchDecision()
@@ -330,11 +341,12 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
                         FROM articles a
                         WHERE a.story_id = ANY((:ids)::int[])
                           AND a.embedding IS NOT NULL
+                          AND ((:self_id)::int IS NULL OR a.id <> (:self_id)::int)
                         GROUP BY a.story_id
                         ORDER BY best_sim DESC
                         LIMIT 5
                     """),
-                    {"emb": emb_str, "ids": ids_pg},
+                    {"emb": emb_str, "ids": ids_pg, "self_id": exclude_article_id},
                 ).fetchall()
                 for story_id, sim in rows:
                     sim = float(sim)
@@ -354,6 +366,8 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
                 best_story_score = 0.0
                 for article in articles:
                     try:
+                        if exclude_article_id is not None and article.id == exclude_article_id:
+                            continue
                         if article.embedding is not None:
                             score = cosine_similarity(article_embedding, article.embedding)
                             if score > best_story_score:
@@ -416,13 +430,14 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
     )
 
 
-def find_matching_story(article_title, article_embedding, recent_stories, article_content=None, db=None):
+def find_matching_story(article_title, article_embedding, recent_stories, article_content=None, db=None, exclude_article_id=None):
     return find_matching_story_with_metadata(
         article_title,
         article_embedding,
         recent_stories,
         article_content=article_content,
         db=db,
+        exclude_article_id=exclude_article_id,
     ).story
 
 
