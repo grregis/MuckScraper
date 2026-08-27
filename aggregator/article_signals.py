@@ -59,7 +59,7 @@ LOW_VALUE_URL_HINTS = (
 # editions (2026-08-08 evening, rank 8).
 #
 # Deliberately multi-word phrases only. Single words are unusable here --
-# BLOCKED_TITLE_KEYWORDS does bare substring matching, so "picks" would kill
+# the title_keyword ingestion blocks do bare substring matching, so "picks" would kill
 # "Trump picks Supreme Court nominee" and "odds" would kill "odds of a
 # recession". These patterns were checked against every matching article in the
 # database (203 across 20 outlets) with no false positives.

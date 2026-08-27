@@ -3,7 +3,7 @@
 
 from aggregator import create_app, db
 from aggregator.article_signals import ROUNDUP_TITLE_PATTERNS, bias_bucket_for_score, is_roundup_article, low_value_article_reason
-from aggregator.models import Article, Outlet, Story, Topic
+from aggregator.models import Article, Outlet, Story, Topic, IngestionBlock
 from newsapi import NewsApiClient
 from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
 from news_fetcher.allsides_lookup import get_allsides_score
@@ -26,123 +26,31 @@ logger = logging.getLogger(__name__)
 
 app = create_app()
 
-BLOCKED_SOURCES = [
-    "github.com",
-    "github.blog",
-    "dev.to",
-    "stackoverflow.com",
-    "reddit.com",
-    "npmjs.com",
-    "pypi.org",
-    # Sports-betting tipster sites -- their entire output is odds and picks, so
-    # block at the domain rather than relying on title matching. Mainstream
-    # outlets that also run betting content are handled by
-    # article_signals.BETTING_TITLE_PATTERNS instead, since only part of their
-    # output qualifies.
-    "actionnetwork.com",
-    "vsin.com",
-    "covers.com",
-    "sportsline.com",
-    "lineups.com",
-    # Official league and club media. These are the subject's own press
-    # operation, not journalism -- and because each is stored as its own
-    # outlet, a club write-up counted as independent corroboration of a story
-    # its own team is the subject of. 662 articles, 79 of which reached a
-    # published edition.
-    #
-    # Matching is bare substring against the whole URL, so the league entries
-    # cover their subdomains for free: "nfl.com" catches the
-    # *-frontend.pocket.nfl.com hosts, and "nba.com" catches "wnba.com" and
-    # "fever.wnba.com". Fan blogs are deliberately absent -- elevenwarriors.com
-    # and dailyknicks.com are independent media, however partisan, not PR.
-    "nhl.com",
-    "mlb.com",
-    "nba.com",
-    "nfl.com",
-    "49ers.com",
-    "atlantafalcons.com",
-    "azcardinals.com",
-    "baltimoreravens.com",
-    "bengals.com",
-    "buccaneers.com",
-    "buffalobills.com",
-    "chargers.com",
-    "chicagobears.com",
-    "chiefs.com",
-    "clevelandbrowns.com",
-    "commanders.com",
-    "dallascowboys.com",
-    "denverbroncos.com",
-    "detroitlions.com",
-    "giants.com",
-    "jaguars.com",
-    "miamidolphins.com",
-    "neworleanssaints.com",
-    "newyorkjets.com",
-    "orlandomagic.com",
-    "packers.com",
-    "panthers.com",
-    "patriots.com",
-    "philadelphiaeagles.com",
-    "pistons.com",
-    "raiders.com",
-    "seahawks.com",
-    "steelers.com",
-    "tennesseetitans.com",
-    "therams.com",
-    "timberwolves.com",
-    "vikings.com",
-    # Press-release wires. Corporate announcements carried verbatim, with no
-    # reporting or editorial selection between the subject and the page.
-    "businesswire.com",
-    "prnewswire.com",
-    "prnewswire.co.uk",
-    "globenewswire.com",
-    # Google News is an aggregator, not an outlet. Its links were stored as if
-    # they were original reporting under a "Google News" outlet -- which even
-    # carried a bias_score of 2, so it counted as a left-leaning source in the
-    # edition bias mix. 61 of its 446 articles sat in a story alongside another
-    # article with the identical title: the same piece ingested twice,
-    # inflating outlet counts and showing readers duplicate headlines. None
-    # ever scraped successfully. Ingestion had already tailed off on its own
-    # (190 in April 2026, 3 in August), so this is mostly insurance.
-    "news.google.com",
-]
+BLOCK_KIND_SOURCE = "source"
+BLOCK_KIND_TITLE = "title_keyword"
 
-BLOCKED_TITLE_KEYWORDS = [
-    "starred",
-    "forked",
-    "pull request",
-    "merged",
-    "repository",
-    "npm package",
-    "pypi",
-    "added to pypi",
-    "released on pypi",
-    "week in review",
-    "patch tuesday",
-    "added to npm",
-    "new release:",
-    "changelog:",
-    "box office",
-    "box score",
-    "game recap",
-    "highlights:",
-    "traded to",
-    "signs with",
-    "scores in",
-    "Nintendo",
-    "PlayStation",
-    "Xbox",
-    "Game review",
-    "Gameplay",
-    "eSports",
-    "patch notes",
-    "Twitch",
-    "Fortnite",
-    "Minecraft",
-    "Pokemon",
-]
+
+def get_ingestion_blocks():
+    """
+    The ingestion blocklists -- DB-backed (IngestionBlock, admin-editable at
+    /admin/ingestion-blocks) rather than two hardcoded lists.
+
+    Returns (sources, title_keywords), both lowercased once here so the
+    per-article checks don't re-lower on every comparison and an entry typed
+    as "NFL.com" in the admin still matches. Loaded once per store_articles()
+    batch, not per article: this is the hottest path in the fetch pipeline.
+    """
+    rows = IngestionBlock.query.filter_by(is_active=True).all()
+    sources, title_keywords = [], []
+    for row in rows:
+        pattern = (row.pattern or "").strip().lower()
+        if not pattern:
+            continue
+        if row.kind == BLOCK_KIND_SOURCE:
+            sources.append(pattern)
+        elif row.kind == BLOCK_KIND_TITLE:
+            title_keywords.append(pattern)
+    return sources, title_keywords
 
 GROUPING_LOOKBACK_DAYS = int(os.getenv("MUCKSCRAPER_GROUPING_LOOKBACK_DAYS", "7"))
 
@@ -854,6 +762,10 @@ def store_articles(articles_data, topic_name, provider=None):
         GROUPING_LOOKBACK_DAYS,
     )
 
+    # Same reasoning as the story pre-fetch above: every article in the batch
+    # is tested against these, so load them once rather than per article.
+    blocked_sources, blocked_title_keywords = get_ingestion_blocks()
+
     for article in articles_data:
         title        = article.get("title")
         content      = article.get("content") or ""
@@ -868,7 +780,7 @@ def store_articles(articles_data, topic_name, provider=None):
             
         url = normalize_url(raw_url)
 
-        if any(blocked in url.lower() for blocked in BLOCKED_SOURCES):
+        if any(blocked in url.lower() for blocked in blocked_sources):
             logger.debug(f"Skipping blocked source: {url}")
             metrics["skipped"]["blocked_source"] += 1
             continue
@@ -879,7 +791,7 @@ def store_articles(articles_data, topic_name, provider=None):
             metrics["skipped"][low_value_reason if low_value_reason in metrics["skipped"] else "low_value_url"] += 1
             continue
 
-        if any(kw.lower() in title.lower() for kw in BLOCKED_TITLE_KEYWORDS):
+        if any(kw in title.lower() for kw in blocked_title_keywords):
             logger.debug(f"Skipping blocked title: {title}")
             metrics["skipped"]["blocked_title"] += 1
             continue

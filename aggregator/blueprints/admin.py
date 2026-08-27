@@ -9,7 +9,7 @@ from flask import Blueprint, current_app, render_template, request, redirect, ur
 from flask_login import login_required
 from sqlalchemy import case, func, or_
 from aggregator import db
-from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule, ScheduledFetch
+from aggregator.models import AppSetting, Article, Outlet, Story, Topic, RawArticlePayload, RssFeed, PromptTemplate, PipelineSchedule, ScheduledFetch, IngestionBlock
 from aggregator.search import SearchUnavailableError, reindex_all, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
 from news_fetcher.prompt_registry import validate_prompt_text, invalidate_cache as invalidate_prompt_cache, KNOWN_VARS as PROMPT_KNOWN_VARS
@@ -1477,6 +1477,68 @@ def delete_pipeline_schedule(entry_id):
     db.session.commit()
     _mark_pipeline_schedule_changed()
     return redirect(url_for("admin.pipeline_schedule_page"))
+
+
+INGESTION_BLOCK_KINDS = ["source", "title_keyword"]
+
+
+@admin.route("/ingestion-blocks")
+@login_required
+def ingestion_blocks_page():
+    blocks_by_kind = {
+        kind: IngestionBlock.query.filter_by(kind=kind).order_by(
+            IngestionBlock.note.asc(), IngestionBlock.pattern.asc()
+        ).all()
+        for kind in INGESTION_BLOCK_KINDS
+    }
+    return render_template(
+        "ingestion_blocks.html", blocks_by_kind=blocks_by_kind, kinds=INGESTION_BLOCK_KINDS,
+    )
+
+
+@admin.route("/ingestion-blocks/add", methods=["POST"])
+@login_required
+def add_ingestion_block():
+    kind = request.form.get("kind", "").strip()
+    # Stored lowercase because that is how both checks compare -- normalizing
+    # on the way in keeps the unique constraint honest, so "NFL.com" can't be
+    # added alongside an existing "nfl.com" as a second row that never fires.
+    pattern = request.form.get("pattern", "").strip().lower()
+    note = request.form.get("note", "").strip() or None
+
+    if pattern and kind in INGESTION_BLOCK_KINDS and not IngestionBlock.query.filter_by(kind=kind, pattern=pattern).first():
+        db.session.add(IngestionBlock(kind=kind, pattern=pattern, note=note, is_active=True))
+        db.session.commit()
+        logger.info(f"[IngestionBlocks] Added {kind} block: {pattern}")
+    return redirect(url_for("admin.ingestion_blocks_page"))
+
+
+@admin.route("/ingestion-blocks/<int:block_id>/update", methods=["POST"])
+@login_required
+def update_ingestion_block(block_id):
+    block = IngestionBlock.query.get_or_404(block_id)
+    pattern = request.form.get("pattern", "").strip().lower()
+
+    clash = IngestionBlock.query.filter(
+        IngestionBlock.kind == block.kind,
+        IngestionBlock.pattern == pattern,
+        IngestionBlock.id != block.id,
+    ).first()
+    if pattern and not clash:
+        block.pattern = pattern
+    block.note = request.form.get("note", "").strip() or None
+    block.is_active = request.form.get("is_active") == "on"
+    db.session.commit()
+    return redirect(url_for("admin.ingestion_blocks_page"))
+
+
+@admin.route("/ingestion-blocks/<int:block_id>/delete", methods=["POST"])
+@login_required
+def delete_ingestion_block(block_id):
+    block = IngestionBlock.query.get_or_404(block_id)
+    db.session.delete(block)
+    db.session.commit()
+    return redirect(url_for("admin.ingestion_blocks_page"))
 
 
 SCHEDULED_FETCH_MODES = ["query", "top"]

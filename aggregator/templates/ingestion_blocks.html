@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
+    <title>Ingestion Blocklist — MuckScraper</title>
+    <style>
+        :root {
+            --accent: #5a5f52;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --topbar-bg: #1e1e2e;
+            --topbar-text: #cdd6f4;
+            --text: #1a1a1a;
+            --text-muted: #555;
+            --text-faint: #888;
+            --border: #eef0f2;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+            --bg: #0f0f17;
+            --surface: #1a1a26;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+            --text-faint: #718096;
+            --border: #2d2d3f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        .topbar {
+            background: var(--topbar-bg);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+        .container { max-width: 1000px; margin: 48px auto; padding: 0 20px; }
+        h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 16px; line-height: 1.6; }
+        .subtitle a { color: var(--accent); font-weight: 600; }
+        [data-theme="dark"] .subtitle a { color: #89b4fa; }
+        .notice {
+            background: rgba(37, 99, 235, 0.08);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 32px;
+            color: var(--text-muted);
+        }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .card + .card { margin-top: 28px; }
+        .card-head { padding: 20px 22px 0; }
+        .card-title { font-size: 16px; font-weight: 800; }
+        .card-copy { color: var(--text-muted); font-size: 13px; margin-top: 4px; line-height: 1.6; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th {
+            text-align: left;
+            padding: 10px 22px; font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+        }
+        [data-theme="dark"] th { background: rgba(255,255,255,0.02); }
+        td { padding: 8px 22px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr.disabled { opacity: 0.45; }
+        input[type="text"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+            font-family: inherit;
+            width: 100%;
+        }
+        td.pattern-cell { width: 30%; }
+        td.pattern-cell input { font-family: ui-monospace, monospace; }
+        td.actions { white-space: nowrap; width: 1%; }
+        .save-btn, .add-btn { background: var(--accent); }
+        .save-btn, .add-btn, .delete-btn {
+            color: white;
+            border: none;
+            padding: 6px 13px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .delete-btn { background: #b51a1a; }
+        .add-form {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 18px 22px;
+            flex-wrap: wrap;
+            border-top: 1px solid var(--border);
+            background: rgba(0,0,0,0.015);
+        }
+        [data-theme="dark"] .add-form { background: rgba(255,255,255,0.02); }
+        .add-form input[type="text"] { width: auto; flex: 1; min-width: 160px; }
+        .check-label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .count { color: var(--text-faint); font-size: 12px; font-weight: 600; }
+        .empty { padding: 24px 22px; color: var(--text-faint); font-style: italic; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div>
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('admin.list_articles') }}" style="margin-left: 24px;">← Back to Feed</a>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Ingestion Blocklist</h1>
+    <p class="subtitle">
+        Articles refused before anything is stored. Changes apply on the next run — no restart needed.
+    </p>
+    <div class="notice">
+        <strong>Not the same as the <a href="{{ url_for('admin.scrape_blocklist') }}">Scrape Blocklist</a>.</strong>
+        That one lists domains whose <em>content</em> won't scrape — those articles are still ingested and still
+        count toward a story. These are never stored at all.
+        <br><br>
+        Matching is a plain case-insensitive substring, not a regex or an exact match. That is load-bearing for
+        the league domains — <code>nfl.com</code> is what catches <code>*-frontend.pocket.nfl.com</code>, and
+        <code>nba.com</code> also catches <code>wnba.com</code> — but it cuts both ways, so single common words
+        make bad title keywords: <code>picks</code> would kill "Trump picks Supreme Court nominee".
+        Untick <strong>Active</strong> to disable a rule without losing it.
+    </div>
+
+    {% for kind in kinds %}
+    {% set blocks = blocks_by_kind[kind] %}
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                {{ 'Blocked Sources' if kind == 'source' else 'Blocked Title Keywords' }}
+                <span class="count">— {{ blocks | selectattr('is_active') | list | length }} active of {{ blocks | length }}</span>
+            </div>
+            <div class="card-copy">
+                {% if kind == 'source' %}
+                Matched against the article's URL. Use these for outlets whose entire output is off-limits —
+                official team media, press-release wires, aggregators.
+                {% else %}
+                Matched against the article's headline. Use these for formats rather than outlets —
+                recaps, changelogs, gaming coverage.
+                {% endif %}
+            </div>
+        </div>
+
+        {% if blocks %}
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ 'URL substring' if kind == 'source' else 'Title substring' }}</th>
+                    <th>Why</th>
+                    <th>Active</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for block in blocks %}
+                <tr class="{{ 'disabled' if not block.is_active else '' }}">
+                    <form method="POST" action="{{ url_for('admin.update_ingestion_block', block_id=block.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <td class="pattern-cell"><input type="text" name="pattern" value="{{ block.pattern }}" required></td>
+                        <td><input type="text" name="note" value="{{ block.note or '' }}" placeholder="why this is blocked"></td>
+                        <td><input type="checkbox" name="is_active" {{ 'checked' if block.is_active else '' }}></td>
+                        <td class="actions"><button type="submit" class="save-btn">Save</button></td>
+                    </form>
+                    <td class="actions">
+                        <form method="POST" action="{{ url_for('admin.delete_ingestion_block', block_id=block.id) }}" onsubmit="return confirm('Delete the &quot;{{ block.pattern }}&quot; rule?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="delete-btn">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">Nothing blocked in this category.</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('admin.add_ingestion_block') }}" class="add-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="kind" value="{{ kind }}">
+            <input type="text" name="pattern" placeholder="{{ 'e.g. example.com' if kind == 'source' else 'e.g. game recap' }}" required>
+            <input type="text" name="note" placeholder="why (optional)">
+            <button type="submit" class="add-btn">+ Add Rule</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+</body>
+</html>

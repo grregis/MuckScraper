@@ -201,6 +201,34 @@ class ScrapeBlocklist(db.Model):
     is_permanent = db.Column(db.Boolean, default=False, nullable=False)
 
 
+class IngestionBlock(db.Model):
+    """
+    Articles refused at ingestion, before anything is stored.
+
+    Distinct from ScrapeBlocklist above, which is about domains whose *content*
+    won't scrape -- those articles are still ingested and still count. These
+    are never stored at all.
+
+    `kind` picks what the pattern is tested against: "source" is a bare
+    substring of the normalized URL, "title_keyword" a bare substring of the
+    title. Both are matched case-insensitively. Substring rather than exact
+    match is load-bearing for the league domains -- "nfl.com" is what catches
+    the *-frontend.pocket.nfl.com hosts, and "nba.com" is what catches
+    "wnba.com" -- so entries want to be specific enough not to over-match.
+    """
+    __tablename__ = "ingestion_blocks"
+    __table_args__ = (
+        db.UniqueConstraint("kind", "pattern", name="uq_ingestion_block_kind_pattern"),
+    )
+
+    id        = db.Column(db.Integer, primary_key=True)
+    kind      = db.Column(db.String(16), nullable=False)  # source / title_keyword
+    pattern   = db.Column(db.String, nullable=False)
+    note      = db.Column(db.String, nullable=True)  # why this is blocked
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    added_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class RssFeed(db.Model):
     __tablename__ = "rss_feeds"
     __table_args__ = (
