@@ -40,7 +40,7 @@ Most aggregators are just article lists. MuckScraper is story-first.
 
 - **Cross-outlet story grouping**: related coverage from multiple publishers is clustered into a single story so you can compare framing side by side.
 - **Bias visibility**: outlets are labeled on a left-to-right scale using AllSides where available and local model scoring otherwise.
-- **Local AI analysis**: summaries, deep reports, topic classification, and outlet scoring run against your own Ollama-compatible models.
+- **Local-first AI analysis**: summaries, deep reports, topic classification, and outlet scoring run against your own Ollama models by default. Gemini, Groq, and any OpenAI-compatible endpoint (OpenRouter, DeepSeek, OpenAI, a local vLLM) are supported alternatives, and the two workloads can be split across providers — see LLM behavior below.
 - **Edition workflow**: the system can publish fixed-size headline editions from the broader story pool instead of leaving everything as a raw reverse-chronological feed.
 - **Self-hosted**: no subscription requirement, no ad-tech, and no mandatory third-party cloud inference.
 
@@ -58,7 +58,7 @@ MuckScraper fetches articles from multiple news APIs and RSS feeds on a schedule
 - **Database:** PostgreSQL with pgvector
 - **Search:** Meilisearch
 - **News Data:** NewsAPI and GNews, with RSS support
-- **LLM Runtime:** Ollama-compatible local models
+- **LLM Runtime:** Ollama by default; Gemini, Groq, or any OpenAI-compatible endpoint optional
 - **Embeddings:** `nomic-embed-text`
 - **Scraping:** BeautifulSoup, readability-lxml, Playwright
 - **Runtime:** Docker and Docker Compose
@@ -226,19 +226,52 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 
 ## Customization
 
-### Topics, RSS feeds, prompts, and schedule
+### Topics, feeds, queries, prompts, filters, and schedule
 
-These are DB-backed and admin-editable, no code change needed:
+All DB-backed and admin-editable, no code change needed:
 - Topics: `/admin/topics`
 - RSS feeds: `/admin/rss-feeds`
 - LLM prompts: `/admin/prompts` (each resettable back to its original default)
-- Pipeline run schedule (when fetch-only vs. full-pipeline runs happen): `/admin/pipeline-schedule`
+- Pipeline run schedule — *when* fetch-only vs. full-pipeline runs happen: `/admin/pipeline-schedule`
+- Scheduled fetches — *what* each run pulls from NewsAPI/GNews: `/admin/scheduled-fetches`
+- Ingestion blocklist — sources and headline keywords refused before anything is
+  stored: `/admin/ingestion-blocks`
 
-Still hardcoded, requiring a code change:
-- Which NewsAPI/GNews categories get queried on each scheduled run:
-  `SCHEDULED_FETCHES` in `news_fetcher/scheduler.py`
+The last two are what closed [issue #1](https://github.com/grregis/MuckScraper/issues/1).
+The shipped defaults reflect the maintainer's reading habits — US-centric topics,
+a gaming-news filter — but they are defaults now rather than the only option, so
+adapting the project to a different beat no longer means a fork.
 
 ### LLM behavior
+
+**Choosing a provider (`LLM_PROVIDER`).** Ollama is the default and the point of
+the project, but `LLM_PROVIDER` also accepts `gemini`, `groq`, and `openrouter`.
+The OpenRouter path is a generic OpenAI-compatible client — set `OPENROUTER_HOST`
+to any endpoint speaking `chat/completions` (DeepSeek, OpenAI, Together, a local
+vLLM) and it works with no code change. Embeddings are a separate axis
+(`EMBEDDING_PROVIDER`) and only Ollama and Gemini can serve them; Groq has no
+embedding models and OpenRouter routes chat completions only.
+
+**Splitting the two workloads (`LLM_FAST_PROVIDER`).** A run makes ~1,140
+mechanical calls against ~65 summary/deep-report calls (see below). Those two
+groups can go to *different* providers, which is the answer to "my GPU can't run
+a model good enough for summaries":
+
+```
+LLM_PROVIDER=openrouter      # the ~65 summaries and deep reports
+LLM_FAST_PROVIDER=ollama     # the ~1,140 grouping/classification/bias calls
+```
+
+The volume stays local and free; only the handful of calls a reader actually
+sees go to the cloud. Note the ordering reads backwards from "send simple things
+to Ollama" — the global is the cloud provider and Ollama is the exception —
+because that is the only arrangement where leaving `LLM_FAST_PROVIDER` blank
+keeps single-provider installs behaving exactly as before.
+
+Health checks are per-tier, so the pipeline degrades rather than stops: if the
+local box is asleep, summaries still run and only classification is skipped, and
+vice versa. This closed
+[issue #8](https://github.com/grregis/MuckScraper/issues/8).
 
 **Model tiers (`OLLAMA_FAST_MODEL`).** A full pipeline run makes roughly 1,200
 sequential LLM calls, and about 1,140 of them are mechanical — story-grouping
@@ -271,7 +304,9 @@ selection, story-grouping thresholds, etc. — still lives in:
 
 Important knobs include:
 - similarity thresholds in `news_fetcher/story_grouper.py`
-- blocklists and ingest filters in `news_fetcher/fetch_and_store_articles.py`
+- heuristic ingest filters (roundup/advice-column/betting title patterns) in
+  `aggregator/article_signals.py` — the source and headline-keyword blocklists
+  themselves are admin-editable at `/admin/ingestion-blocks`
 - retry and cooldown behavior in `news_fetcher/scraper.py`
 
 ---
