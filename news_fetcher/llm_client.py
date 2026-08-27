@@ -56,7 +56,12 @@ GEMINI_FAST_MODEL = os.environ.get("GEMINI_FAST_MODEL", "") or GEMINI_MODEL
 GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+# No default model name on purpose. This used to default to
+# "llama-3.1-8b-instant", which Groq has since retired -- so the default sent
+# every call to a model that 404s, and the failure surfaced as a generic
+# generate error rather than a config problem. An unset value now reads as
+# "not configured" via is_configured(), which fails once and legibly.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "")
 GROQ_FAST_MODEL = os.environ.get("GROQ_FAST_MODEL", "") or GROQ_MODEL
 GROQ_HOST = os.environ.get("GROQ_HOST", "https://api.groq.com/openai/v1")
 
@@ -133,10 +138,11 @@ def is_configured():
         return bool(GEMINI_API_KEY)
     if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
         config = _openai_compatible_config(LLM_PROVIDER)
-        # A model name is required here but not for Groq, which defaults to a
-        # real one; OpenRouter has no sensible default, so an unset
-        # OPENROUTER_MODEL must read as "not configured" rather than send an
-        # empty model name on every call.
+        # Both providers in this family require an explicit model name.
+        # Neither has a default that stays valid -- provider catalogues change
+        # under you (Groq retired the old llama-3.1-8b-instant default) -- so
+        # an unset model must read as "not configured" rather than send an
+        # empty or dead model name on every call.
         return bool(config["api_key"] and config["model"])
     return bool(OLLAMA_HOST and OLLAMA_MODEL)
 
