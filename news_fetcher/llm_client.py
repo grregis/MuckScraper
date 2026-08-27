@@ -1,10 +1,14 @@
 # news_fetcher/llm_client.py
 #
 # Thin dispatch layer so the rest of the pipeline doesn't care whether the
-# backend is a home Ollama box or Gemini. Selected independently for text
-# generation and embeddings via LLM_PROVIDER / EMBEDDING_PROVIDER so either
-# can be flipped back to "ollama" with no code changes once Ollama is
-# reachable again.
+# backend is a home Ollama box, Gemini, or any OpenAI-compatible endpoint
+# (Groq, OpenRouter, and through OpenRouter's base URL anything else speaking
+# that API). Selected independently for text generation and embeddings via
+# LLM_PROVIDER / EMBEDDING_PROVIDER so either can be flipped back to "ollama"
+# with no code changes once Ollama is reachable again.
+#
+# Note the asymmetry: every provider here can generate text, but only Ollama
+# and Gemini can produce embeddings -- see get_embedding().
 
 import os
 import time
@@ -54,6 +58,57 @@ GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedd
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_FAST_MODEL = os.environ.get("GROQ_FAST_MODEL", "") or GROQ_MODEL
+GROQ_HOST = os.environ.get("GROQ_HOST", "https://api.groq.com/openai/v1")
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "")
+OPENROUTER_FAST_MODEL = os.environ.get("OPENROUTER_FAST_MODEL", "") or OPENROUTER_MODEL
+OPENROUTER_HOST = os.environ.get("OPENROUTER_HOST", "https://openrouter.ai/api/v1")
+# OpenRouter uses these purely for attribution on its public leaderboards; both
+# are optional and sending neither is fine.
+OPENROUTER_SITE_URL = os.environ.get("OPENROUTER_SITE_URL", "")
+OPENROUTER_APP_NAME = os.environ.get("OPENROUTER_APP_NAME", "")
+
+
+def _openrouter_headers():
+    headers = {}
+    if OPENROUTER_SITE_URL:
+        headers["HTTP-Referer"] = OPENROUTER_SITE_URL
+    if OPENROUTER_APP_NAME:
+        headers["X-Title"] = OPENROUTER_APP_NAME
+    return headers
+
+
+# Providers that speak the OpenAI `chat/completions` API. Adding one is a
+# config entry, not a code path: any endpoint with that shape -- DeepSeek,
+# OpenAI itself, Together, a local vLLM -- works by pointing *_HOST at it.
+#
+# Read through _openai_compatible_config() rather than directly, so tests can
+# monkeypatch the module-level vars the way they already do for Ollama/Gemini.
+OPENAI_COMPATIBLE_PROVIDERS = ("groq", "openrouter")
+
+
+def _openai_compatible_config(provider):
+    if provider == "groq":
+        return {
+            "base_url": GROQ_HOST,
+            "api_key": GROQ_API_KEY,
+            "model": GROQ_MODEL,
+            "fast_model": GROQ_FAST_MODEL,
+            "headers": {},
+            "label": "Groq",
+        }
+    if provider == "openrouter":
+        return {
+            "base_url": OPENROUTER_HOST,
+            "api_key": OPENROUTER_API_KEY,
+            "model": OPENROUTER_MODEL,
+            "fast_model": OPENROUTER_FAST_MODEL,
+            "headers": _openrouter_headers(),
+            "label": "OpenRouter",
+        }
+    return None
+
 
 # Tiers accepted by generate_text(). "quality" is the default so any existing
 # call site keeps using the main model until it is explicitly opted in.
@@ -76,8 +131,13 @@ def is_configured():
     that decided whether an LLM-backed step should run at all."""
     if LLM_PROVIDER == "gemini":
         return bool(GEMINI_API_KEY)
-    if LLM_PROVIDER == "groq":
-        return bool(GROQ_API_KEY)
+    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
+        config = _openai_compatible_config(LLM_PROVIDER)
+        # A model name is required here but not for Groq, which defaults to a
+        # real one; OpenRouter has no sensible default, so an unset
+        # OPENROUTER_MODEL must read as "not configured" rather than send an
+        # empty model name on every call.
+        return bool(config["api_key"] and config["model"])
     return bool(OLLAMA_HOST and OLLAMA_MODEL)
 
 
@@ -90,8 +150,9 @@ def model_for_tier(tier=TIER_QUALITY):
     fast = tier == TIER_FAST
     if LLM_PROVIDER == "gemini":
         return GEMINI_FAST_MODEL if fast else GEMINI_MODEL
-    if LLM_PROVIDER == "groq":
-        return GROQ_FAST_MODEL if fast else GROQ_MODEL
+    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
+        config = _openai_compatible_config(LLM_PROVIDER)
+        return config["fast_model"] if fast else config["model"]
     return OLLAMA_FAST_MODEL if fast else OLLAMA_MODEL
 
 
@@ -106,8 +167,8 @@ def generate_text(prompt, timeout=30, tier=TIER_QUALITY):
     model = model_for_tier(tier)
     if LLM_PROVIDER == "gemini":
         return _generate_text_gemini(prompt, timeout, model)
-    if LLM_PROVIDER == "groq":
-        return _generate_text_groq(prompt, timeout, model)
+    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
+        return _generate_text_openai_compatible(prompt, timeout, model, LLM_PROVIDER)
     return _generate_text_ollama(prompt, timeout, model)
 
 
@@ -233,45 +294,105 @@ def _generate_text_gemini(prompt, timeout, model=None):
 
 GROQ_MAX_RETRIES = 2
 GROQ_MAX_RETRY_WAIT_SECONDS = 65
+# Kept under the old Groq-specific names because the retry behavior and the
+# tuning behind it are unchanged; they now apply to every OpenAI-compatible
+# provider, which is what the 429 handling was always really about.
+OPENAI_COMPATIBLE_MAX_RETRIES = GROQ_MAX_RETRIES
+OPENAI_COMPATIBLE_MAX_RETRY_WAIT_SECONDS = GROQ_MAX_RETRY_WAIT_SECONDS
 
 
-def _generate_text_groq(prompt, timeout, model=None, _attempt=0):
-    if not GROQ_API_KEY:
+def _generate_text_openai_compatible(prompt, timeout, model, provider, _attempt=0):
+    """One implementation of the OpenAI `chat/completions` shape, shared by
+    every provider that speaks it.
+
+    Groq and OpenRouter differ only in base URL, key and optional headers, so
+    they are config rather than separate functions -- which is what makes "any
+    OpenAI-compatible endpoint" work without new code.
+    """
+    config = _openai_compatible_config(provider)
+    if not config or not config["api_key"]:
         return None
-    model = model or GROQ_MODEL
+    model = model or config["model"]
+    label = config["label"]
+    headers = {"Authorization": f"Bearer {config['api_key']}", **config["headers"]}
     try:
         response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            f"{config['base_url'].rstrip('/')}/chat/completions",
+            headers=headers,
             json={
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
             },
             timeout=timeout,
         )
-        if response.status_code == 429 and _attempt < GROQ_MAX_RETRIES:
-            # Groq's free tier is limited to 6,000 tokens/minute (TPM), which
-            # large summary/deep-report prompts can exceed on their own -- a
-            # 429 here usually just means "wait out this minute's window",
-            # unlike Gemini's per-day quota where retrying is futile.
+        if response.status_code == 429 and _attempt < OPENAI_COMPATIBLE_MAX_RETRIES:
+            # A 429 from these providers is usually a per-minute window rather
+            # than a hard quota -- Groq's free tier caps at 6,000 tokens/minute,
+            # which a single large summary prompt can exceed on its own -- so
+            # waiting it out works, unlike Gemini's per-day quota where a retry
+            # is futile.
             wait_seconds = min(
                 float(response.headers.get("Retry-After", 15)) + 1,
-                GROQ_MAX_RETRY_WAIT_SECONDS,
+                OPENAI_COMPATIBLE_MAX_RETRY_WAIT_SECONDS,
             )
-            logger.info(f"  [llm_client] Groq rate-limited, retrying in {wait_seconds:.0f}s")
+            logger.info(f"  [llm_client] {label} rate-limited, retrying in {wait_seconds:.0f}s")
             time.sleep(wait_seconds)
-            return _generate_text_groq(prompt, timeout, model, _attempt=_attempt + 1)
+            return _generate_text_openai_compatible(
+                prompt, timeout, model, provider, _attempt=_attempt + 1
+            )
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
         return (text or "").strip() or None
     except Exception as e:
-        logger.info(f"  [llm_client] Groq generate error: {e}")
+        logger.info(f"  [llm_client] {label} generate error: {e}")
         return None
 
 
+def _generate_text_groq(prompt, timeout, model=None, _attempt=0):
+    """Retained as a named entry point: it predates the generalization and is
+    referenced by existing tests and call sites."""
+    return _generate_text_openai_compatible(prompt, timeout, model, "groq", _attempt=_attempt)
+
+
+def _generate_text_openrouter(prompt, timeout, model=None, _attempt=0):
+    return _generate_text_openai_compatible(prompt, timeout, model, "openrouter", _attempt=_attempt)
+
+
+# Providers with no embedding endpoint at all. Kept separate from a plain
+# "unknown value" so the warning can say *why* rather than just "unrecognized".
+_NO_EMBEDDING_PROVIDERS = {
+    "groq": "Groq serves no embedding models",
+    "openrouter": "OpenRouter routes chat completions only, not embeddings",
+}
+_warned_embedding_providers = set()
+
+
 def get_embedding(text):
+    """Embed `text` with EMBEDDING_PROVIDER, falling back to Ollama.
+
+    The fallback is deliberate and long-standing, but it used to be silent,
+    which is a trap now that LLM_PROVIDER accepts providers that cannot embed:
+    setting EMBEDDING_PROVIDER to match would quietly keep using Ollama's
+    vectors while looking configured. Warn once per provider instead of
+    per call -- this runs for every ingested article.
+
+    Note that switching embedding providers for real is never just a config
+    change: vectors from different models aren't comparable, so it needs a
+    re-embed of the whole corpus (and a migration if the dimensions differ
+    from Story.embedding's Vector(768)) or story grouping silently degrades.
+    """
     if EMBEDDING_PROVIDER == "gemini":
         return _get_embedding_gemini(text)
+    if EMBEDDING_PROVIDER not in ("ollama", "") and EMBEDDING_PROVIDER not in _warned_embedding_providers:
+        _warned_embedding_providers.add(EMBEDDING_PROVIDER)
+        reason = _NO_EMBEDDING_PROVIDERS.get(
+            EMBEDDING_PROVIDER, f"'{EMBEDDING_PROVIDER}' is not a recognized embedding provider"
+        )
+        logger.warning(
+            "  [llm_client] EMBEDDING_PROVIDER=%s but %s -- using Ollama for embeddings. "
+            "Set EMBEDDING_PROVIDER=ollama or gemini to silence this.",
+            EMBEDDING_PROVIDER, reason,
+        )
     return _get_embedding_ollama(text)
 
 
@@ -321,8 +442,8 @@ def _get_embedding_gemini(text):
 def check_llm_status():
     if LLM_PROVIDER == "gemini":
         return bool(GEMINI_API_KEY)
-    if LLM_PROVIDER == "groq":
-        return bool(GROQ_API_KEY)
+    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
+        return bool(_openai_compatible_config(LLM_PROVIDER)["api_key"])
     return _check_ollama_status()
 
 
@@ -350,8 +471,13 @@ def llm_status_detail():
     boolean the sidebar JS already depends on, plus host/role for Ollama."""
     if LLM_PROVIDER == "gemini":
         return {"online": bool(GEMINI_API_KEY), "provider": "gemini", "host": None, "role": None}
-    if LLM_PROVIDER == "groq":
-        return {"online": bool(GROQ_API_KEY), "provider": "groq", "host": None, "role": None}
+    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
+        return {
+            "online": bool(_openai_compatible_config(LLM_PROVIDER)["api_key"]),
+            "provider": LLM_PROVIDER,
+            "host": None,
+            "role": None,
+        }
     info = ollama_host_status()
     info["provider"] = "ollama"
     return info
