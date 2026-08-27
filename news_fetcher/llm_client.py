@@ -18,6 +18,13 @@ import requests
 logger = logging.getLogger(__name__)
 
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
+# Optional separate provider for the fast tier, so the ~1,140 mechanical calls
+# in a run can go somewhere different from the ~65 summary/deep-report calls --
+# e.g. a local Ollama box for classification with a cloud model for summaries.
+# Blank means "same as LLM_PROVIDER", exactly the convention OLLAMA_FAST_MODEL
+# and friends already use, so an install that only ever set LLM_PROVIDER keeps
+# sending everything to one backend.
+LLM_FAST_PROVIDER = os.environ.get("LLM_FAST_PROVIDER", "").strip().lower() or LLM_PROVIDER
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "ollama").strip().lower()
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "")
@@ -120,6 +127,29 @@ def _openai_compatible_config(provider):
 TIER_QUALITY = "quality"
 TIER_FAST = "fast"
 
+
+def provider_for_tier(tier=TIER_QUALITY):
+    """Which provider serves a given tier.
+
+    The counterpart to model_for_tier(): that picks a model *within* a
+    provider, this picks the provider itself. An unrecognized tier resolves to
+    the quality provider, matching model_for_tier()'s degrade-to-quality rule.
+    """
+    return LLM_FAST_PROVIDER if tier == TIER_FAST else LLM_PROVIDER
+
+
+def providers_in_use():
+    """Distinct providers this install actually routes to, quality first.
+
+    One entry for every existing install, since LLM_FAST_PROVIDER defaults to
+    LLM_PROVIDER -- callers should render per-provider UI off this rather than
+    off the tier count, or a single-provider setup shows two identical rows.
+    """
+    providers = [LLM_PROVIDER]
+    if LLM_FAST_PROVIDER != LLM_PROVIDER:
+        providers.append(LLM_FAST_PROVIDER)
+    return providers
+
 _gemini_client = None
 
 
@@ -131,13 +161,22 @@ def _get_gemini_client():
     return _gemini_client
 
 
-def is_configured():
-    """Provider-agnostic replacement for the old `if OLLAMA_HOST:` gates
-    that decided whether an LLM-backed step should run at all."""
-    if LLM_PROVIDER == "gemini":
+def is_configured(tier=TIER_QUALITY):
+    """Whether the provider serving `tier` has enough config to be called.
+
+    Provider-agnostic replacement for the old `if OLLAMA_HOST:` gates that
+    decided whether an LLM-backed step should run at all.
+
+    The tier argument matters under split routing: every current caller is a
+    fast-tier call site (story grouping, topic classification), so checking
+    the global provider would gate their work on a backend they never use.
+    Defaults to quality so existing callers are unchanged.
+    """
+    provider = provider_for_tier(tier)
+    if provider == "gemini":
         return bool(GEMINI_API_KEY)
-    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
-        config = _openai_compatible_config(LLM_PROVIDER)
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
+        config = _openai_compatible_config(provider)
         # Both providers in this family require an explicit model name.
         # Neither has a default that stays valid -- provider catalogues change
         # under you (Groq retired the old llama-3.1-8b-instant default) -- so
@@ -154,10 +193,11 @@ def model_for_tier(tier=TIER_QUALITY):
     to the old behavior (slower but correct) instead of sending a bad model
     name the provider would reject."""
     fast = tier == TIER_FAST
-    if LLM_PROVIDER == "gemini":
+    provider = provider_for_tier(tier)
+    if provider == "gemini":
         return GEMINI_FAST_MODEL if fast else GEMINI_MODEL
-    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
-        config = _openai_compatible_config(LLM_PROVIDER)
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
+        config = _openai_compatible_config(provider)
         return config["fast_model"] if fast else config["model"]
     return OLLAMA_FAST_MODEL if fast else OLLAMA_MODEL
 
@@ -170,11 +210,12 @@ def generate_text(prompt, timeout=30, tier=TIER_QUALITY):
     yes/no, or a short headline; TIER_QUALITY (the default) for summaries and
     deep reports, where the larger model's output is what readers actually see.
     """
+    provider = provider_for_tier(tier)
     model = model_for_tier(tier)
-    if LLM_PROVIDER == "gemini":
+    if provider == "gemini":
         return _generate_text_gemini(prompt, timeout, model)
-    if LLM_PROVIDER in OPENAI_COMPATIBLE_PROVIDERS:
-        return _generate_text_openai_compatible(prompt, timeout, model, LLM_PROVIDER)
+    if provider in OPENAI_COMPATIBLE_PROVIDERS:
+        return _generate_text_openai_compatible(prompt, timeout, model, provider)
     return _generate_text_ollama(prompt, timeout, model)
 
 

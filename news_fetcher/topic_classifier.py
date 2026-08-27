@@ -65,7 +65,7 @@ def classify_article(title, content_snippet=""):
     Returns a list of topic label strings.
     Falls back to ["Other"] if Ollama is unavailable or classification fails.
     """
-    if not llm_client.is_configured():
+    if not llm_client.is_configured(llm_client.TIER_FAST):
         return ["Other"]
 
     valid_topics = _active_topic_names()
@@ -88,7 +88,7 @@ def classify_article(title, content_snippet=""):
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
-            "provider": llm_client.LLM_PROVIDER,
+            "provider": llm_client.provider_for_tier(llm_client.TIER_FAST),
             "model": llm_client.model_for_tier(llm_client.TIER_FAST),
         }
     )

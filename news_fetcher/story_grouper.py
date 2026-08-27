@@ -287,7 +287,7 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             candidate_story_ids=_candidate_story_ids([best_title_match]),
         )
 
-    if overlap_candidates and llm_client.is_configured():
+    if overlap_candidates and llm_client.is_configured(llm_client.TIER_FAST):
         overlap_candidates.sort(key=lambda item: item[0], reverse=True)
         unique_candidates = []
         seen_story_ids = set()
@@ -389,7 +389,7 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             candidate_story_ids=_candidate_story_ids([best_story]),
         )
 
-    if best_global_score >= LOWER_THRESHOLD and best_story and llm_client.is_configured():
+    if best_global_score >= LOWER_THRESHOLD and best_story and llm_client.is_configured(llm_client.TIER_FAST):
         logger.info(f"  [Grouper] Ambiguous match (score: {best_global_score:.3f}), asking Ollama...")
         logger.info(f"  [Grouper] article_content present: {bool(article_content)}, length: {len(article_content) if article_content else 0}")
 
@@ -544,7 +544,7 @@ def ask_ollama_for_match(article_title, candidate_stories, article_content=None,
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
-            "provider": llm_client.LLM_PROVIDER,
+            "provider": llm_client.provider_for_tier(llm_client.TIER_FAST),
             "model": llm_client.model_for_tier(llm_client.TIER_FAST),
         }
     )

@@ -47,7 +47,7 @@ def generate_story_headline(story):
     Returns a headline string or None if the LLM provider is unavailable.
     Only runs if the story has 2+ articles.
     """
-    if not llm_client.is_configured():
+    if not llm_client.is_configured(HEADLINE_TIER):
         logger.warning("LLM provider not configured, skipping headline generation.")
         return None
 
@@ -73,7 +73,7 @@ def generate_story_headline(story):
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
-            "provider": llm_client.LLM_PROVIDER,
+            "provider": llm_client.provider_for_tier(HEADLINE_TIER),
             "model": llm_client.model_for_tier(HEADLINE_TIER),
         }
     )

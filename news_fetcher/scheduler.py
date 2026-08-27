@@ -850,18 +850,21 @@ def run_all_fetches(run_full_pipeline=True):
                 logging.error(f"Error reviewing ambiguous grouping matches: {e}")
                 run_metrics["status"] = "partial_error"
                 run_metrics["steps"]["review_ambiguous_grouping_matches"] = {"status": "error", "reason": str(e)}
-            if llm_client.LLM_PROVIDER == "groq":
+            # Keyed on the fast provider: the load this guards against is
+            # classification and bias rating, both fast-tier, so the global
+            # provider is the wrong thing to ask under split routing.
+            if llm_client.provider_for_tier(llm_client.TIER_FAST) == "groq":
                 # Targeted left/right RSS enrichment adds meaningful classification/
                 # bias-rating LLM load on top of the regular fetch; skip it on Groq's
                 # free tier. Re-enable once Ollama is back.
-                logging.info("--- Skipping targeted left/right RSS enrichment passes (LLM_PROVIDER=groq) ---")
+                logging.info("--- Skipping targeted left/right RSS enrichment passes (fast tier on groq) ---")
                 for step in (
                     "targeted_right_rss_enrichment", "targeted_right_rss_bias_retry",
                     "targeted_right_rss_enrichment_second_pass", "targeted_right_rss_second_pass_bias_retry",
                     "targeted_left_rss_enrichment", "targeted_left_rss_bias_retry",
                     "targeted_left_rss_enrichment_second_pass", "targeted_left_rss_second_pass_bias_retry",
                 ):
-                    run_metrics["steps"][step] = {"status": "skipped", "reason": "groq_provider"}
+                    run_metrics["steps"][step] = {"status": "skipped", "reason": "groq_fast_provider"}
             else:
                 _run_targeted_rss_enrichment_pass(RIGHT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)
                 _run_targeted_rss_enrichment_pass(LEFT_RSS_ENRICHMENT_CONFIG, run_metrics, ollama_state)

@@ -32,7 +32,7 @@ def _ask_ollama(prompt):
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
-            "provider": llm_client.LLM_PROVIDER,
+            "provider": llm_client.provider_for_tier(llm_client.TIER_FAST),
             "model": llm_client.model_for_tier(llm_client.TIER_FAST),
         }
     )
@@ -70,7 +70,7 @@ def get_outlet_bias_from_llm(outlet_name):
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={"provider": llm_client.provider_for_tier(llm_client.TIER_FAST)}
     )
     raw = _ask_ollama(prompt)
     langfuse_context.update_current_observation(
@@ -98,7 +98,7 @@ def get_article_bias_from_llm(title, content=None):
 
     langfuse_context.update_current_observation(
         input=prompt,
-        metadata={"provider": llm_client.LLM_PROVIDER}
+        metadata={"provider": llm_client.provider_for_tier(llm_client.TIER_FAST)}
     )
     raw = _ask_ollama(prompt)
     langfuse_context.update_current_observation(

@@ -102,14 +102,21 @@ def fetch_and_store_rss():
     classification, and story grouping as NewsAPI/GNews articles.
     Must be called within a Flask app context.
 
-    While LLM_PROVIDER=groq, entries per feed are capped well below the normal
-    30 — every stored article costs at least one classify_article() call, and
-    Groq's free-tier TPM budget can't keep up with the full wire-service volume.
+    While Groq serves the fast tier, entries per feed are capped well below the
+    normal 30 — every stored article costs at least one classify_article()
+    call, and Groq's free-tier TPM budget can't keep up with the full
+    wire-service volume.
+
+    Keyed on the *fast* provider, not the global one: classification is a
+    fast-tier call, so under split routing (LLM_PROVIDER=openrouter +
+    LLM_FAST_PROVIDER=groq) the global provider says nothing about whether
+    this budget applies.
     """
     from news_fetcher.fetch_and_store_articles import store_articles
     from news_fetcher import llm_client
 
-    max_entries = RSS_MAX_ENTRIES_PER_FEED_GROQ if llm_client.LLM_PROVIDER == "groq" else 30
+    fast_provider = llm_client.provider_for_tier(llm_client.TIER_FAST)
+    max_entries = RSS_MAX_ENTRIES_PER_FEED_GROQ if fast_provider == "groq" else 30
     feed_urls = _active_feed_urls("general")
 
     logger.info("=== RSS fetch starting ===")

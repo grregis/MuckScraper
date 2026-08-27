@@ -25,7 +25,12 @@ langfuse = Langfuse(
 # pipeline's mechanical calls (grouping, classification, headlines).
 MODEL = os.environ.get("OLLAMA_MODEL", "")
 
-if llm_client.LLM_PROVIDER == "ollama" and not MODEL:
+# Checks the provider that actually serves summaries. Under split routing the
+# global provider can be a cloud model while Ollama runs the fast tier, in
+# which case an unset OLLAMA_MODEL is irrelevant here -- and, more importantly,
+# the reverse: warning off LLM_PROVIDER would go quiet exactly when summaries
+# are the thing misconfigured.
+if llm_client.provider_for_tier(llm_client.TIER_QUALITY) == "ollama" and not MODEL:
     logging.warning("OLLAMA_MODEL environment variable is not set. All summarization will fail.")
 
 
