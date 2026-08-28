@@ -233,7 +233,7 @@ def _candidate_story_ids(stories, max_candidates=3):
     return ids
 
 
-def find_matching_story_with_metadata(article_title, article_embedding, recent_stories, article_content=None, db=None, exclude_article_id=None):
+def find_matching_story_with_metadata(article_title, article_embedding, recent_stories, article_content=None, db=None, exclude_article_id=None, incumbent_story=None):
     """Find the best story match for an article.
 
     `exclude_article_id` keeps an article from being compared against itself.
@@ -244,6 +244,15 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
     so the match always "confirms" wherever the article already is and the
     review can never correct a misgrouping. Leave it None on the ingestion
     path, where the article has no story yet and there is no self to exclude.
+
+    `incumbent_story`, when set, is guaranteed a seat in the title-overlap-review
+    candidate slate even if its raw shared-token count doesn't put it in the top
+    3. Without this, a review pass that already appended the article's current
+    story to `recent_stories` could still fail to ever show it to the model --
+    the slate is ranked by raw token count and capped at 3, so the incumbent
+    routinely lost that ranking to unrelated stories that happened to share a
+    common word, and the model then picked blind from strangers. Leave it None
+    on paths with no current placement to defend (ingestion, merging).
     """
     article_title = strip_video_prefix(article_title)
     if article_embedding is None:
@@ -299,6 +308,12 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             if len(unique_candidates) == 3:
                 break
 
+        if incumbent_story is not None and incumbent_story.id not in seen_story_ids:
+            if len(unique_candidates) == 3:
+                unique_candidates[-1] = incumbent_story
+            else:
+                unique_candidates.append(incumbent_story)
+
         story_snippets = []
         for story in unique_candidates:
             snippet = ""
@@ -311,6 +326,7 @@ def find_matching_story_with_metadata(article_title, article_embedding, recent_s
             unique_candidates,
             article_content=article_content,
             story_snippets=story_snippets,
+            incumbent_id=incumbent_story.id if incumbent_story is not None else None,
         )
         if ollama_decision:
             logger.info(f"  [Grouper] Matched to '{ollama_decision.title}' via title-overlap review")
@@ -489,12 +505,21 @@ def get_candidate_stories(article_title, recent_stories, max_candidates=5):
     return [story for _, story in scored[:max_candidates]]
 
 
-def build_match_prompt(article_title, story_list, article_content=None):
+def build_match_prompt(article_title, story_list, article_content=None, incumbent_present=False):
     article_block = f'Article title: "{article_title}"'
     if article_content:
         snippet = strip_to_snippet(article_content)
         if snippet:
             article_block += f"\nArticle context: {snippet}"
+
+    incumbent_rule = ""
+    if incumbent_present:
+        incumbent_rule = (
+            "\n- One option is marked [CURRENT STORY]: that is where this article is "
+            "already placed. Only move it away from that story if another story is a "
+            "clearly better match on the actual event described in the context "
+            "snippets -- do not move it based on title wording alone."
+        )
 
     return f"""You are a news editor grouping articles into stories.
 
@@ -510,7 +535,7 @@ Rules:
 - Do not match just because they share a broad topic or the same company/person/country
 - Do not match if the stories contradict each other (e.g. "price drop" vs "price increase")
 - Do not match broad opinion or analysis to a news event unless it is explicitly anchored to that same concrete event or ongoing situation
-- Use the context snippets to distinguish between similar-sounding but different events
+- Use the context snippets to distinguish between similar-sounding but different events{incumbent_rule}
 - If it matches, respond with only the number of the matching story (e.g. "2")
 - If it does not match any story, respond with only "0"
 - Respond with a single number and nothing else
@@ -527,19 +552,32 @@ Examples of correct NON-matches (should return 0):
 
 
 @observe()
-def ask_ollama_for_match(article_title, candidate_stories, article_content=None, story_snippets=None):
-    """Kept for regroup_ungrouped_stories compatibility."""
+def ask_ollama_for_match(article_title, candidate_stories, article_content=None, story_snippets=None, incumbent_id=None):
+    """Kept for regroup_ungrouped_stories compatibility.
+
+    `incumbent_id`, when it matches one of `candidate_stories`, tags that option
+    as [CURRENT STORY] in the prompt and turns on a burden-of-proof rule asking
+    the model to defend it rather than pick based on title wording alone. Tested
+    live against a real bad reassignment (Haiti gang-attack article pulled onto
+    an unrelated bird-mortality story by coincidental "more than X ... dead"
+    title overlap): without the label, TIER_QUALITY picked the wrong story 3/3
+    runs; with it, 4/4 correct. Position in the list matters more than raw
+    token-overlap rank, so the label -- not just ordering -- is what fixes it.
+    """
     if not candidate_stories:
         return None
 
+    incumbent_present = any(story.id == incumbent_id for story in candidate_stories) if incumbent_id is not None else False
+
     story_lines = []
     for i, story in enumerate(candidate_stories):
-        line = f"{i+1}. {story.title}"
+        tag = " [CURRENT STORY -- this article is presently placed here]" if story.id == incumbent_id else ""
+        line = f"{i+1}. {story.title}{tag}"
         if story_snippets and i < len(story_snippets) and story_snippets[i]:
             line += f"\n   Context: {story_snippets[i]}"
         story_lines.append(line)
     story_list = "\n".join(story_lines)
-    prompt = build_match_prompt(article_title, story_list, article_content=article_content)
+    prompt = build_match_prompt(article_title, story_list, article_content=article_content, incumbent_present=incumbent_present)
 
     langfuse_context.update_current_observation(
         input=prompt,

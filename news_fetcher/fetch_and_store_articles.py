@@ -140,9 +140,25 @@ def guess_story_title(title):
     return " ".join(title.split()[:6])
 
 
-def clear_story_headline_if_single_article(story):
-    """Single-article stories should fall back to their original title."""
-    if story and len(story.articles) <= 1:
+def clear_story_headline_after_article_departs(story):
+    """Clear a story's headline whenever it loses an article.
+
+    Losing an article can only shrink the story's remaining newest-fetched-at,
+    so the usual staleness check (headline_generated_at older than the newest
+    article) never fires on a removal -- only clearing the headline outright
+    forces `generate_headlines_for_stale_stories()` to rewrite it. Left
+    unguarded on story size: a story with several articles left can still keep
+    a headline that was actually about the one that just departed, and that
+    stale headline is checked by `titles_are_near_duplicates()` against every
+    future ambiguous article, so a wrong one can hijack matching outright
+    before the LLM review ever runs. Confirmed live 2026-08-27: a story about
+    Australian bird deaths kept the headline "Gang attack in Haiti leaves 47
+    dead" after its one Haiti article was reassigned elsewhere, and that stale
+    headline pulled an unrelated Haiti kidnapping article straight into the
+    bird story on a title-token match, with no LLM call and no chance for the
+    incumbent-labeling fix above to weigh in.
+    """
+    if story:
         story.headline = None
 
 
@@ -1035,6 +1051,7 @@ def review_ambiguous_grouping_matches(max_articles=300):
             candidate_stories,
             article_content=article.content,
             exclude_article_id=article.id,
+            incumbent_story=article.story,
         )
 
         original_story = article.story
@@ -1055,7 +1072,7 @@ def review_ambiguous_grouping_matches(max_articles=300):
                     matched_story.topics.append(topic)
 
             if original_story:
-                clear_story_headline_if_single_article(original_story)
+                clear_story_headline_after_article_departs(original_story)
 
             if original_story and not original_story.articles:
                 db.session.delete(original_story)
