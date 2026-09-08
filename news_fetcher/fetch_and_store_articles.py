@@ -20,7 +20,6 @@ from datetime import datetime, timedelta
 from news_fetcher.topic_classifier import classify_article
 from news_fetcher.headline_generator import generate_missing_headlines
 import logging
-from sqlalchemy.orm import selectinload
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -766,10 +765,18 @@ def store_articles(articles_data, topic_name, provider=None):
     # Pre-fetch recent stories once for the whole batch. This is the hottest
     # fetch path: every new article compares against this pool, so keep the
     # lookback configurable while we diagnose runtime trends.
+    # No selectinload(Story.articles) here on purpose: the pgvector query in
+    # find_matching_story_with_metadata() does the real embedding-match work
+    # in SQL and never touches the ORM relationship, so eager-loading every
+    # recent story's articles up front (~40s/run at ~3,440 stories) paid for
+    # a collection almost nothing in the batch actually reads. What does read
+    # story.articles -- the title_overlap_review/embedding_review snippet
+    # lookups (a handful of candidates per call) and this loop's own
+    # story.articles.append() below -- now lazy-loads per story touched,
+    # which is bounded by batch size rather than the whole lookback pool.
     cutoff = datetime.utcnow() - timedelta(days=GROUPING_LOOKBACK_DAYS)
     recent_stories = (
         Story.query
-        .options(selectinload(Story.articles))
         .filter(Story.created_at >= cutoff)
         .all()
     )

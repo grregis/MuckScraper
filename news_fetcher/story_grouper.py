@@ -7,6 +7,7 @@ import unicodedata
 import numpy as np
 import logging
 from dataclasses import dataclass, field
+from functools import lru_cache
 from langfuse import Langfuse
 from langfuse.decorators import observe, langfuse_context
 
@@ -207,8 +208,21 @@ def strip_video_prefix(title):
     return title
 
 
+@lru_cache(maxsize=8192)
 def normalize_title_tokens(title):
-    """Normalize headline wording for conservative near-duplicate checks."""
+    """Normalize headline wording for conservative near-duplicate checks.
+
+    Cached: every new article re-scans the whole recent-stories pool
+    (~3,440 stories as of the 2026-07-02 audit), re-tokenizing each story's
+    title/headline from scratch every time even though most don't change
+    between comparisons within the same run (~2 min/run). maxsize is a
+    generous multiple of the current story count rather than unbounded --
+    the scheduler process runs for days, so an unbounded cache would grow
+    forever; this one just LRU-evicts stale titles from earlier runs as new
+    ones come in. Callers must never mutate the returned set in place (only
+    read via intersection/union-into-a-copy) since the same set object is
+    handed back on every cache hit -- true everywhere it's called today.
+    """
     cleaned = strip_video_prefix(title or "")
     cleaned = cleaned.replace("’", "'")
     cleaned = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("ascii").lower()
