@@ -279,8 +279,6 @@ def stories_look_duplicate_for_edition(story_a, story_b):
     tokens_b = _story_signature_tokens(story_b)
     shared_tokens = tokens_a & tokens_b
     distinctive_shared = _distinctive_shared_tokens(tokens_a, tokens_b)
-    if len(distinctive_shared) >= 4:
-        return True
     if len(distinctive_shared) >= 3:
         return True
 

@@ -712,26 +712,15 @@ def extract_article_html_playwright(url):
             if content:
                 return content
 
-            # Fall back to manual extraction
-            content_html = page.evaluate("""
-                () => {
-                    const article = document.querySelector('article');
-                    if (article) return article.innerHTML;
-
-                    const selectors = [
-                        '.article-body', '.article-content', '.story-body',
-                        '.post-content', '.entry-content',
-                        '[itemprop="articleBody"]'
-                    ];
-                    for (const sel of selectors) {
-                        const el = document.querySelector(sel);
-                        if (el && el.innerText.length > 200) return el.innerHTML;
-                    }
-
-                    const paras = Array.from(document.querySelectorAll('p'));
-                    return '<div>' + paras.map(p => p.outerHTML).join('') + '</div>';
-                }
-            """) if False else None  # page already closed, use html from above
+            # Manual JS fallback removed 2026-09-08: `browser.close()` above
+            # already ran by this point, so page.evaluate() here would fail
+            # on a dead page -- this had been silently short-circuited to
+            # None via `if False` rather than fixed or removed. Readability
+            # above is this function's real extraction path. A BS4-based
+            # fallback mirroring the one in extract_article_html_bs4() would
+            # need to operate on `html`, not a closed page, if this ever
+            # needs its own last-resort fallback.
+            content_html = None
 
             if content_html and len(content_html) > 200:
                 sanitized = sanitize_html(content_html)
