@@ -4,6 +4,116 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [0.7.0] - 2026-09-08
+
+Status: beta. The theme of this release is **splitting cost from quality in
+the LLM pipeline, and closing the loop on both GitHub issues that shaped
+0.6.0**: LLM calls can now be routed per-tier to different providers, so the
+~1,140 mechanical calls in a run can run locally while the ~65 summaries and
+deep reports go somewhere better. Alongside that, several rounds of
+grouping-accuracy fixes and content-quality filters landed, closing out
+issues #1 and #8 for good.
+
+### Added
+
+- **Per-tier LLM provider routing (GitHub issue #8)** — `LLM_PROVIDER` is now
+  the quality-tier provider and the optional `LLM_FAST_PROVIDER` overrides
+  the fast tier, defaulting to `LLM_PROVIDER` when unset so single-provider
+  installs are unchanged. `llm_client.provider_for_tier(tier)` is the one
+  place that should ever be asked which backend serves a call.
+- **A generic OpenAI-compatible provider** — `openrouter` speaks
+  `chat/completions` against any base URL (`OPENROUTER_HOST`), so DeepSeek,
+  OpenAI, Together, or a local vLLM endpoint all work with no new code.
+  Built on the same client Groq already used.
+- **Tier-aware LLM health checks and status** — `check_llm_status(tier=)` and
+  `is_configured(tier=)` gate a pipeline stage on the backend that stage
+  actually uses, instead of one boolean for the whole pipeline. With split
+  routing, one tier being down is now the normal steady state rather than a
+  fault, so the pipeline degrades per-stage instead of stopping outright.
+- **What gets fetched is now fully DB-backed (GitHub issue #1, final slice)**
+  — `ScheduledFetch` (`/admin/scheduled-fetches`) replaces the hardcoded
+  NewsAPI/GNews query list, read fresh at the top of every run with no
+  restart needed; `IngestionBlock` (`/admin/ingestion-blocks`) replaces
+  `BLOCKED_SOURCES`/`BLOCKED_TITLE_KEYWORDS` with CRUD and a `kind` column
+  (`source` / `title_keyword`).
+- **An entity-veto guardrail on LLM grouping decisions** — `story_grouper.py`
+  now rejects an LLM-approved match when the article and the destination
+  story name different, non-overlapping countries, catching cases where the
+  model approved a match on a shared boilerplate phrase ("death toll rises
+  to X") with no real topical connection.
+- **A confirmation dialog on "Rebuild Story Grouping"** in Admin Tools — this
+  bulk action regenerates every article's embedding and reassigns it from
+  scratch, and had no guard at all despite sitting next to two other
+  destructive actions that do.
+- **Content-quality filters at ingestion**: sports-betting tipster sites and
+  betting-section/TV-listings stubs, syndicated advice columns (anchored to
+  the column name so news coverage *about* a columnist isn't caught), and
+  league/club PR sites, press-release wires, and `news.google.com`.
+- **An independence floor on corroboration claims** — outlets whose stored
+  content is a blocked paywall (0 chars) or a thin RSS stub no longer count
+  toward a story's "N outlets reported this," which had been inflating
+  every such claim (18 of 20 stories in one audited edition advertised
+  multiple outlets when only 10 actually had more than one source above
+  the floor).
+
+### Changed
+
+- **Headline generation now runs in one batch pass on the quality tier**,
+  after grouping settles, instead of inline per-article interleaved with
+  fast-tier grouping/classification calls. On a box where the model doesn't
+  fit in VRAM, alternating tiers per call was costing ~40 minutes/run in
+  pure model-swap time; batching next to the summary phase (which loads the
+  same model anyway) costs about 8 minutes instead.
+- The stale `GROQ_MODEL` default (a model Groq has since retired) was
+  removed rather than replaced — an unset model now fails once at the
+  config gate instead of 404ing on every request.
+- `normalize_title_tokens()` is now memoized (`@lru_cache`), and
+  `store_articles()` no longer eager-loads every recent story's articles
+  up front — only the rare Python-fallback grouping path needs them, and
+  pgvector does the real match in SQL without touching that relationship.
+
+### Fixed
+
+- **The grouping review could match an article against itself**, so the
+  safety net built to catch and correct misgrouped articles could never
+  actually move one — it always "confirmed" the article's existing
+  placement at a fabricated similarity of exactly 1.0.
+- **Three compounding bugs in `title_overlap_review`'s incumbent handling**:
+  an article's current story could fail to make the LLM's candidate slate
+  at all; even when present, the incumbent lost to superficial title
+  overlap and list-position bias; and a story's stale headline (from before
+  it lost an article) could hijack matching outright before the LLM step
+  ever ran. All three fixed — candidate-slate pinning, an explicit
+  `[CURRENT STORY]` label with a burden-of-proof prompt rule, and clearing
+  a story's headline on any article departure rather than only when it
+  drops to a single article.
+- `headline_generated_at` is now backfilled for existing headlines, so they
+  read as current instead of perpetually stale under the new staleness
+  check.
+- Two small dead-code spots from an earlier code audit: an unreachable
+  Playwright JS fallback gated behind a literal `if False`, and a redundant
+  duplicate-detection branch that could never change the outcome.
+
+### Upgrade Notes
+
+- Pull the update and run migrations:
+
+  ```bash
+  docker compose up -d --build
+  docker compose exec app flask db upgrade
+  ```
+
+- **Restart the `scheduler` container after upgrading.** It imports pipeline
+  code once at process startup and never reloads it — a `git pull` alone
+  does not put any of this release's fixes into effect.
+- `LLM_FAST_PROVIDER` is optional and defaults to `LLM_PROVIDER` when blank,
+  so an install that only ever set `LLM_PROVIDER` sees no behavior change.
+- `ScheduledFetch` and `IngestionBlock` are seeded from the values that used
+  to be hardcoded, so an existing install keeps fetching and blocking
+  exactly what it did before, on both migrations.
+
+---
+
 ## [0.6.0] - 2026-08-08
 
 Status: beta. The theme of this release is **configuration moving out of the
