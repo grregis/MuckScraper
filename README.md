@@ -165,6 +165,13 @@ If you pull schema changes later:
 docker exec muckscraper-app-1 flask db upgrade
 ```
 
+**Upgrading within a major version (e.g. `1.x` → `1.y`) never breaks your
+stored config or customizations** — topics, RSS feeds, prompts, scheduled
+fetches, and ingestion blocks you've edited stay as you left them.
+Config-breaking changes are reserved for major version bumps (`1.x` →
+`2.0`) and always called out explicitly in that release's `CHANGELOG.md`
+entry, never shipped silently in a minor/patch upgrade.
+
 ### Optional workflow integrations
 
 MuckScraper can be extended with personal workflow hooks, such as n8n webhooks for fetch reports or Ollama power management, and Matrix notifications for status messages. These are not part of the default Docker Compose setup; add them with your own environment variables, compose override, or notification code if you want those workflows.
