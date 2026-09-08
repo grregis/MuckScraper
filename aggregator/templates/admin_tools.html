@@ -608,7 +608,7 @@
                 <div class="meta-row">
                     <span class="badge badge-danger">⚠ Danger</span>
                 </div>
-                <form method="POST" action="{{ url_for('admin.force_regroup') }}">
+                <form method="POST" action="{{ url_for('admin.force_regroup') }}" onsubmit="return confirm('Rebuild story grouping for every article in the database? This regenerates all embeddings and reassigns every article to a story from scratch -- it can take a long time and will change story membership site-wide.');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_for('admin.tools_page') }}">
                     <button type="submit" class="btn btn-danger" id="bulk-btn-force_regroup">Rebuild Story Grouping</button>
