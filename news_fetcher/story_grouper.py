@@ -32,9 +32,63 @@ TITLE_STOPWORDS = {
     "us", "u", "s",
 }
 
+# Canonical country/major-territory tokens for the entity veto in
+# ask_ollama_for_match(). Deliberately not an exhaustive ISO-3166 list --
+# just the countries that actually show up often enough in this pipeline's
+# feed to be worth a false-positive-free identity check. Extend as new
+# gaps show up in production audits rather than trying to guess ahead.
+# A handful of these double as common English words or US state names
+# (georgia, jordan, turkey, chad) -- left in deliberately, since the veto
+# only fires on *disjoint* country sets, so an ambiguous shared token just
+# means the veto quietly doesn't fire for that case, never that it fires
+# wrongly.
+COUNTRY_TOKENS = {
+    "nepal", "india", "pakistan", "bangladesh", "afghanistan", "china",
+    "japan", "korea", "taiwan", "russia", "ukraine", "belarus", "poland",
+    "germany", "france", "spain", "italy", "portugal", "greece", "turkey",
+    "netherlands", "belgium", "austria", "switzerland", "hungary",
+    "romania", "bulgaria", "serbia", "croatia", "sweden", "norway",
+    "denmark", "finland", "ireland", "iceland", "haiti", "cuba", "mexico",
+    "colombia", "venezuela", "brazil", "argentina", "chile", "peru",
+    "ecuador", "bolivia", "paraguay", "uruguay", "canada", "guatemala",
+    "honduras", "nicaragua", "panama", "iran", "iraq", "syria", "israel",
+    "palestine", "gaza", "lebanon", "jordan", "egypt", "libya", "sudan",
+    "somalia", "ethiopia", "kenya", "nigeria", "ghana", "chad", "mali",
+    "niger", "uganda", "rwanda", "congo", "zimbabwe", "zambia",
+    "mozambique", "morocco", "algeria", "tunisia", "yemen", "qatar",
+    "kuwait", "bahrain", "oman", "vietnam", "thailand", "cambodia",
+    "myanmar", "laos", "philippines", "indonesia", "malaysia", "singapore",
+    "australia", "zealand", "fiji",
+}
+
 TITLE_TOKEN_REPLACEMENTS = {
     "xi": "xi_jinping",
     "jinping": "xi_jinping",
+    "russian": "russia",
+    "ukrainian": "ukraine",
+    "nepali": "nepal",
+    "nepalese": "nepal",
+    "haitian": "haiti",
+    "iranian": "iran",
+    "iraqi": "iraq",
+    "syrian": "syria",
+    "israeli": "israel",
+    "palestinian": "palestine",
+    "lebanese": "lebanon",
+    "egyptian": "egypt",
+    "nigerian": "nigeria",
+    "pakistani": "pakistan",
+    "afghan": "afghanistan",
+    "indian": "india",
+    "japanese": "japan",
+    "korean": "korea",
+    "taiwanese": "taiwan",
+    "mexican": "mexico",
+    "colombian": "colombia",
+    "venezuelan": "venezuela",
+    "brazilian": "brazil",
+    "canadian": "canada",
+    "turkish": "turkey",
     "chinese": "china",
     "pm": "prime_minister",
     "prime": "prime_minister",
@@ -190,6 +244,38 @@ def normalize_title_tokens(title):
 
 def shared_title_tokens(title_a, title_b):
     return normalize_title_tokens(title_a) & normalize_title_tokens(title_b)
+
+
+def extract_countries(title, extra_titles=None):
+    """Recognized COUNTRY_TOKENS mentioned in title (plus optional extra_titles)."""
+    tokens = set(normalize_title_tokens(title))
+    for extra in (extra_titles or []):
+        if extra:
+            tokens |= normalize_title_tokens(extra)
+    return tokens & COUNTRY_TOKENS
+
+
+def entity_veto(article_title, matched_story):
+    """True if article_title and matched_story name different, non-overlapping
+    countries -- catches an LLM match approved purely on a shared boilerplate
+    phrase ("death toll rises to X") with no actual topical connection.
+
+    Only fires when *both* sides name a recognized country; most articles
+    don't, so this can't veto the majority of matches, and an unrecognized
+    or ambiguous country name (see COUNTRY_TOKENS) only ever costs a missed
+    veto, never a wrong one.
+    """
+    article_countries = extract_countries(article_title)
+    if not article_countries:
+        return False
+
+    extra_titles = [matched_story.headline]
+    extra_titles += [a.title for a in (matched_story.articles or [])[:2]]
+    story_countries = extract_countries(matched_story.title, extra_titles=extra_titles)
+    if not story_countries:
+        return False
+
+    return article_countries.isdisjoint(story_countries)
 
 
 def titles_are_near_duplicates(article_title, story_title):
@@ -596,6 +682,13 @@ def ask_ollama_for_match(article_title, candidate_stories, article_content=None,
             match_index = int(token)
             if 1 <= match_index <= len(candidate_stories):
                 matched = candidate_stories[match_index - 1]
+                if entity_veto(article_title, matched):
+                    logger.info(
+                        f"  [Grouper] Entity veto: rejected match to '{matched.title}' "
+                        f"-- article mentions {sorted(extract_countries(article_title))}, "
+                        f"story mentions {sorted(extract_countries(matched.title, extra_titles=[matched.headline] + [a.title for a in (matched.articles or [])[:2]]))}"
+                    )
+                    return None
                 logger.info(f"  [Grouper] Matched to story: '{matched.title}'")
                 return matched
             elif match_index == 0:
