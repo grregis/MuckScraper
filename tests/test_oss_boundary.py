@@ -126,6 +126,32 @@ class OpenSourceBoundaryTests(unittest.TestCase):
         self.assertNotIn("generate_deep_report", source)
         self.assertNotIn("db.session.commit", source)
 
+    def test_export_static_does_not_redefine_apply_aggregator_filter(self):
+        # Regression guard for the 2026-09-09 Fable audit finding: export_static.py
+        # carried its own copy of apply_aggregator_filter() that never got the
+        # is_independent_source() corroboration floor added in 317c108, so the
+        # published muckscraper.news site overstated outlet counts on 7 of 20
+        # stories in one audited edition while the admin app (which uses the
+        # canonical aggregator.story_view version) showed the correct numbers.
+        # Fixed by deleting the duplicate and importing the canonical function --
+        # this asserts the duplicate doesn't quietly come back.
+        export_static_path = ROOT / "private_site" / "export_static.py"
+        if not export_static_path.exists():
+            self.skipTest("private_site/ is not present on this checkout (main)")
+        tree = ast.parse(export_static_path.read_text(encoding="utf-8"))
+        defined_names = {
+            node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+        }
+        self.assertNotIn("apply_aggregator_filter", defined_names)
+
+        imports_canonical = any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "aggregator.story_view"
+            and any(alias.name == "apply_aggregator_filter" for alias in node.names)
+            for node in tree.body
+        )
+        self.assertTrue(imports_canonical, "export_static.py must import apply_aggregator_filter from aggregator.story_view")
+
     def test_app_factory_builds_without_private_routes_when_dependencies_exist(self):
         try:
             from aggregator import create_app
