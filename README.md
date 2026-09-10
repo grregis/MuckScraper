@@ -74,12 +74,12 @@ muckscraper/
 │   ├── app.py                      # Main Flask entry point
 │   ├── models.py                   # SQLAlchemy models
 │   ├── filters.py                  # Jinja filters and display helpers
-│   ├── constants.py                # Shared constants (topics, bias buckets, etc.)
-│   ├── article_signals.py          # Article engagement and signal tracking
+│   ├── constants.py                # Shared constants (AGGREGATORS; TOPICS is dead, topics are DB-backed)
+│   ├── article_signals.py          # Ingest heuristics: roundup/betting patterns, bias bucketing, independent-source checks
 │   ├── search.py                   # Meilisearch integration
 │   ├── story_view.py               # Story view helpers
 │   ├── blueprints/
-│   │   ├── admin.py                # Admin and maintenance routes
+│   │   ├── admin/                  # Admin and maintenance routes (package: articles, bulk_actions, config_crud, tools, ...)
 │   │   ├── auth.py                 # Login/logout routes
 │   │   └── public.py               # Public reader routes
 │   ├── static/                     # Shared static assets
@@ -87,7 +87,7 @@ muckscraper/
 ├── migrations/                     # Alembic migration files
 ├── news_fetcher/
 │   ├── Dockerfile                  # Scheduler image
-│   ├── fetch_and_store_articles.py # Ingestion, grouping, and edition publishing
+│   ├── fetch_and_store_articles/   # Ingestion, grouping, and edition publishing (package)
 │   ├── rss_fetcher.py              # RSS ingestion helpers
 │   ├── scheduler.py                # Scheduled fetch runner
 │   ├── scraper.py                  # Scrape pipeline and fallback logic
@@ -142,7 +142,10 @@ cd muckscraper
 The first run creates `.env` from `.env.sample` and stops so you can fill in
 your API keys, Ollama host, and admin login. Run it again once that's done —
 it builds the core services, sets up the database (pgvector extension +
-tables) and admin user, and starts the scheduler. Safe to re-run.
+tables) and admin user, and starts the scheduler. Safe to re-run on a fresh
+install. On an existing install being upgraded across versions, re-running
+this alone can mark the schema current without actually applying pending
+migrations — run the `flask db upgrade` step below afterward to be sure.
 
 Then open `http://localhost:5000`.
 
