@@ -74,9 +74,13 @@ def apply_aggregator_filter(story):
             status_counts["blocked"] += 1
 
     total_articles = len(story.display_articles)
+    total_unique_outlets = len(story.unique_outlets)
+    story.display_article_count = total_articles
+    story.display_outlet_count = total_unique_outlets
     readable_articles = status_counts["success"] + status_counts["fallback"]
     story.scrape_quality = {
         "total": total_articles,
+        "outlets": total_unique_outlets,
         "success": status_counts["success"],
         "fallback": status_counts["fallback"],
         "blocked": status_counts["blocked"],
