@@ -122,6 +122,50 @@ LOW_VALUE_TITLE_PATTERNS = (
     re.compile(r"\bnewsletter\b", re.IGNORECASE),
 )
 
+# Opinion/editorial content: op-eds, columns, editorial-board pieces. Not
+# reporting, but it arrives through ordinary outlet feeds and reaches grouping
+# (2026-09-10: two Fox News opinion pieces on the same Iran story got pulled
+# into unrelated "news" stories by grouping review, and a reader flagged
+# opinion/promo content showing up generally).
+#
+# URL paths verified against the full corpus (2,902 + 194 + 74 + 2 = 3,172
+# articles) before adding: /opinion/ is 99%+ five outlets (The Hill, NY Post,
+# Fox News, National Post, Toronto Sun), /opinions/ is 100% Al Jazeera,
+# /editorials/ is 100% Toronto Sun, /commentisfree/ is The Guardian's opinion
+# section. No false positives found across any of these -- every sampled
+# title was a genuine column/op-ed/editorial.
+OPINION_URL_HINTS = (
+    "/opinion/",
+    "/opinions/",
+    "/editorials/",
+    "/commentisfree/",
+)
+
+# Title-prefix signal, verified separately against 39 "Opinion:" and 75
+# "Editorial:" matches with zero false positives. Needed alongside the URL
+# check because some outlets (NPR) don't use a dedicated opinion URL path at
+# all, and others (Fox News' Outkick vertical) fold "opinion-" into a slug
+# rather than a path segment.
+OPINION_TITLE_PATTERNS = (
+    re.compile(r"^\s*(?:opinion|editorial)\s*[:|]", re.IGNORECASE),
+)
+
+# Shopping/affiliate content: product roundups, deal roundups, "shop this
+# sale" pieces. Not news, and it is explicitly promotional (affiliate-linked
+# product recommendations), which is what a reader flagged 2026-09-10.
+#
+# Deliberately excludes wsj.com: WSJ files real M&A reporting under
+# /business/deals/ ("EverBank to Combine With WaFd to Create $75 Billion
+# Bank"), a completely different sense of "deals" than the shopping one.
+# Verified every other outlet under /deals/ (Fox News, CNN Underscored,
+# Yahoo, CNET, etc.) is genuinely affiliate/shopping content with no similar
+# collision.
+PROMOTIONAL_URL_HINTS = (
+    "/shopping/",
+    "/deals/",
+)
+PROMOTIONAL_URL_HINT_EXCLUDED_DOMAINS = ("wsj.com",)
+
 
 def is_roundup_article(title=None, url=None):
     normalized_title = (title or "").strip()
@@ -179,6 +223,27 @@ def is_advice_column(title=None):
     return any(pattern.search(normalized_title) for pattern in ADVICE_COLUMN_TITLE_PATTERNS)
 
 
+def is_opinion_article(title=None, url=None):
+    """Op-eds, columns, and editorial-board pieces -- not reporting."""
+    normalized_title = (title or "").strip()
+    if any(pattern.search(normalized_title) for pattern in OPINION_TITLE_PATTERNS):
+        return True
+
+    parsed_path = urlparse(url or "").path.lower()
+    return any(hint in parsed_path for hint in OPINION_URL_HINTS)
+
+
+def is_promotional_article(title=None, url=None):
+    """Shopping/affiliate content (deal roundups, product picks), not news."""
+    parsed = urlparse(url or "")
+    netloc = parsed.netloc.lower()
+    if any(domain in netloc for domain in PROMOTIONAL_URL_HINT_EXCLUDED_DOMAINS):
+        return False
+
+    parsed_path = parsed.path.lower()
+    return any(hint in parsed_path for hint in PROMOTIONAL_URL_HINTS)
+
+
 def low_value_article_reason(title=None, url=None):
     if is_roundup_article(title, url):
         return "roundup"
@@ -188,6 +253,12 @@ def low_value_article_reason(title=None, url=None):
 
     if is_advice_column(title):
         return "advice_column"
+
+    if is_opinion_article(title, url):
+        return "opinion"
+
+    if is_promotional_article(title, url):
+        return "promotional"
 
     normalized_title = (title or "").strip()
     if any(pattern.search(normalized_title) for pattern in LOW_VALUE_TITLE_PATTERNS):
