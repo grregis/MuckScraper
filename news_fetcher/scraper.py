@@ -111,6 +111,16 @@ SCRAPE_STATUS_FAILED = "failed"
 RETRY_CACHE_SETTING_KEY = "scrape_retry_cache_v1"
 RETRY_CACHE_MAX_ENTRIES = 500
 
+# fableaudit.md 1.1: a domain used to get auto-blocked on the strength of one
+# bad scrape, with no expiry. BLOCKLIST_MIN_HIT_THRESHOLD requires this many
+# distinct bad-scrape hits before a domain is actually treated as blocked
+# (see is_domain_blocked()); BLOCKLIST_WINDOW_HOURS is both how far apart two
+# hits can be and still count toward the same streak, and how long a block
+# lasts (from its most recent qualifying hit) once the threshold is reached --
+# see add_to_blocklist() and the ScrapeBlocklist model docstring.
+BLOCKLIST_MIN_HIT_THRESHOLD = 3
+BLOCKLIST_WINDOW_HOURS = 48
+
 
 @dataclass
 class ScrapeResult:
@@ -375,40 +385,124 @@ def should_auto_rescrape_article(article, minimum_content_length=500):
 
 
 def is_domain_blocked(url):
-    """Return True if this URL's domain is on the scrape blocklist."""
+    """
+    Return True if this URL's domain is actually blocked.
+
+    Permanent entries always block. Auto-blocked (non-permanent) entries only
+    block once they've accumulated BLOCKLIST_MIN_HIT_THRESHOLD hits, and stop
+    blocking once expires_at has passed -- see add_to_blocklist() and the
+    ScrapeBlocklist model docstring for how those get set.
+    """
     try:
         from aggregator.models import ScrapeBlocklist
         domain = get_domain(url)
         if not domain:
             return False
-        return ScrapeBlocklist.query.filter_by(domain=domain).first() is not None
+        entry = ScrapeBlocklist.query.filter_by(domain=domain).first()
+        if not entry:
+            return False
+        if entry.is_permanent:
+            return True
+        if (entry.hit_count or 0) < BLOCKLIST_MIN_HIT_THRESHOLD:
+            return False
+        if entry.expires_at and entry.expires_at <= datetime.utcnow():
+            return False
+        return True
     except Exception:
         return False
 
 
 def add_to_blocklist(url, reason, is_permanent=False):
-    """Add a domain to the scrape blocklist. Silent no-op if already present."""
+    """
+    Record a bad-scrape hit against this URL's domain.
+
+    Non-permanent hits accumulate on a `ScrapeBlocklist` row rather than
+    blocking immediately: the domain only actually blocks (per
+    is_domain_blocked()) once hit_count reaches BLOCKLIST_MIN_HIT_THRESHOLD,
+    at which point expires_at is set (and slid forward on each further hit)
+    to BLOCKLIST_WINDOW_HOURS out. A hit that arrives more than
+    BLOCKLIST_WINDOW_HOURS after the previous one restarts the streak from
+    scratch, so a stale one-off from months back can't combine with a fresh
+    hit to trip the threshold, and a domain that goes quiet after a block
+    expires gets a genuinely clean slate rather than re-blocking on its next
+    single hit.
+
+    is_permanent=True (used by hand-flagged/seeded entries, not by the
+    scraper's own bad-scrape detection) bypasses all of this and blocks
+    immediately, same as before. An existing permanent entry is never
+    downgraded by a later non-permanent call.
+    """
     try:
         from aggregator import db
         from aggregator.models import ScrapeBlocklist
-        from datetime import datetime
         domain = get_domain(url)
         if not domain:
             return
+        now = datetime.utcnow()
         existing = ScrapeBlocklist.query.filter_by(domain=domain).first()
-        if existing:
+
+        if existing and existing.is_permanent:
             return
-        entry = ScrapeBlocklist(
-            domain=domain,
-            reason=reason,
-            is_permanent=is_permanent,
-            added_at=datetime.utcnow(),
-        )
-        db.session.add(entry)
-        db.session.commit()
-        logger.info(f"[Blocklist] Added {domain}: {reason}")
+
+        if is_permanent:
+            if existing:
+                existing.reason = reason
+                existing.is_permanent = True
+                existing.hit_count = 1
+                existing.last_hit_at = now
+                existing.expires_at = None
+            else:
+                db.session.add(ScrapeBlocklist(
+                    domain=domain,
+                    reason=reason,
+                    is_permanent=True,
+                    added_at=now,
+                    last_hit_at=now,
+                    hit_count=1,
+                    expires_at=None,
+                ))
+            db.session.commit()
+            logger.info(f"[Blocklist] Added {domain} (permanent): {reason}")
+            return
+
+        window_cutoff = now - timedelta(hours=BLOCKLIST_WINDOW_HOURS)
+
+        if existing and existing.last_hit_at and existing.last_hit_at >= window_cutoff:
+            existing.hit_count = (existing.hit_count or 1) + 1
+        elif existing:
+            # Streak went cold -- restart it rather than compounding a stale hit.
+            existing.hit_count = 1
+            existing.added_at = now
+            existing.expires_at = None
+        else:
+            existing = ScrapeBlocklist(
+                domain=domain,
+                reason=reason,
+                is_permanent=False,
+                added_at=now,
+                hit_count=1,
+                expires_at=None,
+            )
+            db.session.add(existing)
+
+        existing.reason = reason
+        existing.last_hit_at = now
+
+        if existing.hit_count >= BLOCKLIST_MIN_HIT_THRESHOLD:
+            existing.expires_at = now + timedelta(hours=BLOCKLIST_WINDOW_HOURS)
+            db.session.commit()
+            logger.info(
+                f"[Blocklist] {domain} reached {existing.hit_count} bad-scrape hits "
+                f"-- blocked until {existing.expires_at.isoformat()}: {reason}"
+            )
+        else:
+            db.session.commit()
+            logger.info(
+                f"[Blocklist] {domain} bad-scrape hit {existing.hit_count}/"
+                f"{BLOCKLIST_MIN_HIT_THRESHOLD} (not yet blocked): {reason}"
+            )
     except Exception as e:
-        logger.warning(f"[Blocklist] Failed to add domain: {e}")
+        logger.warning(f"[Blocklist] Failed to record hit: {e}")
 
 
 def detect_bad_scrape(content):
@@ -784,13 +878,26 @@ def scrape_article(url, fallback_content=None, force=False):
     last_failure = None
     http_status = None
     initial_html = None
+    # One article is one blocklist hit, however many URL variants it is
+    # fetched under. finalize_content() runs for the base URL and again for
+    # every variant (?output=amp, ?amp=1, ?mobile=1, /amp, /print, m.), and
+    # a wall page that renders the same on each would otherwise count as
+    # 4-6 "distinct" hits and clear BLOCKLIST_MIN_HIT_THRESHOLD on its own.
+    # Seen live 2026-09-13: a single Fox article about CAPTCHA malware
+    # recorded hits 1-4 within 334 ms and blocked foxnews.com for 48h.
+    blocklist_hit_recorded = False
 
     def finalize_content(content, method, status=SCRAPE_STATUS_SUCCESS, http_status_override=None):
+        nonlocal blocklist_hit_recorded
         if content:
             is_bad, reason = detect_bad_scrape(content)
             if is_bad:
-                logger.warning(f"  [Scraper] {reason} — clearing content and blocking domain for {url[:60]}")
-                add_to_blocklist(url, reason)
+                if blocklist_hit_recorded:
+                    logger.info(f"  [Scraper] {reason} on a variant of {url[:60]} -- already counted for this article")
+                else:
+                    logger.warning(f"  [Scraper] {reason} — clearing content and recording a blocklist hit for {url[:60]}")
+                    add_to_blocklist(url, reason)
+                    blocklist_hit_recorded = True
                 return ScrapeResult(
                     content=None,
                     status=SCRAPE_STATUS_BLOCKED,

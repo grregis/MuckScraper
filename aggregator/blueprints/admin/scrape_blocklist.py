@@ -83,9 +83,16 @@ def scrape_blocklist():
     retry_cache_domains.sort(key=lambda row: (row["defer_until"] or "", row["failure_count"]), reverse=True)
     retry_cache_urls.sort(key=lambda row: (row["defer_until"] or "", row["failure_count"]), reverse=True)
 
+    from news_fetcher.scraper import BLOCKLIST_MIN_HIT_THRESHOLD
+    now = datetime.utcnow()
+
     blocklist_rows = []
     for entry in entries:
         counts = domain_status_counts.get(entry.domain, {})
+        is_active = entry.is_permanent or (
+            (entry.hit_count or 0) >= BLOCKLIST_MIN_HIT_THRESHOLD
+            and (not entry.expires_at or entry.expires_at > now)
+        )
         blocklist_rows.append({
             "entry": entry,
             "success": counts.get("success", 0),
@@ -94,6 +101,8 @@ def scrape_blocklist():
             "failed": counts.get("failed", 0),
             "skipped": counts.get("skipped", 0),
             "last_seen": domain_last_seen.get(entry.domain),
+            "is_active": is_active,
+            "hit_threshold": BLOCKLIST_MIN_HIT_THRESHOLD,
         })
 
     return render_template(

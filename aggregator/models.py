@@ -189,6 +189,25 @@ class User(db.Model, UserMixin):
 
 
 class ScrapeBlocklist(db.Model):
+    """
+    Domains whose scraped *content* is untrustworthy (paywall/login-wall
+    text, near-duplicate boilerplate across articles, etc).
+
+    Non-permanent rows are hit-counted, not blocked outright: `hit_count`
+    tracks distinct bad-scrape hits, and `news_fetcher.scraper.is_domain_blocked()`
+    only treats the domain as blocked once `hit_count` reaches
+    `scraper.BLOCKLIST_MIN_HIT_THRESHOLD` -- a single flaky article no longer
+    takes out an entire outlet. `expires_at` (set once that threshold is hit,
+    and slid forward on each further hit while active) lets a block lapse on
+    its own if the domain's scrapes clean up; `add_to_blocklist()` restarts the
+    hit count from zero if the previous hit fell outside
+    `scraper.BLOCKLIST_WINDOW_HOURS`, so a stale one-off from months ago
+    doesn't count toward a fresh streak. `is_permanent` rows (the seeded
+    hard-paywall list, or anything hand-flagged via the admin UI) bypass all
+    of this and are always blocked -- see fableaudit.md 1.1 for the incident
+    (Fox News, BBC, Toronto Sun, and others silently suppressed for months on
+    one bad scrape each) that prompted adding hit-counting and expiry here.
+    """
     __tablename__ = "scrape_blocklist"
     __table_args__ = (
         db.Index("ix_scrape_blocklist_domain", "domain"),
@@ -199,6 +218,9 @@ class ScrapeBlocklist(db.Model):
     reason       = db.Column(db.String, nullable=False)
     added_at     = db.Column(db.DateTime, default=datetime.utcnow)
     is_permanent = db.Column(db.Boolean, default=False, nullable=False)
+    hit_count    = db.Column(db.Integer, default=1, nullable=False)
+    last_hit_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at   = db.Column(db.DateTime, nullable=True)
 
 
 class IngestionBlock(db.Model):

@@ -270,6 +270,7 @@
                     <th>Domain</th>
                     <th>Reason</th>
                     <th>24h Telemetry</th>
+                    <th>Hits</th>
                     <th>Added</th>
                     <th>Type</th>
                     <th></th>
@@ -288,13 +289,29 @@
                         </div>
                     </td>
                     <td style="color: var(--text-faint); white-space: nowrap;">
+                        {% if entry.is_permanent %}
+                            —
+                        {% else %}
+                            {{ entry.hit_count }}/{{ row.hit_threshold }}
+                            <div style="color: var(--text-faint); font-size: 12px; margin-top: 4px;">
+                                {% if row.is_active %}
+                                    Expires: {{ entry.expires_at.strftime('%Y-%m-%d %H:%M') if entry.expires_at else '—' }}
+                                {% else %}
+                                    Not yet blocked
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--text-faint); white-space: nowrap;">
                         {{ entry.added_at.strftime('%Y-%m-%d') if entry.added_at else '—' }}
                     </td>
                     <td>
                         {% if entry.is_permanent %}
                             <span class="tag-permanent">Permanent</span>
-                        {% else %}
+                        {% elif row.is_active %}
                             <span class="tag-auto">Auto-blocked</span>
+                        {% else %}
+                            <span class="tag-auto" style="opacity: 0.6;">Pending</span>
                         {% endif %}
                     </td>
                     <td>

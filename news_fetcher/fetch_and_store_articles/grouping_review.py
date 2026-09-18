@@ -8,7 +8,7 @@ rules that keep a stale Story.headline from hijacking later matches.
 import logging
 from datetime import datetime, timedelta
 from aggregator import db
-from aggregator.models import Article, Story
+from aggregator.models import Article, EditionStory, Story
 from news_fetcher import llm_client as _llm
 from news_fetcher.summarizer import check_ollama_status
 from .ingestion import deserialize_grouping_candidate_ids, serialize_grouping_candidate_ids, truncate_db_string
@@ -66,6 +66,26 @@ def clear_stale_single_article_headlines():
         )
 
     return len(stale_stories)
+
+
+def _reassign_edition_rows(from_story, to_story):
+    """Move any EditionStory rows off `from_story` before it is deleted.
+
+    Story.edition_stories carries delete-orphan cascade, so deleting a story
+    that is still in a published edition silently removes that edition row
+    -- the 2026-09-12 incident lost 11 ranks from a live edition exactly this
+    way. Reassign each row to the surviving story instead, or drop it when
+    that story is already in the same edition (the (edition, story) pair is
+    unique). Callers flush afterwards.
+    """
+    for es in EditionStory.query.filter_by(story_id=from_story.id).all():
+        dup = EditionStory.query.filter_by(
+            edition_id=es.edition_id, story_id=to_story.id
+        ).first()
+        if dup:
+            db.session.delete(es)
+        else:
+            es.story_id = to_story.id
 
 
 def review_ambiguous_grouping_matches(max_articles=300):
@@ -139,7 +159,16 @@ def review_ambiguous_grouping_matches(max_articles=300):
                 original_story.title[:90] if original_story else "no story",
                 matched_story.title[:90],
             )
-            article.story_id = matched_story.id
+            # Move via the relationship, not the raw FK column. The matcher
+            # above reads original_story.articles (candidate snippets, the
+            # entity veto), so that collection is already loaded and cached
+            # with this article in it. A raw column write leaves the cache
+            # stale, and the "is it empty now?" check below then reads the
+            # cache and never deletes the vacated story -- the same bug class
+            # regroup_ungrouped_stories() had (2026-09-13), with a milder
+            # symptom: empty stories accumulating instead of orphaned
+            # articles. Assigning article.story updates both collections.
+            article.story = matched_story
             db.session.flush()
             reassigned += 1
 
@@ -151,6 +180,8 @@ def review_ambiguous_grouping_matches(max_articles=300):
                 clear_story_headline_after_article_departs(original_story)
 
             if original_story and not original_story.articles:
+                _reassign_edition_rows(original_story, matched_story)
+                db.session.flush()
                 db.session.delete(original_story)
 
             # Headline regeneration is left to the batch pass, which runs after
@@ -209,14 +240,31 @@ def regroup_ungrouped_stories():
         if matched and matched.id != story.id:
             logger.info(f"  [Re-group] Merging '{story.title}' into '{matched.title}'")
 
-            # Move article to matched story
-            article.story_id = matched.id
+            # Move article to matched story via the relationship attribute, not
+            # the raw article.story_id column. Story.articles was already
+            # accessed above (len(s.articles) for every story in all_recent),
+            # which loads and caches each story's articles collection. Setting
+            # the FK column directly doesn't update that cached collection, so
+            # story.articles still lists this article as a member; deleting
+            # story below then has SQLAlchemy "disassociate" it by nulling the
+            # FK right back to NULL (Story.articles has no delete/delete-orphan
+            # cascade), silently orphaning the very article we just moved.
+            # Assigning through article.story keeps both sides' in-memory
+            # state correct so the later delete doesn't clobber it.
+            article.story = matched
             db.session.flush()
 
             # Merge topic tags
             for topic in story.topics:
                 if topic not in matched.topics:
                     matched.topics.append(topic)
+
+            # If this singleton is currently sitting in a published edition,
+            # move its EditionStory row to the surviving story first -- see
+            # _reassign_edition_rows() for why deleting without this loses
+            # the edition row.
+            _reassign_edition_rows(story, matched)
+            db.session.flush()
 
             # The merged story's headline is now stale, but regenerating it here
             # would swap the quality model in mid-merge-loop. ollama_catchup()
