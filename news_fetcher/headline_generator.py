@@ -3,6 +3,7 @@
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta
 
 from langfuse import Langfuse
@@ -38,6 +39,41 @@ langfuse = Langfuse(
     secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
     host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000")
 )
+
+
+# The model answers with an error or refusal instead of a headline when the
+# titles it is handed give it nothing to summarize -- e.g. five "Transcript:
+# ... Face the Nation" titles produced "(Error: Input transcripts are missing.
+# Please provide the content to generate a headline.)" on 2026-09-21, which
+# passed the length check and was stored as the story's headline. Patterns are
+# anchored to the start (or a whole-string wrapper) and deliberately narrow --
+# "Error at Boeing plant..." and "Unable to reach deal, talks stall" are
+# ordinary headlines and must never be rejected.
+_LLM_FAILURE_RE = re.compile(
+    r"^\s*(?:"
+    r"\(.*\)\s*$"                                   # whole output wrapped in parens
+    r"|\[.*\]\s*$"                                  # ...or brackets
+    r"|error\s*:"
+    r"|sorry,?\s+(?:but\s+)?i\b"
+    r"|i\s+(?:cannot|can't|can not|am unable|'m unable|apologi[sz]e)\b"
+    r"|as an ai\b"
+    r"|please provide\b"
+    r"|note:"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _looks_like_llm_failure(headline):
+    """True when `headline` is an error/refusal/commentary rather than a headline.
+
+    A real headline is a single line, so any newline (the model adding an
+    explanation after the headline) is also a rejection; the story then keeps
+    its old headline and is retried next run, like any other failed call.
+    """
+    if not headline or "\n" in headline:
+        return True
+    return bool(_LLM_FAILURE_RE.match(headline)) or "please provide" in headline.lower()
 
 
 @observe()
@@ -88,6 +124,10 @@ def generate_story_headline(story):
 
     # Clean up common LLM artifacts
     headline = headline.strip('"\'').strip()
+
+    if _looks_like_llm_failure(headline):
+        logger.warning(f"Rejected non-headline LLM output for '{story.title}': '{headline}'")
+        return None
 
     if headline and len(headline.split()) <= 20:
         logger.info(f"Generated headline: '{headline}'")
