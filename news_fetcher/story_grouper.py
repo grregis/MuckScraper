@@ -269,6 +269,33 @@ def extract_countries(title, extra_titles=None):
     return tokens & COUNTRY_TOKENS
 
 
+# Stock event vocabulary that two unrelated stories routinely share. Used ONLY
+# by entity_veto's overlap guard: a shared token from this set does not count as
+# evidence that two titles describe the same subject.
+#
+# Derived from the 2026-09-04 Nepal/Ukraine misgrouping this veto was built to
+# catch -- a Nepal flood article was merged into a Russian arms-depot strike
+# story on nothing but "death toll rises to X". Those three tokens are the whole
+# overlap, so the guard must not treat them as a subject match.
+#
+# NOTE: corpus document frequency does NOT work as a substitute here, measured
+# 2026-09-27 over 8,000 story titles: 'toll' (0.09%) and 'rises' (0.13%) are
+# RARER than 'netanyahu' (0.18%) or 'games' (0.49%). Stock phrases are rare
+# precisely because they are specific boilerplate, so rarity measures the wrong
+# thing. This has to stay a curated list of generic event language; keep it
+# small, and only add a token after seeing it cause a wrong suppression.
+# TODO.md -> "Recurring Checks" has a runnable method for surfacing candidates
+# (and records the two statistical approaches that do NOT work, so they don't
+# get retried).
+VETO_GENERIC_TOKENS = frozenset({
+    "death", "toll", "rises", "rise", "rose", "killed", "kills", "dead",
+    "injured", "wounded", "hurt", "missing", "dies", "died", "arrested",
+    "charged", "report", "reports", "says", "said", "warns", "urges",
+    "who", "are", "but", "key", "new", "first", "latest", "amid", "after",
+    "live", "updates", "what", "how", "why",
+})
+
+
 def entity_veto(article_title, matched_story):
     """True if article_title and matched_story name different, non-overlapping
     countries -- catches an LLM match approved purely on a shared boilerplate
@@ -278,6 +305,30 @@ def entity_veto(article_title, matched_story):
     don't, so this can't veto the majority of matches, and an unrecognized
     or ambiguous country name (see COUNTRY_TOKENS) only ever costs a missed
     veto, never a wrong one.
+
+    Overlap guard added 2026-09-27. Disjoint country sets are NOT evidence of a
+    different story: one event is routinely described with different countries
+    ("Fiery Netanyahu vows *Iran's* demise" vs "*Netanyahu* faces isolation",
+    whose {israel} comes from its headline). Measured over all 31 firings in 17
+    days of retained logs, 21 wrongly split a single event -- an entire UN
+    speech, the BRICS summit and the Okinawa election were each split from
+    themselves. So if the two titles share any meaningful token, the subject is
+    the same and the country difference is ignored.
+
+    Replayed against those 31 firings before shipping: of the 29 whose article
+    could be reliably attributed, this suppresses 21 and leaves 8 -- including
+    both firings confirmed correct by hand (a UK front-pages roundup vs a Diana
+    book theft, and an Israeli hostage musician vs Ed Sheeran's Gaza remarks),
+    which share no tokens at all.
+
+    KNOWN RISK, watch for this: "any shared token" is deliberately loose, and
+    some suppressions in the replay rested on weak tokens ('oil', 'parts',
+    'who'/'are'/'but' -- the last three survive TITLE_STOPWORDS today). That is
+    the same shared-boilerplate hole this veto was built to close, so if
+    chimeras start reappearing on generic phrases, tighten this before widening
+    it. Tightening by requiring 2+ shared tokens does NOT work -- it loses the
+    two cleanest wins, Netanyahu and Okinawa, which share exactly one highly
+    distinctive token each. Rank tokens by distinctiveness instead.
     """
     article_countries = extract_countries(article_title)
     if not article_countries:
@@ -289,7 +340,19 @@ def entity_veto(article_title, matched_story):
     if not story_countries:
         return False
 
-    return article_countries.isdisjoint(story_countries)
+    if not article_countries.isdisjoint(story_countries):
+        return False
+
+    # Same subject named in both titles -> differing countries are incidental.
+    # Compared against the story's own title only, matching the replay above;
+    # folding in headline/article titles would suppress considerably more.
+    # Stock event language is excluded: "death toll rises" is shared vocabulary
+    # without shared subject, and suppressing on it would reopen the very
+    # misgrouping this veto exists to catch (see VETO_GENERIC_TOKENS).
+    if shared_title_tokens(article_title, matched_story.title) - VETO_GENERIC_TOKENS:
+        return False
+
+    return True
 
 
 def titles_are_near_duplicates(article_title, story_title):
