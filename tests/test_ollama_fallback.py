@@ -143,6 +143,39 @@ class OllamaFallbackTests(unittest.TestCase):
         self.assertEqual(candidates, [self.PRIMARY, self.FALLBACK])
         self.assertEqual(llm_client._ollama_state["active"], "primary")
 
+    def test_fallback_success_does_not_push_reprobe_deadline(self):
+        """A burst of successful fallback calls must NOT move next_primary_probe
+        forward -- otherwise a busy job keeps resetting the timer and the primary
+        is never re-probed mid-job (the long-catch-up-on-fallback bug)."""
+        deadline = 12345.0
+        llm_client._ollama_state["active"] = "fallback"
+        llm_client._ollama_state["next_primary_probe"] = deadline
+
+        for _ in range(5):
+            llm_client._mark_ollama_host_up(self.FALLBACK)
+            self.assertEqual(llm_client._ollama_state["active"], "fallback")
+            self.assertEqual(llm_client._ollama_state["next_primary_probe"], deadline)
+
+    def test_busy_fallback_job_rechecks_primary_on_schedule(self):
+        """Even while continuously serving from the fallback, once the wall-clock
+        recheck deadline passes the primary is re-probed and (if back) adopted --
+        a GPU box that returns mid-job is noticed within one recheck interval."""
+        # Simulate a job already parked on the fallback with several successful
+        # fallback calls behind it; the deadline was set when we entered fallback.
+        llm_client._ollama_state["active"] = "fallback"
+        llm_client._ollama_state["next_primary_probe"] = 0.0  # interval has elapsed
+        for _ in range(10):
+            llm_client._mark_ollama_host_up(self.FALLBACK)  # busy load, no timer bump
+
+        # Deadline is still in the past, so the next candidates() call probes the
+        # primary, which has now come back online.
+        with mock.patch.object(llm_client.requests, "get",
+                               side_effect=lambda url, **k: _FakeResponse(status_code=200)):
+            candidates = llm_client._ollama_host_candidates()
+
+        self.assertEqual(candidates, [self.PRIMARY, self.FALLBACK])
+        self.assertEqual(llm_client._ollama_state["active"], "primary")
+
     # -- request-time failure falls through to the other host ----------------
 
     def test_primary_generate_error_falls_through_to_fallback(self):

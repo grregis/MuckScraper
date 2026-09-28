@@ -269,10 +269,17 @@ def _mark_ollama_host_up(host):
     if host == OLLAMA_HOST:
         _ollama_state["active"] = "primary"
     elif host == OLLAMA_FALLBACK_HOST:
+        # Stay parked on the fallback, but deliberately DON'T push
+        # next_primary_probe forward. The re-probe deadline is a fixed
+        # wall-clock timer set once when we enter fallback state (and only
+        # rescheduled after an actual failed re-probe). Bumping it on every
+        # successful fallback call would mean a busy job -- summaries/embeds
+        # landing more often than the recheck interval -- keeps resetting the
+        # timer so the primary is never re-probed mid-job, and a GPU box that
+        # comes back partway through a long catch-up would go unnoticed until
+        # the job goes idle. Leaving the deadline alone lets the recheck fire
+        # on schedule regardless of load.
         _ollama_state["active"] = "fallback"
-        _ollama_state["next_primary_probe"] = (
-            time.monotonic() + OLLAMA_PRIMARY_RECHECK_SECONDS
-        )
 
 
 def _mark_ollama_host_down(host):
