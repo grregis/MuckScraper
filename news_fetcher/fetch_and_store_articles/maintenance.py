@@ -32,7 +32,7 @@ def generate_missing_embeddings(batch_size=50):
     logger.info(f"Generating embeddings for {len(missing)} articles...")
     count = 0
     for article in missing:
-        # Align with store_articles and force_regroup_all: use title + snippet
+        # Align with store_articles: use title + snippet
         from news_fetcher.story_grouper import strip_video_prefix
         clean_title = strip_video_prefix(article.title)
         embed_text = clean_title
@@ -185,138 +185,6 @@ def force_resummarize_all(batch_size=20):
 
     db.session.commit()
     logger.info("=== Force re-summarization complete ===")
-
-
-def force_regroup_all():
-    """
-    Force re-group ALL articles using vector similarity embeddings.
-    Regenerates ALL embeddings first (to include content), then re-assigns every article
-    to the best matching story.
-    """
-    from news_fetcher.story_grouper import get_embedding, find_matching_story
-
-    # Fast tier: regrouping regenerates embeddings and confirms matches via
-    # ask_ollama_for_match(). Note embeddings follow EMBEDDING_PROVIDER, a
-    # third axis this check has never covered -- see get_embedding().
-    if not check_ollama_status(_llm.TIER_FAST):
-        logger.info("Fast-tier LLM offline, skipping force re-group.")
-        return
-
-    logger.info("=== Force re-group starting ===")
-    logger.info("  [Force Regroup] Step 1: Regenerating embeddings...")
-
-    # Step 1: Regenerate embeddings for ALL articles to ensure content is included
-    all_articles = Article.query.all()
-    logger.info(f"Regenerating embeddings for {len(all_articles)} articles (this may take a while)...")
-    
-    for i, article in enumerate(all_articles):
-        # Use title + snippet for better semantic matching
-        from news_fetcher.story_grouper import strip_video_prefix
-        clean_title = strip_video_prefix(article.title)
-        embed_text = clean_title
-        if article.content:
-            from news_fetcher.summarizer import strip_html
-            snippet = strip_html(article.content)[:200].strip()
-            embed_text = f"{clean_title}. {snippet}"
-        embedding = get_embedding(embed_text)
-        if embedding is not None:
-            article.embedding = embedding
-        
-        if (i + 1) % 50 == 0:
-            db.session.commit()
-            logger.info(f"  [Force Regroup] Embeddings progress: {i + 1}/{len(all_articles)}")
-
-    db.session.commit()
-    logger.info("Embeddings regenerated.")
-    logger.info("  [Force Regroup] Step 2: Starting re-grouping loop...")
-
-    # Step 2: Get all articles with embeddings (should be all of them now)
-    # Re-query to be safe
-    all_articles = Article.query.filter(Article.embedding != None).all()
-    logger.info(f"Re-grouping {len(all_articles)} articles...")
-
-    # Step 3: Delete all existing stories and re-create from scratch
-    # First detach all articles from stories and clear topics
-    for article in all_articles:
-        article.story_id = None
-        article.topics = [] # Clear in-memory topics to avoid IntegrityError on flush/commit
-    db.session.flush()
-
-    # Clear junction tables first to avoid foreign key violations
-    db.session.execute(db.text("DELETE FROM story_topics"))
-    db.session.execute(db.text("DELETE FROM article_topics"))
-    db.session.flush()
-
-    # Delete all stories
-    Story.query.delete()
-    db.session.flush()
-    
-    # CRITICAL: Expire all objects after bulk deletes so the identity map 
-    # doesn't contain references to the deleted Story objects.
-    db.session.expire_all()
-
-    # Step 4: Re-group articles one by one and re-attach topics
-    from news_fetcher.story_grouper import clean_story_title
-    from news_fetcher.topic_classifier import classify_article
-    from aggregator.models import Topic as TopicModel
-
-    new_stories = []
-    try:
-        for i, article in enumerate(all_articles):
-            matched = find_matching_story(
-                article.title, article.embedding, new_stories, article_content=article.content
-            )
-
-            if matched:
-                story = matched
-            else:
-                new_title = clean_story_title(article.title)
-                story = Story(title=new_title, summary=None)
-                db.session.add(story)
-                db.session.flush()
-                new_stories.append(story)
-            
-            # Re-attach article to story
-            article.story = story
-            # Maintain in-memory list so find_matching_story can see it
-            if article not in story.articles:
-                story.articles.append(article)
-
-            # Re-attach topic tags
-            topic_names = classify_article(article.title, article.content or "")
-            for topic_name in topic_names:
-                topic = TopicModel.query.filter_by(name=topic_name).first()
-                if not topic:
-                    topic = TopicModel(name=topic_name)
-                    db.session.add(topic)
-                    db.session.flush()
-                
-                # Since we cleared article.topics = [] above, this is safe
-                if topic not in article.topics:
-                    article.topics.append(topic)
-                if topic not in story.topics:
-                    story.topics.append(topic)
-
-            # Commit in batches of 50
-            if (i + 1) % 50 == 0:
-                db.session.commit()
-                logger.info(f"  [Force Regroup] Grouping progress: {i + 1}/{len(all_articles)}")
-
-    except Exception as e:
-        logger.error(f"  [Force Regroup] CRITICAL ERROR: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        db.session.rollback()
-        raise
-
-    db.session.commit()
-
-    # Step 5: Generate headlines for all multi-article stories
-    logger.info("Generating AI headlines for regrouped stories...")
-    logger.info("  [Force Regroup] Step 3: Generating AI headlines...")
-    generate_missing_headlines()
-
-    logger.info(f"=== Force re-group complete. Created {len(new_stories)} stories. ===")
 
 
 def reclassify_all_articles(batch_size=50):

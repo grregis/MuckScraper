@@ -20,7 +20,7 @@ _TASK_STATUS_KEY_PREFIXES = ("bulk_task_status_v1:", "ai_task_status_v1:")
 
 # How long a task-status can plausibly stay 'running' before it's treated as
 # orphaned rather than just slow. Generous on purpose -- some of these
-# (force_regroup_all, reclassify_all_articles) can legitimately run for a long
+# (reclassify_all_articles, force_resummarize_all) can legitimately run for a long
 # time on a full DB; this only needs to catch tasks that are truly dead, not
 # flag slow-but-alive ones.
 ORPHANED_TASK_STALE_AFTER = timedelta(hours=3)
@@ -28,7 +28,6 @@ ORPHANED_TASK_STALE_AFTER = timedelta(hours=3)
 BULK_TASK_ACTIONS = {
     "ollama_catchup",
     "scrape_all_missing",
-    "force_regroup",
     "force_resummarize",
     "reclassify_articles",
     "audit_scrapes",

@@ -80,7 +80,6 @@ from .maintenance import (  # noqa: F401
     generate_missing_embeddings,
     audit_existing_scrapes,
     force_resummarize_all,
-    force_regroup_all,
     reclassify_all_articles,
     ollama_catchup,
 )

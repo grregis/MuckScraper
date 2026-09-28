@@ -22,16 +22,6 @@ def ollama_catchup_route():
     return redirect_to_articles(label, scrape_status)
 
 
-@admin.route("/force-regroup", methods=["POST"])
-@login_required
-def force_regroup():
-    label = request.form.get("label", "")
-    scrape_status = request.form.get("scrape_status", "").strip() or None
-    from news_fetcher.fetch_and_store_articles import force_regroup_all
-    _start_bulk_task("force_regroup", force_regroup_all)
-    return redirect_to_articles(label, scrape_status)
-
-
 @admin.route("/force-resummarize", methods=["POST"])
 @login_required
 def force_resummarize():
