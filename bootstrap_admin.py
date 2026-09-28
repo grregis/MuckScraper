@@ -8,6 +8,7 @@ from flask_migrate import stamp
 from aggregator import db
 from aggregator.app import app, init_db
 from aggregator.models import User
+from aggregator.seed_defaults import seed_defaults
 
 
 def required_env(name):
@@ -38,6 +39,19 @@ def bootstrap_admin():
         # Fresh installs created with db.create_all() need Alembic marked current
         # so later `flask db upgrade` runs only future migrations.
         stamp(revision="head")
+
+        # ...but stamping head also means the seeding migrations never run, and
+        # can never run afterwards, so a fresh install would come up with all
+        # seven config tables empty: nothing scheduled, nothing fetched, and no
+        # prompts, hence no summaries/headlines/classification. Seed them here
+        # instead. Insert-only and idempotent, so this is a no-op on an existing
+        # install and cannot overwrite anything the operator has customized.
+        counts = seed_defaults()
+        inserted = sum(v for k, v in counts.items() if k != "topics_backfilled")
+        print(
+            f"Default config seeded: {inserted} row(s) inserted."
+            if inserted else "Default config already present."
+        )
 
         user = User.query.filter_by(username=username).first()
         email_owner = User.query.filter_by(email=email).first()
