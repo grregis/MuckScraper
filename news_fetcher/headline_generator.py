@@ -106,6 +106,7 @@ def generate_story_headline(story):
         logger.error("No prompt template found for 'headline_generator'")
         return None
 
+    langfuse_context.update_current_trace(metadata={"story_id": story.id}, tags=[f"story:{story.id}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={

@@ -135,6 +135,44 @@ def _save_json_setting(key, value):
     db.session.commit()
 
 
+# Per-run quality counters kept in the outcome history: history key -> (step
+# name in run_metrics["steps"], counter names). last_run_metrics is overwritten
+# every run, so without this the counters have no trend.
+_QUALITY_STEP_COUNTERS = {
+    "headline_generation": ("headline_generation", ("candidates", "generated", "failed")),
+    "grouping_review": ("review_ambiguous_grouping_matches", ("reviewed", "reassigned")),
+    "edition_content": (
+        "process_current_edition",
+        (
+            "story_summaries_generated", "deep_reports_generated",
+            "child_article_summaries_generated", "stale_stories_reset",
+        ),
+    ),
+    "edition_publish": (
+        "publish_edition",
+        (
+            "story_count", "dedupe_skip_count", "mixed_coverage_count",
+            "caps_skipped_bias", "balance_bucket_counts",
+        ),
+    ),
+}
+
+
+def _quality_step_counters(run_metrics):
+    """Counters for phases that ran; None for phases that were skipped or errored.
+
+    None, not 0: a fetch-only run skips these phases, and "did not run" must not
+    look like "ran and produced nothing" in a trend.
+    """
+    steps = run_metrics.get("steps") or {}
+    out = {}
+    for key, (step_name, counters) in _QUALITY_STEP_COUNTERS.items():
+        step = steps.get(step_name)
+        ran = isinstance(step, dict) and step.get("status") in ("ok", "processed", "published", "empty")
+        out[key] = {name: step.get(name) for name in counters} if ran else None
+    return out
+
+
 def _build_scrape_outcome_history_entry(run_metrics, headline_site_metrics):
     started_at = run_metrics.get("started_at")
     finished_at = run_metrics.get("finished_at")
@@ -162,6 +200,7 @@ def _build_scrape_outcome_history_entry(run_metrics, headline_site_metrics):
         "headline_blocked_articles": headline_site_metrics.get("scrape", {}).get("blocked_articles"),
         "stored_articles": run_metrics.get("totals", {}).get("stored"),
         "input_articles": run_metrics.get("totals", {}).get("input_articles"),
+        "quality": _quality_step_counters(run_metrics),
     }
 
 

@@ -309,6 +309,7 @@ def summarize_story(story):
     if prompt is None:
         return None
 
+    langfuse_context.update_current_trace(metadata={"story_id": story.id}, tags=[f"story:{story.id}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
@@ -472,6 +473,7 @@ def generate_deep_report(story):
     if prompt is None:
         return None
 
+    langfuse_context.update_current_trace(metadata={"story_id": story.id}, tags=[f"story:{story.id}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={
@@ -521,6 +523,7 @@ def summarize_article(article):
     if prompt is None:
         return None
 
+    langfuse_context.update_current_trace(metadata={"article_id": article.id}, tags=[f"article:{article.id}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={"model": MODEL, "analysis_type": analysis_type, "persona": persona}
@@ -573,6 +576,7 @@ def generate_article_deep_analysis(article):
     if prompt is None:
         return None
 
+    langfuse_context.update_current_trace(metadata={"article_id": article.id}, tags=[f"article:{article.id}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={"model": MODEL, "analysis_type": analysis_type, "scope": "article_deep_analysis"}

@@ -68,6 +68,7 @@ def get_outlet_bias_from_llm(outlet_name):
     if prompt is None:
         return None
 
+    langfuse_context.update_current_trace(metadata={"outlet_name": outlet_name}, tags=[f"outlet:{outlet_name}"])
     langfuse_context.update_current_observation(
         input=prompt,
         metadata={"provider": llm_client.provider_for_tier(llm_client.TIER_FAST)}
