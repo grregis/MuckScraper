@@ -330,6 +330,11 @@ def merge_duplicate_outlets():
                 canonical.bias_source = dup.bias_source
                 canonical.allsides_bias_score = getattr(dup, 'allsides_bias_score', None)
 
+            # dup.articles was loaded by len(o.articles) above and still
+            # holds the moved rows; deleting dup with that stale collection
+            # makes SQLAlchemy NULL their outlet_id (341 orphans found
+            # 2026-09-30). Expire it so the delete sees the empty truth.
+            db.session.expire(dup, ["articles"])
             db.session.delete(dup)
             merged += article_count
             deleted += 1
