@@ -142,10 +142,10 @@ cd muckscraper
 The first run creates `.env` from `.env.sample` and stops so you can fill in
 your API keys, Ollama host, and admin login. Run it again once that's done —
 it builds the core services, sets up the database (pgvector extension +
-tables) and admin user, and starts the scheduler. Safe to re-run on a fresh
-install. On an existing install being upgraded across versions, re-running
-this alone can mark the schema current without actually applying pending
-migrations — run the `flask db upgrade` step below afterward to be sure.
+tables) and admin user, and starts the scheduler. Safe to re-run: on an
+existing install it applies any pending migrations rather than skipping them.
+(A very old install with tables but no migration history stops with
+instructions instead of guessing its schema version.)
 
 Then open `http://localhost:5000`.
 
