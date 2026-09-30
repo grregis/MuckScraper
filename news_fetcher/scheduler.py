@@ -671,6 +671,36 @@ def _notify_n8n():
         logging.warning(f"  [n8n] Webhook failed ({e}) — continuing normally")
 
 
+def _refresh_inference_health(ollama_state, label):
+    """Probe real Ollama inference and set llm_client's wedged flag.
+
+    The reachability checks only ask whether Ollama's HTTP server answers,
+    which stays true when the GPU cannot run inference (2026-09-28). A wedged
+    result makes every Ollama call fail fast until a later checkpoint's probe
+    succeeds, so a dead GPU degrades the run like an ordinary outage.
+    """
+    if not llm_client.uses_ollama():
+        return
+    try:
+        ok = llm_client.probe_ollama_inference()
+    except Exception as e:
+        logging.warning("  [LLM] Inference probe errored during %s (%s)", label, e)
+        return
+    was_wedged = llm_client.inference_wedged()
+    wedged = ok is False
+    llm_client.set_inference_wedged(wedged)
+    if wedged:
+        ollama_state["inference_wedged"] = True
+        if not was_wedged:
+            logging.error(
+                "  [LLM] Ollama answers HTTP but inference is failing at %s -- "
+                "skipping Ollama work until it recovers. Host likely needs a reboot.",
+                label,
+            )
+    elif was_wedged:
+        logging.info("  [LLM] Ollama inference recovered at %s", label)
+
+
 def _check_ollama_status_for_report(ollama_state, label):
     """Record LLM availability at one point in the run.
 
@@ -685,6 +715,13 @@ def _check_ollama_status_for_report(ollama_state, label):
     install, which is every install that hasn't set LLM_FAST_PROVIDER, this is
     byte-identical to the old behavior.
     """
+    if label == "run_end":
+        # Don't probe here: the n8n suspend follows immediately. Just clear
+        # the flag so it can't outlive the run; the next run_start re-probes.
+        llm_client.set_inference_wedged(False)
+    else:
+        _refresh_inference_health(ollama_state, label)
+
     try:
         by_provider = llm_client.check_all_llm_status()
     except Exception as e:
@@ -767,6 +804,7 @@ def run_all_fetches(run_full_pipeline=True):
             "up_at_start": False,
             "up_at_end": False,
             "went_down_during_run": False,
+            "inference_wedged": False,
             "checks": [],
         }
         run_metrics = {

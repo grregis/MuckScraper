@@ -292,10 +292,75 @@ def _mark_ollama_host_down(host):
         )
 
 
+# Inference-level health, set by the scheduler at each run checkpoint.
+# /api/tags answering does not mean inference works: on 2026-09-28 the box
+# resumed with HTTP, ARP and /api/tags all healthy while every embedding and
+# generate call timed out, so every stage's gate passed and the run ground
+# through 499+ timeouts for hours. While this flag is set, Ollama counts as
+# down and calls fail fast -- the same additive-singleton fallback as an
+# ordinary outage, in seconds rather than hours.
+_INFERENCE_PROBE_TIMEOUT = 30
+_INFERENCE_PROBE_ATTEMPTS = 2
+_inference_state = {"wedged": False, "logged_skip": False}
+
+
+def uses_ollama():
+    """Whether any chat tier or embeddings are served by Ollama."""
+    return "ollama" in providers_in_use() or EMBEDDING_PROVIDER != "gemini"
+
+
+def probe_ollama_inference():
+    """Make one real embedding call against each reachable Ollama host.
+
+    True  -- some host embedded successfully.
+    False -- a host answers HTTP but none can embed (inference wedged).
+    None  -- no host answers at all (asleep or down), which the ordinary
+             reachability checks already handle.
+    """
+    reachable = False
+    for host in (OLLAMA_HOST, OLLAMA_FALLBACK_HOST):
+        if not host or not _probe_ollama_host(host):
+            continue
+        reachable = True
+        for attempt in range(1, _INFERENCE_PROBE_ATTEMPTS + 1):
+            try:
+                response = requests.post(
+                    f"{host}/api/embeddings",
+                    json={"model": EMBEDDING_MODEL, "prompt": "health check"},
+                    timeout=_INFERENCE_PROBE_TIMEOUT,
+                )
+                response.raise_for_status()
+                if response.json().get("embedding"):
+                    return True
+            except Exception as e:
+                logger.info(
+                    f"  [llm_client] Inference probe {attempt}/{_INFERENCE_PROBE_ATTEMPTS} "
+                    f"failed on {host}: {e}"
+                )
+    return False if reachable else None
+
+
+def set_inference_wedged(wedged):
+    _inference_state["wedged"] = bool(wedged)
+    _inference_state["logged_skip"] = False
+
+
+def inference_wedged():
+    return _inference_state["wedged"]
+
+
 def _ollama_request(kind, fn):
     """Run fn(host) against the preferred Ollama host, falling back to the other
     host on failure, and update the shared health state. Returns fn's result, or
     None if every candidate failed. `kind` is a label used only for logging."""
+    if _inference_state["wedged"]:
+        if not _inference_state["logged_skip"]:
+            _inference_state["logged_skip"] = True
+            logger.warning(
+                "  [llm_client] Ollama inference is wedged -- skipping Ollama calls "
+                "until the next health checkpoint"
+            )
+        return None
     for host in _ollama_host_candidates():
         if not host:
             continue
@@ -528,6 +593,8 @@ def check_all_llm_status():
 def _check_ollama_status():
     # Online if EITHER host answers -- the fallback keeps AI features available
     # (and the sidebar dot green) while the primary is asleep.
+    if _inference_state["wedged"]:
+        return False
     for host in (OLLAMA_HOST, OLLAMA_FALLBACK_HOST):
         if host and _probe_ollama_host(host):
             return True
