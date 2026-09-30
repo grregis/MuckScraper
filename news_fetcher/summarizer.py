@@ -250,6 +250,29 @@ def article_needs_deep_analysis(article):
     return detect_analysis_type(article) in {"politics", "science", "business"}
 
 
+# Shortest legitimate multi-article story summary in the 60 days to
+# 2026-09-30 was 319 chars (p1 421); the one below this was an 81-char
+# mid-sentence cut (story 74001) that went straight onto the site.
+STORY_SUMMARY_MIN_CHARS = 200
+
+
+def _story_summary_rejection(summary):
+    """Reason a generated story summary must not be stored, else None.
+
+    Returning None from summarize_story() leaves Story.summary empty, so the
+    story is retried on the next full run instead of publishing a cut-off
+    paragraph. Deliberately narrow: only length and a missing sentence end.
+    """
+    from news_fetcher.quality_checks import looks_truncated
+
+    if not summary or not summary.strip():
+        return None
+    text = summary.strip()
+    if len(text) < STORY_SUMMARY_MIN_CHARS:
+        return f"too short ({len(text)} chars)"
+    return looks_truncated(text)
+
+
 @observe()
 def summarize_story(story):
     """
@@ -322,6 +345,15 @@ def summarize_story(story):
     )
     summary = llm_client.generate_text(prompt, timeout=120)
     langfuse_context.update_current_observation(output=summary)
+
+    rejected = _story_summary_rejection(summary)
+    if rejected:
+        logger.warning(
+            "  [Summarizer] Rejected story summary for '%s' (%s): %r",
+            story.title[:60], rejected, (summary or "")[-80:],
+        )
+        langfuse_context.update_current_observation(metadata={"rejected_reason": rejected})
+        return None
 
     if summary:
         logger.info(f"  Generated {analysis_type} summary for story: {story.title[:60]}...")
