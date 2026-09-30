@@ -16,6 +16,7 @@ ALLSIDES_BIAS = {
     "NPR": 2,
     "PBS": 3,
     "PBS NewsHour": 3,
+    "PBS News": 3,
     "BBC": 2,
     "BBC News": 2,
 
@@ -71,6 +72,7 @@ ALLSIDES_BIAS = {
     "The Daily Mail": 4,
     "Washington Examiner": 4,
     "Washington Times": 4,
+    "The Washington Times": 4,
     "National Review": 4,
     "Fox Business": 4,
     "Reason": 4,
@@ -79,6 +81,7 @@ ALLSIDES_BIAS = {
     "Fox News": 5,
     "Breitbart": 5,
     "Breitbart News": 5,
+    "Breitbart News Network": 5,
     "The Daily Wire": 5,
     "Daily Wire": 5,
     "Newsmax": 5,

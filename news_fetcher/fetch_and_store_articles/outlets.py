@@ -120,6 +120,25 @@ def normalize_source_name(name):
     if name_lower in mapping:
         return mapping[name_lower]
 
+    # Bare-domain names (some providers report the source as "nypost.com"),
+    # which otherwise become AI-rated duplicates of the AllSides-rated outlet.
+    domain_names = {
+        "cnn.com": "CNN",
+        "nypost.com": "New York Post",
+        "washingtonpost.com": "Washington Post",
+        "usatoday.com": "USA Today",
+        "huffpost.com": "HuffPost",
+        "vox.com": "Vox",
+        "businessinsider.com": "Business Insider",
+        "the-independent.com": "The Independent",
+        "dailymail.com": "Daily Mail",
+        "upi.com": "UPI",
+        "reason.com": "Reason",
+    }
+    domain = name_lower[4:] if name_lower.startswith("www.") else name_lower
+    if domain in domain_names:
+        return domain_names[domain]
+
     # Partial matches/cleaning
 
     # Al Jazeera — strip long feed title
@@ -283,6 +302,17 @@ def merge_duplicate_outlets():
                 ),
                 {"canonical_id": canonical.id, "dup_id": dup.id}
             )
+            # Article bias is a copy of outlet bias, so re-copy it from the
+            # outlet the articles now belong to (nypost.com's AI 4 vs New
+            # York Post's AllSides 5).
+            if canonical.bias_score is not None:
+                db.session.execute(
+                    db.text(
+                        "UPDATE articles SET bias_score = :score "
+                        "WHERE outlet_id = :canonical_id"
+                    ),
+                    {"score": canonical.bias_score, "canonical_id": canonical.id}
+                )
             db.session.flush()
 
             # Verify reassignment before deleting
