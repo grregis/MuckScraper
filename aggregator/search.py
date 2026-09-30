@@ -4,9 +4,10 @@ import time
 
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 
-from aggregator.models import Article, Story
+from aggregator.models import db, Article, Story
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,11 @@ ARTICLE_INDEX = "articles"
 TASK_TIMEOUT_SECONDS = 60
 TASK_POLL_SECONDS = 0.5
 DOCUMENT_BATCH_SIZE = 200
+# Rows loaded from Postgres per chunk. A full reindex used to load every
+# article (with full content) at once; on 2026-09-30 that got the gunicorn
+# worker running it killed 70s in, leaving the index two months stale.
+LOAD_CHUNK_SIZE = 500
+ID_PAGE_SIZE = 10000
 INDEX_SETTINGS = {
     STORY_INDEX: {
         "searchableAttributes": [
@@ -189,56 +195,138 @@ def ensure_indexes():
         _wait_for_task(task["taskUid"])
 
 
-def reindex_all():
-    ensure_indexes()
-
-    stories = (
-        Story.query
-        .options(
-            joinedload(Story.topics),
-            joinedload(Story.articles).joinedload(Article.outlet),
-            joinedload(Story.articles).joinedload(Article.topics),
-        )
-        .all()
-    )
-    articles = (
-        Article.query
-        .options(
-            joinedload(Article.outlet),
-            joinedload(Article.topics),
-            joinedload(Article.story).joinedload(Story.topics),
-        )
-        .all()
+def _story_query():
+    return Story.query.options(
+        joinedload(Story.topics),
+        joinedload(Story.articles).joinedload(Article.outlet),
+        joinedload(Story.articles).joinedload(Article.topics),
     )
 
-    story_documents = [_serialize_story(story) for story in stories]
-    article_documents = [_serialize_article(article) for article in articles]
 
-    _replace_documents(STORY_INDEX, story_documents)
-    _replace_documents(ARTICLE_INDEX, article_documents)
-
-    return {
-        "story_documents": len(story_documents),
-        "article_documents": len(article_documents),
-    }
+def _article_query():
+    return Article.query.options(
+        joinedload(Article.outlet),
+        joinedload(Article.topics),
+        joinedload(Article.story).joinedload(Story.topics),
+    )
 
 
-def _replace_documents(index_name, documents, batch_size=DOCUMENT_BATCH_SIZE):
-    delete_task = _request("DELETE", f"/indexes/{index_name}/documents", timeout=120)
-    _wait_for_task(delete_task["taskUid"])
-
-    if not documents:
-        return
-
+def _put_documents(index_name, documents, batch_size=DOCUMENT_BATCH_SIZE):
     for start in range(0, len(documents), batch_size):
-        batch = documents[start:start + batch_size]
         task = _request(
             "PUT",
             f"/indexes/{index_name}/documents",
-            json=batch,
+            json=documents[start:start + batch_size],
             timeout=120,
         )
         _wait_for_task(task["taskUid"])
+
+
+def _upsert_ids(index_name, model, query_fn, serialize, ids):
+    """Load, serialize and upsert rows in chunks so memory stays bounded.
+    Upserting (not delete-then-add) keeps search answering throughout."""
+    ids = sorted(set(ids))
+    written = 0
+    for start in range(0, len(ids), LOAD_CHUNK_SIZE):
+        chunk = ids[start:start + LOAD_CHUNK_SIZE]
+        rows = query_fn().filter(model.id.in_(chunk)).all()
+        documents = [serialize(row) for row in rows]
+        if documents:
+            _put_documents(index_name, documents)
+        written += len(documents)
+    return written
+
+
+def _indexed_ids(index_name):
+    ids = set()
+    offset = 0
+    while True:
+        payload = _request(
+            "GET",
+            f"/indexes/{index_name}/documents",
+            params={"fields": "id", "limit": ID_PAGE_SIZE, "offset": offset},
+            timeout=60,
+        )
+        results = payload.get("results") or []
+        ids.update(doc["id"] for doc in results)
+        if len(results) < ID_PAGE_SIZE:
+            return ids
+        offset += ID_PAGE_SIZE
+
+
+def _delete_missing(index_name, model):
+    """Remove documents whose row no longer exists (e.g. a story merged away
+    during grouping). Returns how many were deleted."""
+    existing = {row[0] for row in db.session.query(model.id).all()}
+    stale = sorted(_indexed_ids(index_name) - existing)
+    for start in range(0, len(stale), ID_PAGE_SIZE):
+        task = _request(
+            "POST",
+            f"/indexes/{index_name}/documents/delete-batch",
+            json=stale[start:start + ID_PAGE_SIZE],
+            timeout=120,
+        )
+        _wait_for_task(task["taskUid"])
+    return len(stale)
+
+
+def reindex_all():
+    """Rebuild both indexes from Postgres. Upserts in bounded chunks and then
+    deletes stale documents, so search keeps working while it runs."""
+    ensure_indexes()
+
+    story_ids = [row[0] for row in db.session.query(Story.id).all()]
+    article_ids = [row[0] for row in db.session.query(Article.id).all()]
+    stories = _upsert_ids(STORY_INDEX, Story, _story_query, _serialize_story, story_ids)
+    articles = _upsert_ids(ARTICLE_INDEX, Article, _article_query, _serialize_article, article_ids)
+
+    return {
+        "story_documents": stories,
+        "article_documents": articles,
+        "stories_deleted": _delete_missing(STORY_INDEX, Story),
+        "articles_deleted": _delete_missing(ARTICLE_INDEX, Article),
+    }
+
+
+def index_changed_since(since):
+    """Bring the indexes up to date with what changed since `since` (a naive
+    UTC datetime, normally the start of a pipeline run).
+
+    Covers new articles, the stories they joined, stories whose headline or
+    summary was (re)generated, the articles of those stories (their documents
+    carry the story headline), and stories/articles that no longer exist.
+    """
+    _ensure_index_exists(STORY_INDEX)
+    _ensure_index_exists(ARTICLE_INDEX)
+
+    new_article_rows = (
+        db.session.query(Article.id, Article.story_id)
+        .filter(Article.fetched_at >= since)
+        .all()
+    )
+    story_ids = {story_id for _, story_id in new_article_rows if story_id}
+    story_ids.update(
+        row[0] for row in db.session.query(Story.id).filter(
+            or_(
+                Story.created_at >= since,
+                Story.summary_generated_at >= since,
+                Story.headline_generated_at >= since,
+            )
+        ).all()
+    )
+    article_ids = {article_id for article_id, _ in new_article_rows}
+    for start in range(0, len(story_ids), ID_PAGE_SIZE):
+        chunk = sorted(story_ids)[start:start + ID_PAGE_SIZE]
+        article_ids.update(
+            row[0] for row in db.session.query(Article.id).filter(Article.story_id.in_(chunk)).all()
+        )
+
+    return {
+        "story_documents": _upsert_ids(STORY_INDEX, Story, _story_query, _serialize_story, story_ids),
+        "article_documents": _upsert_ids(ARTICLE_INDEX, Article, _article_query, _serialize_article, article_ids),
+        "stories_deleted": _delete_missing(STORY_INDEX, Story),
+        "articles_deleted": _delete_missing(ARTICLE_INDEX, Article),
+    }
 
 
 def search_story_ids(query, limit=250):
