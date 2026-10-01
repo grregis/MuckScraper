@@ -26,7 +26,26 @@ def guess_story_title(title):
     return " ".join(title.split()[:6])
 
 
+def _strip_outlet_suffix(title, outlet_names):
+    """Drop a trailing " - CNBC" / " | Reuters" naming one of the story's own
+    outlets, so the outlet name doesn't count as a shared title word."""
+    for sep in (" - ", " | ", " — ", " – "):
+        head, found, tail = title.rpartition(sep)
+        if found and head and tail.strip().lower() in outlet_names:
+            return head
+    return title
+
+
 def _story_dedupe_titles(story, max_article_titles=5):
+    outlet_names = set()
+    for article in story.articles:
+        source = getattr(article, "source", None)
+        outlet = getattr(article, "outlet", None)
+        if source:
+            outlet_names.add(source.strip().lower())
+        if outlet is not None and getattr(outlet, "name", None):
+            outlet_names.add(outlet.name.strip().lower())
+
     titles = []
     if story.title:
         titles.append(story.title)
@@ -35,7 +54,7 @@ def _story_dedupe_titles(story, max_article_titles=5):
     for article in story.articles[:max_article_titles]:
         if article.title:
             titles.append(article.title)
-    return titles
+    return [_strip_outlet_suffix(title, outlet_names) for title in titles]
 
 
 def _story_signature_tokens(story):
@@ -91,6 +110,27 @@ EDITION_DEDUPE_GENERIC_TOKENS = {
     "where",
     "wife",
     "win",
+}
+
+# Added 2026-10-01: edition 475 dropped "A'ja Wilson receives technical foul"
+# as a duplicate of a Schumer/Cornell story on was/what/who, and a $200bn
+# South Korea energy story as a duplicate of an Iowa steel mill on
+# announce/announces/trump/watch. Function words and stock event words carry
+# no event identity.
+EDITION_DEDUPE_GENERIC_TOKENS |= {
+    # function words TITLE_STOPWORDS (grouping) deliberately leaves in
+    "about", "all", "also", "any", "are", "been", "being", "but", "can",
+    "did", "does", "get", "gets", "got", "had", "has", "have", "his", "how",
+    "its", "may", "most", "not", "now", "one", "our", "she", "than", "that",
+    "their", "them", "then", "they", "this", "two", "very", "was", "were",
+    "what", "when", "who", "why", "will", "you", "your",
+    # stock news and event vocabulary
+    "announce", "announced", "announces", "day", "first", "game", "games",
+    "loss", "losses", "report", "reports", "season", "today", "update",
+    "updates", "watch", "week", "wins", "year", "years",
+    # outlet/site fragments and filler that survive the suffix strip
+    "news", "com", "top", "again", "during", "down", "off", "man", "nears",
+    "plan", "order", "orders", "coach",
 }
 
 
@@ -346,6 +386,23 @@ def publish_edition():
             deduped.append((story, has_updates))
     top_20 = []
     dedupe_skip_count = 0
+    logged_duplicate_ids = set()
+
+    def is_duplicate_of_kept(story):
+        """Same-event check against the stories kept so far. Logs each skipped
+        story once, with the kept story it matched, so a wrong skip can be
+        audited (previously only the last fill loop logged, without the match)."""
+        for kept_story, _ in top_20:
+            if stories_look_duplicate_for_edition(story, kept_story):
+                if story.id not in logged_duplicate_ids:
+                    logged_duplicate_ids.add(story.id)
+                    logger.info(
+                        "[Edition] Skipping same-event duplicate candidate %s '%s' -- matches kept %s '%s'",
+                        story.id, (story.headline or story.title or "")[:90],
+                        kept_story.id, (kept_story.headline or kept_story.title or "")[:90],
+                    )
+                return True
+        return False
     constrained_skip_counts = {
         "bias_cap": 0,
         "outlet_cap": 0,
@@ -405,7 +462,7 @@ def publish_edition():
             break
         if not _story_has_left_and_right_coverage(story):
             continue
-        if any(stories_look_duplicate_for_edition(story, kept_story) for kept_story, _ in top_20):
+        if is_duplicate_of_kept(story):
             dedupe_skip_count += 1
             continue
         if not can_add_balanced(story):
@@ -428,7 +485,7 @@ def publish_edition():
                 continue
             if _story_balance_bucket(story) != bucket:
                 continue
-            if any(stories_look_duplicate_for_edition(story, kept_story) for kept_story, _ in top_20):
+            if is_duplicate_of_kept(story):
                 dedupe_skip_count += 1
                 continue
             if not can_add_balanced(story):
@@ -443,12 +500,8 @@ def publish_edition():
             break
         if story.id in selected_ids:
             continue
-        if any(stories_look_duplicate_for_edition(story, kept_story) for kept_story, _ in top_20):
+        if is_duplicate_of_kept(story):
             dedupe_skip_count += 1
-            logger.info(
-                "[Edition] Skipping same-event duplicate candidate: %s",
-                story.title[:100],
-            )
             continue
         if not can_add_balanced(story):
             continue
@@ -467,7 +520,7 @@ def publish_edition():
                     break
                 if story.id in selected_ids:
                     continue
-                if any(stories_look_duplicate_for_edition(story, kept_story) for kept_story, _ in top_20):
+                if is_duplicate_of_kept(story):
                     continue
 
                 balance_bucket = _story_balance_bucket(story)
