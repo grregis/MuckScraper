@@ -131,6 +131,9 @@ EDITION_DEDUPE_GENERIC_TOKENS |= {
     # outlet/site fragments and filler that survive the suffix strip
     "news", "com", "top", "again", "during", "down", "off", "man", "nears",
     "plan", "order", "orders", "coach",
+    # edition 486 (2026-10-01): Gershkovich vs Kasparov on him/life/russia,
+    # UK air base vs FlyDubai on attack/behind/iran
+    "him", "life", "behind",
 }
 
 
