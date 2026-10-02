@@ -273,6 +273,33 @@ def _story_summary_rejection(summary):
     return looks_truncated(text)
 
 
+# Total article text in one story_summary prompt. Prompts over ~13k chars
+# overflowed Ollama's default ~4k-token context (2026-10-02 scan: 6 of 8
+# prompts >= 15k came back empty or cut off, 0 of 215 under 13k), leaving
+# the output no room. 9k of content keeps the whole prompt near 11k.
+STORY_SUMMARY_CONTENT_BUDGET = 9000
+STORY_SUMMARY_EXCERPT_MAX = 1500
+
+
+def _story_summary_excerpt_limits(content_lengths, budget=STORY_SUMMARY_CONTENT_BUDGET,
+                                  per_article_max=STORY_SUMMARY_EXCERPT_MAX):
+    """Per-article excerpt length so all excerpts together fit `budget`.
+
+    Each article gets at most `per_article_max`. Short articles only use what
+    they have, and the unused share goes to the longer ones, so a story with
+    a few stubs is not cut any harder than it has to be. Stories whose
+    articles already fit (six or fewer full articles) are unchanged.
+    """
+    limits = [0] * len(content_lengths)
+    remaining = budget
+    order = sorted(range(len(content_lengths)), key=lambda i: content_lengths[i])
+    for position, i in enumerate(order):
+        share = remaining // (len(order) - position)
+        limits[i] = min(content_lengths[i], per_article_max, share)
+        remaining -= limits[i]
+    return limits
+
+
 @observe()
 def summarize_story(story):
     """
@@ -315,15 +342,16 @@ def summarize_story(story):
         )
         return None
 
+    contents = [
+        strip_html(article.content).strip() if article.content else ""
+        for article in prompt_articles
+    ]
+    limits = _story_summary_excerpt_limits([len(c) for c in contents])
     article_texts = []
-    for i, article in enumerate(prompt_articles, 1):
+    for i, (article, content, limit) in enumerate(zip(prompt_articles, contents, limits), 1):
         text = f"{i}. Title: {article.title}"
-        if article.content:
-            # Strip HTML before sending to Ollama
-            clean_content = strip_html(article.content)
-            # Use more content now that we have full scraped articles
-            snippet = clean_content[:1500].strip()
-            text += f"\n   Content: {snippet}"
+        if content:
+            text += f"\n   Content: {content[:limit].strip()}"
         article_texts.append(text)
 
     combined = "\n\n".join(article_texts)
