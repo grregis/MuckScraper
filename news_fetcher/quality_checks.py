@@ -202,6 +202,34 @@ ACRONYMS = frozenset({
 _WORD_RE = re.compile(r"\b[A-Za-z][a-z]+\b")
 
 
+def _acronym_casing_spans(text):
+    """(start, end) of each Title-case known acronym, with the same rules as
+    acronym_cased_tokens()."""
+    spans = []
+    previous = ""
+    for match in _WORD_RE.finditer(text or ""):
+        token = match.group(0)
+        is_title = token[0].isupper() and token[1:].islower()
+        is_name = token.upper() == "UN" and previous.lower() == "jong"
+        if is_title and token.upper() in ACRONYMS and not is_name:
+            spans.append(match.span())
+        previous = token
+    return spans
+
+
+def fix_acronym_casing(text):
+    """Upper-case known acronyms the model wrote in Title case ("Gop" -> "GOP").
+
+    Only touches tokens acronym_cased_tokens() would flag, so it inherits the
+    curated list's guarantee that none of them is an ordinary English word.
+    """
+    if not text:
+        return text
+    for start, end in reversed(_acronym_casing_spans(text)):
+        text = text[:start] + text[start:end].upper() + text[end:]
+    return text
+
+
 def acronym_cased_tokens(text):
     """Tokens that are a known acronym written in Title case ("Nato", "Gop")."""
     if not text:
