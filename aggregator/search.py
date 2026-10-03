@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from datetime import timezone
 
 import requests
 from bs4 import BeautifulSoup
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 STORY_INDEX = "stories"
 ARTICLE_INDEX = "articles"
 TASK_TIMEOUT_SECONDS = 60
+# A filterable-attribute change makes Meilisearch re-process every document,
+# which takes far longer than an ordinary document write.
+SETTINGS_TASK_TIMEOUT_SECONDS = 900
 TASK_POLL_SECONDS = 0.5
 DOCUMENT_BATCH_SIZE = 200
 # Rows loaded from Postgres per chunk. A full reindex used to load every
@@ -37,6 +41,7 @@ INDEX_SETTINGS = {
             "topic_names",
             "scrape_statuses",
             "article_count",
+            "latest_article_ts",
         ],
         "sortableAttributes": [
             "latest_article_date",
@@ -58,6 +63,7 @@ INDEX_SETTINGS = {
             "story_id",
             "topic_names",
             "scrape_status",
+            "date_ts",
         ],
         "sortableAttributes": [
             "date",
@@ -122,6 +128,14 @@ def _normalize_text(value, limit=None):
     return text
 
 
+def _epoch_seconds(value):
+    """Integer epoch seconds for a naive UTC datetime. Meilisearch range
+    filters need numbers; the ISO strings above only support equality."""
+    if value is None:
+        return None
+    return int(value.replace(tzinfo=timezone.utc).timestamp())
+
+
 def _serialize_story(story):
     latest_article_date = max((article.date for article in story.articles if article.date), default=None)
     return {
@@ -137,6 +151,7 @@ def _serialize_story(story):
         "scrape_statuses": [article.scrape_status or "pending" for article in story.articles],
         "article_count": len(story.articles),
         "latest_article_date": latest_article_date.isoformat() if latest_article_date else None,
+        "latest_article_ts": _epoch_seconds(latest_article_date),
         "created_at": story.created_at.isoformat() if story.created_at else None,
     }
 
@@ -156,6 +171,7 @@ def _serialize_article(article):
         "topic_names": [topic.name for topic in article.topics],
         "scrape_status": article.scrape_status or "pending",
         "date": article.date.isoformat() if article.date else None,
+        "date_ts": _epoch_seconds(article.date),
         "fetched_at": article.fetched_at.isoformat() if article.fetched_at else None,
         "bias_score": article.bias_score,
     }
@@ -192,7 +208,7 @@ def ensure_indexes():
     for uid, settings in INDEX_SETTINGS.items():
         _ensure_index_exists(uid)
         task = _request("PATCH", f"/indexes/{uid}/settings", json=settings)
-        _wait_for_task(task["taskUid"])
+        _wait_for_task(task["taskUid"], timeout_seconds=SETTINGS_TASK_TIMEOUT_SECONDS)
 
 
 def _story_query():
@@ -329,19 +345,33 @@ def index_changed_since(since):
     }
 
 
-def search_story_ids(query, limit=250):
+def search_story_ids(query, limit=250, since=None):
+    """Story ids matching `query`, best first.
+
+    `since` (naive UTC datetime, or None for all time) is applied inside
+    Meilisearch, so the `limit` candidates are already inside the window. A
+    story matches when any of its articles is in the window, which is the
+    same as its latest article being in it, so both indexes filter on that.
+    """
     _ensure_index_exists(STORY_INDEX)
     _ensure_index_exists(ARTICLE_INDEX)
+
+    story_body = {"q": query, "limit": limit}
+    article_body = {"q": query, "limit": limit}
+    if since is not None:
+        since_ts = _epoch_seconds(since)
+        story_body["filter"] = f"latest_article_ts >= {since_ts}"
+        article_body["filter"] = f"date_ts >= {since_ts}"
 
     story_payload = _request(
         "POST",
         f"/indexes/{STORY_INDEX}/search",
-        json={"q": query, "limit": limit},
+        json=story_body,
     )
     article_payload = _request(
         "POST",
         f"/indexes/{ARTICLE_INDEX}/search",
-        json={"q": query, "limit": limit},
+        json=article_body,
     )
 
     ordered_story_ids = []

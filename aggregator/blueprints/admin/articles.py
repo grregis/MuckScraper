@@ -66,8 +66,8 @@ def list_articles(per_page=25, force_multi=False):
     # Existence check only: the story is kept if any article is in the window,
     # but its displayed articles are never filtered, so older ones still show.
     window = TIME_RANGES[active_range]
-    if window is not None:
-        cutoff = datetime.utcnow() - window
+    cutoff = datetime.utcnow() - window if window is not None else None
+    if cutoff is not None:
         query = query.filter(Story.articles.any(Article.date >= cutoff))
 
     if not show_single:
@@ -85,7 +85,7 @@ def list_articles(per_page=25, force_multi=False):
 
     if active_search_query:
         try:
-            meili_story_ids = search_story_ids(active_search_query)
+            meili_story_ids = search_story_ids(active_search_query, since=cutoff)
         except SearchUnavailableError as exc:
             logger.warning("Meilisearch unavailable, falling back to SQL search: %s", exc)
 
