@@ -115,6 +115,15 @@ def redirect_to_articles(label=None, scrape_status=None):
             show_single = parse_qs(referrer.query).get("show_single", [""])[0]
     if show_single == "true":
         params["show_single"] = "true"
+    # Carry the time range through the same way; list_articles() treats a
+    # missing or unknown value as the default, so only a non-default needs sending.
+    time_range = request.form.get("range", "").strip().lower()
+    if not time_range and request.referrer:
+        referrer = urlparse(request.referrer)
+        if referrer.netloc == request.host:
+            time_range = parse_qs(referrer.query).get("range", [""])[0]
+    if time_range and time_range != "7d":
+        params["range"] = time_range
     return redirect(url_for("admin.list_articles", **params))
 
 

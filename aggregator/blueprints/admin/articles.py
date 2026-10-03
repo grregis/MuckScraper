@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
 from sqlalchemy import case, func, or_
@@ -14,6 +14,17 @@ from ._shared import _load_json_setting, _save_json_setting, fetch_presets, stor
 from ._tasks import _start_bulk_task
 
 logger = logging.getLogger(__name__)
+
+# Time-range filter for the story listings. Matched on article publish date:
+# a story is included if any of its articles falls inside the window, and it
+# then shows all of its articles, older ones included.
+TIME_RANGES = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "all": None,
+}
+DEFAULT_TIME_RANGE = "7d"
 
 
 @admin.route("/fetch-page")
@@ -36,6 +47,9 @@ def list_articles(per_page=25, force_multi=False):
     page = request.args.get("page", 1, type=int)
     show_single = request.args.get("show_single", "false") == "true"
     story_id = request.args.get("story_id", type=int)
+    active_range = request.args.get("range", DEFAULT_TIME_RANGE)
+    if active_range not in TIME_RANGES:
+        active_range = DEFAULT_TIME_RANGE
 
     if active_scrape_status not in SCRAPE_STATUS_FILTERS:
         active_scrape_status = None
@@ -48,6 +62,13 @@ def list_articles(per_page=25, force_multi=False):
 
     query = Story.query.join(Article).group_by(Story.id)
     meili_story_ids = None
+
+    # Existence check only: the story is kept if any article is in the window,
+    # but its displayed articles are never filtered, so older ones still show.
+    window = TIME_RANGES[active_range]
+    if window is not None:
+        cutoff = datetime.utcnow() - window
+        query = query.filter(Story.articles.any(Article.date >= cutoff))
 
     if not show_single:
         query = query.having(func.count(Article.id) > 1)
@@ -132,6 +153,8 @@ def list_articles(per_page=25, force_multi=False):
         show_single=show_single,
         is_multi_view=force_multi,
         active_nav=active_nav,
+        active_range=active_range,
+        time_ranges=[("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days"), ("all", "All time")],
     )
 
 
