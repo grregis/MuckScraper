@@ -6,6 +6,7 @@ left/center/right balance helpers it ranks candidates with.
 
 import logging
 from datetime import datetime, timedelta
+import numpy as np
 from aggregator import db
 from aggregator.article_signals import ROUNDUP_TITLE_PATTERNS, bias_bucket_for_score
 from news_fetcher.story_grouper import normalize_title_tokens, titles_are_near_duplicates
@@ -144,6 +145,44 @@ def _distinctive_shared_tokens(tokens_a, tokens_b):
     }
 
 
+# Shared title words alone over-match: by 2026-10-03 the remaining wrong skips
+# shared real content words (arrests/charged/fbi, trump/republicans,
+# college/football) that no word list should ignore. A word match now also
+# needs the two stories' article embeddings to agree. Measured on the 22
+# logged skips (10-01 to 10-03): real duplicates 0.78-0.97 (all but one
+# >= 0.889), wrong matches 0.56-0.79; 0.80 drops every wrong skip and lets one
+# borderline follow-up story through.
+EDITION_DEDUPE_MIN_SIMILARITY = 0.80
+# Same floor as story_view.has_good_original: blocked/paywalled articles have
+# near-empty content and degenerate embeddings that match each other.
+EDITION_DEDUPE_CONTENT_FLOOR = 500
+
+
+def _story_embedding_centroid(story):
+    """Unit-length mean embedding of the story's readable articles, or None."""
+    vectors = []
+    for article in getattr(story, "articles", None) or []:
+        embedding = getattr(article, "embedding", None)
+        if embedding is None or len(getattr(article, "content", None) or "") < EDITION_DEDUPE_CONTENT_FLOOR:
+            continue
+        vectors.append(np.asarray(embedding, dtype=float))
+    if not vectors:
+        return None
+    centroid = np.mean(vectors, axis=0)
+    norm = np.linalg.norm(centroid)
+    return centroid / norm if norm else None
+
+
+def _stories_semantically_differ(story_a, story_b):
+    """True only when both stories have usable embeddings and they disagree.
+    No embeddings (e.g. an Ollama outage) means no veto: the word match stands."""
+    centroid_a = _story_embedding_centroid(story_a)
+    centroid_b = _story_embedding_centroid(story_b)
+    if centroid_a is None or centroid_b is None:
+        return False
+    return float(centroid_a @ centroid_b) < EDITION_DEDUPE_MIN_SIMILARITY
+
+
 def stories_look_duplicate_for_edition(story_a, story_b):
     titles_a = _story_dedupe_titles(story_a)
     titles_b = _story_dedupe_titles(story_b)
@@ -157,15 +196,13 @@ def stories_look_duplicate_for_edition(story_a, story_b):
     tokens_b = _story_signature_tokens(story_b)
     shared_tokens = tokens_a & tokens_b
     distinctive_shared = _distinctive_shared_tokens(tokens_a, tokens_b)
-    if len(distinctive_shared) >= 3:
-        return True
+    word_match = len(distinctive_shared) >= 3
+    if not word_match:
+        outlets_a = {((article.outlet.name or "").strip().lower()) for article in story_a.articles if article.outlet and article.outlet.name}
+        outlets_b = {((article.outlet.name or "").strip().lower()) for article in story_b.articles if article.outlet and article.outlet.name}
+        word_match = bool(outlets_a & outlets_b) and len(distinctive_shared) >= 2 and len(shared_tokens) >= 3
 
-    outlets_a = {((article.outlet.name or "").strip().lower()) for article in story_a.articles if article.outlet and article.outlet.name}
-    outlets_b = {((article.outlet.name or "").strip().lower()) for article in story_b.articles if article.outlet and article.outlet.name}
-    if outlets_a & outlets_b and len(distinctive_shared) >= 2 and len(shared_tokens) >= 3:
-        return True
-
-    return False
+    return word_match and not _stories_semantically_differ(story_a, story_b)
 
 
 def _story_balance_bucket(story):
