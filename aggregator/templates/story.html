@@ -11,33 +11,10 @@
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>{{ story.display_headline }} — MuckScraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
-            --accent:        #5a5f52;
-            --accent-text: #5a5f52;
-            --accent-light:  #7a8172;
-            --accent-dark:   #464b40;
-            --bg:            #f8f9fa;
-            --surface:       #ffffff;
-            --text:          #1a1a1a;
-            --text-muted:    #555;
-            --text-faint:    #6c6c6c;
-            --border:        #eef0f2;
-            --summary-bg:    #fdfbff;
             --shadow:        0 10px 30px rgba(0,0,0,0.08);
-            --topbar-bg:     #1e1e2e;
-            --topbar-text:   #cdd6f4;
-        }
-
-        [data-theme="dark"] {
-            --accent-text: #a9b19c;
-            --bg:            #0f0f17;
-            --surface:       #1a1a26;
-            --text:          #e2e8f0;
-            --text-muted:    #a0aec0;
-            --text-faint:    #8b97ab;
-            --border:        #2d2d3f;
-            --summary-bg:    #222230;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -124,11 +101,11 @@
             letter-spacing: 0.5px;
             color: white;
         }
-        .bias-1 { background: #1a6bb5; }
-        .bias-2 { background: #6aaee0; color: #1a1a1a; }
-        .bias-3 { background: #6c6c6c; }
-        .bias-4 { background: #e07b6a; color: #1a1a1a; }
-        .bias-5 { background: #b51a1a; }
+        .bias-1 { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
+        .bias-2 { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
+        .bias-3 { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
+        .bias-4 { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
+        .bias-5 { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background: #ddd; color: #4a4a4a; }
 
         .source-badge {

@@ -1,0 +1,81 @@
+/*
+ * Colour tokens for the aggregator app (port 5000), one place for both themes.
+ * Every page links this before its own <style>, so a page can still override
+ * a token locally (story.html and article.html keep a bigger card shadow).
+ *
+ * Text tokens meet WCAG AA (4.5:1) against --bg, --surface and --summary-bg
+ * in their theme. Check the pair before changing one.
+ * Not used by muckscraper.news (public_app.py / private_site/).
+ */
+
+:root {
+    /* Accent: --accent is for backgrounds and borders (white text on it);
+       --accent-text is for text in the accent colour. */
+    --accent:         #5a5f52;
+    --accent-light:   #7a8172;
+    --accent-dark:    #464b40;
+    --accent-text:    #5a5f52;
+
+    --bg:             #f8f9fa;
+    --surface:        #ffffff;
+    --summary-bg:     #fdfbff;
+    --text:           #1a1a1a;
+    --text-muted:     #555;
+    --text-faint:     #6c6c6c;
+    --border:         #eef0f2;
+    --input-border:   #dde1e7;
+    --btn-muted-bg:   #f0f2f5;
+    --btn-muted-text: #4a5568;
+    --shadow:         0 2px 8px rgba(0,0,0,0.05);
+
+    --topbar-bg:      #1e1e2e;
+    --topbar-text:    #cdd6f4;
+
+    /* Sidebar (sidebar_styles.html) */
+    --sidebar-bg:          #1e1e2e;
+    --sidebar-bg-end:      #50507b;
+    --sidebar-text:        #cdd6f4;
+    --sidebar-muted:       #c3c8dc;
+    --sidebar-accent-text: #d4dcb8;
+    --sidebar-hover:       #ffffff;
+    --sidebar-active-bg:   #2a2a3e;
+
+    /* Bias, 1 = Left ... 5 = Right (blue / grey / red, see CLAUDE.md).
+       Chips: same in both themes; -fg is the text colour on that chip. */
+    --bias-1-bg: #1a6bb5;  --bias-1-fg: #ffffff;
+    --bias-2-bg: #6aaee0;  --bias-2-fg: #1a1a1a;
+    --bias-3-bg: #6c6c6c;  --bias-3-fg: #ffffff;
+    --bias-4-bg: #e07b6a;  --bias-4-fg: #1a1a1a;
+    --bias-5-bg: #b51a1a;  --bias-5-fg: #ffffff;
+    --bias-unrated-bg: #64748b;
+    /* Left / Center / Right as text, and for thin rules beside it */
+    --bias-left-text:   #1a6bb5;
+    --bias-center-text: #6c6c6c;
+    --bias-right-text:  #b51a1a;
+}
+
+[data-theme="dark"] {
+    --accent-text:    #a9b19c;
+
+    --bg:             #0f0f17;
+    --surface:        #1a1a26;
+    --summary-bg:     #222230;
+    --text:           #e2e8f0;
+    --text-muted:     #a0aec0;
+    --text-faint:     #8b97ab;
+    --border:         #2d2d3f;
+    --input-border:   #3f3f5a;
+    --btn-muted-bg:   #2d2d3f;
+    --btn-muted-text: #cbd5e0;
+    --shadow:         0 4px 12px rgba(0,0,0,0.25);
+
+    --sidebar-bg:          #030308;
+    --sidebar-bg-end:      #262665;
+    --sidebar-muted:       #a6adc8;
+    --sidebar-active-bg:   #121220;
+
+    --bias-unrated-bg: #4a5568;
+    --bias-left-text:   #5b9be0;
+    --bias-center-text: #a0aec0;
+    --bias-right-text:  #ef6b6b;
+}

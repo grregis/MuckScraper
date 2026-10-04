@@ -6,48 +6,14 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <title>MuckScraper: Search</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
-            --accent:        #5a5f52;
-            --accent-text: #5a5f52;
-            --accent-light:  #7a8172;
-            --accent-dark:   #464b40;
-
-            /* Light mode */
-            --bg:            #f8f9fa;
-            --surface:       #ffffff;
-            --text:          #1a1a1a;
-            --text-muted:    #555;
-            --text-faint:    #6c6c6c;
-            --border:        #eef0f2;
             --row-hover:     #f4f6f8;
-            --input-border:  #dde1e7;
-            --btn-muted-bg:  #f0f2f5;
-            --btn-muted-text:#4a5568;
-            --shadow:        0 2px 8px rgba(0,0,0,0.05);
-            --bias-left:     #2b6cb0;
-            --bias-center:   #5f6b7d;
-            --bias-right:    #c53030;
-            --bias-unrated:  #a0aec0;
         }
 
         [data-theme="dark"] {
-            --accent-text: #a9b19c;
-            --bg:            #0f0f17;
-            --surface:       #1a1a26;
-            --text:          #e2e8f0;
-            --text-muted:    #a0aec0;
-            --text-faint:    #8b97ab;
-            --border:        #2d2d3f;
             --row-hover:     #222230;
-            --input-border:  #3f3f5a;
-            --btn-muted-bg:  #2d2d3f;
-            --btn-muted-text:#cbd5e0;
-            --shadow:        0 4px 12px rgba(0,0,0,0.25);
-            --bias-left:     #63b3ed;
-            --bias-center:   #a0aec0;
-            --bias-right:    #fc8181;
-            --bias-unrated:  #4a5568;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -203,9 +169,9 @@
         .col-topics, .col-outlet, .col-story { color: var(--text-muted); }
         .col-num, th.col-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .col-date { white-space: nowrap; color: var(--text-muted); }
-        .col-left { color: var(--bias-left); }
-        .col-right { color: var(--bias-right); }
-        .col-center { color: var(--bias-center); }
+        .col-left { color: var(--bias-left-text); }
+        .col-right { color: var(--bias-right-text); }
+        .col-center { color: var(--bias-center-text); }
 
         .bias {
             display: inline-block;
@@ -217,10 +183,10 @@
             font-variant-numeric: tabular-nums;
             color: white;
         }
-        .bias-left { background: var(--bias-left); }
-        .bias-center { background: var(--bias-center); }
-        .bias-right { background: var(--bias-right); }
-        .bias-unrated { background: var(--bias-unrated); }
+        .bias-left { background: var(--bias-1-bg); }
+        .bias-center { background: var(--bias-3-bg); }
+        .bias-right { background: var(--bias-5-bg); }
+        .bias-unrated { background: var(--bias-unrated-bg); }
 
         .empty { padding: 28px; text-align: center; color: var(--text-faint); }
 

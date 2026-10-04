@@ -10,47 +10,13 @@
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>MuckScraper: All the muck that's fit to scrape</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
-            --bias-left-text: #1a6bb5;
-            --bias-right-text: #b51a1a;
-            --bias-center-text: #6c6c6c;
-            --accent:        #5a5f52;
-            --accent-text: #5a5f52;
-            --accent-light:  #7a8172;
-            --accent-dark:   #464b40;
-
-            /* Light mode */
-            --bg:            #f8f9fa;
-            --surface:       #ffffff;
-            --text:          #1a1a1a;
-            --text-muted:    #555;
-            --text-faint:    #6c6c6c;
-            --border:        #eef0f2;
-            --summary-bg:    #fdfbff;
-            --input-border:  #dde1e7;
-            --btn-muted-bg:  #f0f2f5;
-            --btn-muted-text:#4a5568;
-            --shadow:        0 2px 8px rgba(0,0,0,0.05);
             --menu-bg:       #ffffff;
         }
 
         [data-theme="dark"] {
-            --bias-left-text: #5b9be0;
-            --bias-right-text: #ef6b6b;
-            --bias-center-text: #a0aec0;
-            --accent-text: #a9b19c;
-            --bg:            #0f0f17;
-            --surface:       #1a1a26;
-            --text:          #e2e8f0;
-            --text-muted:    #a0aec0;
-            --text-faint:    #8b97ab;
-            --border:        #2d2d3f;
-            --summary-bg:    #222230;
-            --input-border:  #3f3f5a;
-            --btn-muted-bg:  #2d2d3f;
-            --btn-muted-text:#cbd5e0;
-            --shadow:        0 4px 12px rgba(0,0,0,0.25);
             --menu-bg:       #1e1e2e;
         }
 
@@ -446,11 +412,11 @@
             letter-spacing: 0.5px;
         }
 
-        .bias-1    { background-color: #1a6bb5; color: white; }
-        .bias-2    { background-color: #6aaee0; color: #1a1a1a; }
-        .bias-3    { background-color: #6c6c6c;    color: white; }
-        .bias-4    { background-color: #e07b6a; color: #1a1a1a; }
-        .bias-5    { background-color: #b51a1a; color: white; }
+        .bias-1    { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
+        .bias-2    { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
+        .bias-3    { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
+        .bias-4    { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
+        .bias-5    { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background-color: #ddd;    color: #666;  }
 
         .article-actions { margin-left: auto; display: flex; gap: 8px; }

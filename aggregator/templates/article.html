@@ -10,42 +10,14 @@
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>{{ article.title }} — MuckScraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
-            --bias-left-text: #1a6bb5;
-            --bias-right-text: #b51a1a;
-            --accent:        #5a5f52;
-            --accent-text: #5a5f52;
-            --accent-light:  #7a8172;
-            --accent-dark:   #464b40;
-
-            /* Light mode */
-            --bg:            #f8f9fa;
-            --surface:       #ffffff;
-            --topbar-bg:     #1e1e2e;
-            --topbar-text:   #cdd6f4;
-            --text:          #1a1a1a;
-            --text-muted:    #555;
-            --text-faint:    #6c6c6c;
-            --border:        #eef0f2;
-            --summary-bg:    #fdfbff;
             --shadow:        0 10px 30px rgba(0,0,0,0.08);
-            --input-border:  #dde1e7;
         }
 
         [data-theme="dark"] {
-            --bias-left-text: #5b9be0;
-            --bias-right-text: #ef6b6b;
-            --accent-text: #a9b19c;
-            --bg:            #0f0f17;
-            --surface:       #1a1a26;
-            --text:          #e2e8f0;
-            --text-muted:    #a0aec0;
-            --text-faint:    #8b97ab;
-            --border:        #2d2d3f;
-            --summary-bg:    #222230;
             --shadow:        0 15px 40px rgba(0,0,0,0.4);
-            --input-border:  #3f3f5a;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -123,11 +95,11 @@
             letter-spacing: 0.5px;
         }
 
-        .bias-1 { background-color: #1a6bb5; color: white; }
-        .bias-2 { background-color: #6aaee0; color: #1a1a1a; }
-        .bias-3 { background-color: #6c6c6c;    color: white; }
-        .bias-4 { background-color: #e07b6a; color: #1a1a1a; }
-        .bias-5 { background-color: #b51a1a; color: white; }
+        .bias-1 { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
+        .bias-2 { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
+        .bias-3 { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
+        .bias-4 { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
+        .bias-5 { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background-color: #ddd; color: #666;  }
 
         .source-badge {

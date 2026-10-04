@@ -8,30 +8,8 @@
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>Scrape Blocklist — MuckScraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
-        :root {
-            --accent: #5a5f52;
-            --accent-text: #5a5f52;
-            --bg: #f8f9fa;
-            --surface: #ffffff;
-            --topbar-bg: #1e1e2e;
-            --topbar-text: #cdd6f4;
-            --text: #1a1a1a;
-            --text-muted: #555;
-            --text-faint: #6c6c6c;
-            --border: #eef0f2;
-            --shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        [data-theme="dark"] {
-            --accent-text: #a9b19c;
-            --bg: #0f0f17;
-            --surface: #1a1a26;
-            --text: #e2e8f0;
-            --text-muted: #a0aec0;
-            --text-faint: #8b97ab;
-            --border: #2d2d3f;
-            --shadow: 0 4px 12px rgba(0,0,0,0.25);
-        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
         .topbar {

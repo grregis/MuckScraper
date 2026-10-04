@@ -11,43 +11,23 @@
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>Admin Tools — MuckScraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
-            --accent: #5a5f52;
-            --accent-text: #5a5f52;
-            --accent-light: #7a8172;
-            --accent-dark: #464b40;
             --broad: #b08a22;
             --broad-dark: #8d6d18;
             --broad-soft: #fbf3dc;
             --danger: #9a725b;
             --danger-dark: #7b5a47;
             --danger-soft: #f6eee9;
-            --bg: #f8f9fa;
-            --surface: #ffffff;
-            --topbar-bg: #1e1e2e;
-            --topbar-text: #cdd6f4;
-            --text: #1a1a1a;
-            --text-muted: #555;
-            --text-faint: #6c6c6c;
-            --border: #eef0f2;
             --warning-bg: #f1f3f4;
             --warning-border: #d7dcdf;
-            --shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         [data-theme="dark"] {
-            --accent-text: #a9b19c;
-            --bg: #0f0f17;
-            --surface: #1a1a26;
-            --text: #e2e8f0;
-            --text-muted: #a0aec0;
-            --text-faint: #8b97ab;
-            --border: #2d2d3f;
             --broad-soft: rgba(176, 138, 34, 0.18);
             --danger-soft: rgba(154, 114, 91, 0.18);
             --warning-bg: #1d2430;
             --warning-border: #364152;
-            --shadow: 0 4px 12px rgba(0,0,0,0.25);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
