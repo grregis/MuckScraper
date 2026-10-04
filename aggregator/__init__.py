@@ -28,6 +28,9 @@ def create_app():
         )
     app.config["SECRET_KEY"] = secret_key
 
+    from aggregator.display_time import configured_timezone_name
+    app.config["DISPLAY_TIMEZONE"] = configured_timezone_name()
+
     db.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)

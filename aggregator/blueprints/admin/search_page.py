@@ -18,6 +18,7 @@ from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import aliased
 
 from aggregator import db
+from aggregator.display_time import local_day_end_utc, local_day_start_utc
 from aggregator.models import Article, Outlet, Story, Topic, story_topics
 from aggregator.search import SearchUnavailableError, search_article_ids, search_story_ids
 
@@ -93,10 +94,11 @@ def _resolve_window(args):
         start = _parse_day(args.get("start"))
         end = _parse_day(args.get("end"))
         if start and end and start <= end:
+            # Whole days in the display time zone, as naive UTC bounds.
             return {
                 "range": "custom",
-                "since": start,
-                "until": end + timedelta(days=1),
+                "since": local_day_start_utc(start.date()),
+                "until": local_day_end_utc(end.date()),
                 "start": start.date().isoformat(),
                 "end": end.date().isoformat(),
             }

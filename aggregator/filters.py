@@ -1,3 +1,4 @@
+from aggregator.display_time import local_datetime
 from aggregator.html_safety import clean_html, plain_text_br
 
 
@@ -6,6 +7,9 @@ def register_filters(app):
     # never `| safe`. See aggregator/html_safety.py.
     app.add_template_filter(clean_html, "clean_html")
     app.add_template_filter(plain_text_br, "plain_text_br")
+
+    # Stored timestamps are naive UTC; show them in DISPLAY_TIMEZONE.
+    app.add_template_filter(local_datetime, "local_datetime")
 
     @app.template_filter("get_whats_happening")
     def get_whats_happening(summary):

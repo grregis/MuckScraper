@@ -256,6 +256,6 @@
 
     {% include 'sidebar_script.html' %}
 </script>
-<script src="{{ url_for('static', filename='js/local_time.js') }}"></script>
+<script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
 </body>
 </html>
