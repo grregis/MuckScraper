@@ -641,9 +641,9 @@
                                         <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
                                         <button type="submit" class="btn btn-muted" style="width: 100%; padding: 10px 12px; font-weight: 700;">
                                             {% if story.enrichment_direction == 'right' %}
-                                                Fetch More Right-Leaning Coverage
+                                                Fetch more right-leaning coverage
                                             {% else %}
-                                                Fetch More Left-Leaning Coverage
+                                                Fetch more left-leaning coverage
                                             {% endif %}
                                         </button>
                                     </form>
@@ -651,8 +651,8 @@
                                 {% endif %}
 
                                 <div class="action-row" style="margin-bottom: 0;">
-                                    <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="text-decoration: none; width: 100%; text-align: center; padding: 12px; font-weight: 800; letter-spacing: 1px;">
-                                        VIEW FULL COVERAGE & ANALYSIS →
+                                    <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="text-decoration: none; width: 100%; text-align: center; padding: 12px; font-weight: 700;">
+                                        View full coverage & analysis →
                                     </a>
                                 </div>
                             </div>
@@ -768,13 +768,13 @@
         {% if total_pages > 1 %}
         <div class="pagination">
             {% if page > 1 %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page-1, q=active_search_query or '', range=active_range) }}" class="page-btn">← PREVIOUS</a>
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page-1, q=active_search_query or '', range=active_range) }}" class="page-btn">← Previous</a>
             {% endif %}
 
-            <span class="page-info">PAGE {{ page }} OF {{ total_pages }}</span>
+            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
 
             {% if page < total_pages %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page+1, q=active_search_query or '', range=active_range) }}" class="page-btn">NEXT →</a>
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page+1, q=active_search_query or '', range=active_range) }}" class="page-btn">Next →</a>
             {% endif %}
         </div>
         {% endif %}
