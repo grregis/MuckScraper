@@ -461,7 +461,8 @@
             flex-wrap: wrap;
         }
 
-        /* Show single-article stories: a link styled as a switch (it reloads the list) */
+        /* Hide single-article stories: a link styled as a switch (it reloads the list).
+           On (filled) means hidden, i.e. show_single=false. */
         .single-toggle-row { margin: 0 0 24px 4px; }
         .switch { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-muted); font-size: 13px; font-weight: 600; }
         .switch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
@@ -565,9 +566,9 @@
         {% if not is_multi_view %}
         <div class="single-toggle-row">
             <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
-               class="switch" role="switch" aria-checked="{{ 'true' if show_single else 'false' }}">
+               class="switch" role="switch" aria-checked="{{ 'false' if show_single else 'true' }}">
                 <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-                <span class="switch-label">Show single-article stories</span>
+                <span class="switch-label">Hide single-article stories</span>
             </a>
         </div>
         {% endif %}
