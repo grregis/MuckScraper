@@ -39,6 +39,10 @@ STORY_COLUMNS = [
     ("headline", "Headline", False, "asc"),
     ("topics", "Topics", False, None),
     ("articles", "Articles", True, "desc"),
+    # Distinct outlets: one outlet can file many articles on a story (The Hill
+    # filed 30 of the 125 on the 09-18 White House press-ban story), so this,
+    # not Articles, is "most reported" (GitHub issue #6).
+    ("sources", "Sources", True, "desc"),
     ("left", "Left", True, "desc"),
     ("center", "Center", True, "desc"),
     ("right", "Right", True, "desc"),
@@ -53,7 +57,7 @@ ARTICLE_COLUMNS = [
     ("story", "Story", False, "asc"),
     ("story_articles", "Story articles", True, "desc"),
 ]
-STORY_SORTABLE = {"headline", "articles", "left", "center", "right", "created", "updated"}
+STORY_SORTABLE = {"headline", "articles", "sources", "left", "center", "right", "created", "updated"}
 ARTICLE_SORTABLE = {"title", "outlet", "date", "bias", "story", "story_articles"}
 
 
@@ -131,6 +135,8 @@ def _effective_bias():
 def _story_rows(story_ids, window, sort_key, descending, page, text_query):
     eff = _effective_bias()
     article_count = func.count(Article.id)
+    # An article with no outlet row counts by its raw source name.
+    source_count = func.count(func.distinct(func.coalesce(Outlet.name, Article.source)))
     left = func.sum(case((eff <= LEFT_MAX, 1), else_=0))
     center = func.sum(case((and_(eff > LEFT_MAX, eff <= CENTER_MAX), 1), else_=0))
     right = func.sum(case((eff > CENTER_MAX, 1), else_=0))
@@ -139,6 +145,7 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
     sort_columns = {
         "headline": func.lower(func.coalesce(Story.headline, Story.title)),
         "articles": article_count,
+        "sources": source_count,
         "left": left,
         "center": center,
         "right": right,
@@ -154,6 +161,7 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
         db.session.query(
             Story,
             article_count.label("article_count"),
+            source_count.label("source_count"),
             left.label("left"),
             center.label("center"),
             right.label("right"),
@@ -191,12 +199,13 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
             topics_by_story.setdefault(story_id, []).append(name)
 
     rows = []
-    for story, count, n_left, n_center, n_right, last in items:
+    for story, count, n_sources, n_left, n_center, n_right, last in items:
         rows.append({
             "id": story.id,
             "headline": story.headline or story.title or f"Story {story.id}",
             "topics": topics_by_story.get(story.id, []),
             "articles": count,
+            "sources": n_sources or 0,
             "left": n_left or 0,
             "center": n_center or 0,
             "right": n_right or 0,

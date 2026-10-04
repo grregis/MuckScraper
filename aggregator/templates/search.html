@@ -311,6 +311,7 @@
                         <td class="col-title"><a href="{{ url_for('public.view_story', story_id=row.id) }}">{{ row.headline }}</a></td>
                         <td class="col-topics">{{ row.topics|join(', ') }}</td>
                         <td class="col-num">{{ row.articles }}</td>
+                        <td class="col-num">{{ row.sources }}</td>
                         <td class="col-num col-left">{{ row.left }}</td>
                         <td class="col-num col-center">{{ row.center }}</td>
                         <td class="col-num col-right">{{ row.right }}</td>
