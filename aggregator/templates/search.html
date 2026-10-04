@@ -1,4 +1,5 @@
 {% from 'icons.html' import icon, theme_toggle_label %}
+{% from 'pagination.html' import pager %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -200,25 +201,6 @@
 
         .empty { padding: 28px; text-align: center; color: var(--text-faint); }
 
-        .pager {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-        .pager a {
-            background: var(--surface);
-            color: var(--text);
-            border: 1px solid var(--input-border);
-            padding: 7px 14px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        .pager a.disabled { opacity: 0.4; pointer-events: none; }
 
         @media (max-width: 900px) {
             .main { padding: 0 16px; }
@@ -315,11 +297,7 @@
         </div>
 
         {% if total_pages > 1 %}
-        <div class="pager">
-            <a href="{{ prev_url or '#' }}" class="{{ '' if prev_url else 'disabled' }}">← Previous</a>
-            <span>Page {{ page }} of {{ total_pages }}</span>
-            <a href="{{ next_url or '#' }}" class="{{ '' if next_url else 'disabled' }}">Next →</a>
-        </div>
+        {{ pager(page, total_pages) }}
         {% endif %}
     </div>
 </div>

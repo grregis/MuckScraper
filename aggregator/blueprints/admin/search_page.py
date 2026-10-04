@@ -360,10 +360,12 @@ def search_page():
         # SQL fallback has no ranking to follow.
         sort_key = column_default
 
-    if tab == "stories":
-        rows, pagination = _story_rows(candidate_ids, window, sort_key, descending, page, text_query)
-    else:
-        rows, pagination = _article_rows(candidate_ids, window, sort_key, descending, page, text_query)
+    load_rows = _story_rows if tab == "stories" else _article_rows
+    rows, pagination = load_rows(candidate_ids, window, sort_key, descending, page, text_query)
+    if pagination.pages and page > pagination.pages:
+        # Past the end (e.g. typed into the page box): show the last page.
+        page = pagination.pages
+        rows, pagination = load_rows(candidate_ids, window, sort_key, descending, page, text_query)
 
     tab_urls = {
         key: url_for(
@@ -373,10 +375,6 @@ def search_page():
         )
         for key in SEARCH_TABS
     }
-
-    def page_url(target_page):
-        return url_for("admin.search_page", tab=tab, page=target_page, sort=sort_key,
-                       dir="desc" if descending else "asc", **base_args)
 
     return render_template(
         "search.html",
@@ -391,8 +389,6 @@ def search_page():
         page=pagination.page,
         total_pages=pagination.pages,
         total=pagination.total,
-        prev_url=page_url(pagination.page - 1) if pagination.has_prev else None,
-        next_url=page_url(pagination.page + 1) if pagination.has_next else None,
         degraded=degraded,
         sorted_by_relevance=sort_key == RELEVANCE,
         relevance_url=url_for("admin.search_page", tab=tab, sort=RELEVANCE, **base_args)

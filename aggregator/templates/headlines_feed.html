@@ -1,4 +1,5 @@
 {% from 'icons.html' import icon, theme_toggle_label %}
+{% from 'pagination.html' import pager %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -92,21 +93,6 @@
 
         .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
 
-        .pagination { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 40px 0 80px 0; }
-        .page-btn {
-            background: var(--surface);
-            color: var(--text);
-            border: 1px solid var(--input-border);
-            padding: 10px 20px;
-            border-radius: 12px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-            box-shadow: var(--shadow);
-        }
-        .page-btn:hover { border-color: var(--accent); color: var(--accent-text); transform: translateY(-1px); }
-        .page-info { font-size: 14px; font-weight: 600; color: var(--text-muted); }
 
         @media (max-width: 900px) {
             .story-layout { flex-direction: column; }
@@ -222,15 +208,7 @@
         </div>
         {% endfor %}
 
-        <div class="pagination">
-            {% if has_prev %}
-                <a href="{{ url_for('public.headlines_feed', page=page-1) }}" class="page-btn">← Previous</a>
-            {% endif %}
-            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
-            {% if has_next %}
-                <a href="{{ url_for('public.headlines_feed', page=page+1) }}" class="page-btn">Next →</a>
-            {% endif %}
-        </div>
+        {{ pager(page, total_pages) }}
     {% else %}
         <div class="empty">No headlines yet — check back after the next scheduled fetch.</div>
     {% endif %}

@@ -1,0 +1,29 @@
+{#- Page navigation shared by All/Grouped Stories, Headlines and Search.
+    Usage: {% from 'pagination.html' import pager %} ... {{ pager(page, total_pages) }}
+    Links and the jump box keep every other query parameter of the current
+    page (filters, sort, search), changing only `page`. Routes clamp an
+    out-of-range page to the nearest real one. Styles live in theme.css. -#}
+{% macro pager(page, total_pages) -%}
+{%- if total_pages > 1 -%}
+{%- set args = request.args.to_dict() -%}
+{%- set _ = args.pop('page', None) -%}
+<nav class="pager" aria-label="Pages">
+    {%- if page > 1 %}
+    <a class="page-btn" href="{{ url_for(request.endpoint, page=1, **args) }}" aria-label="First page">« First</a>
+    <a class="page-btn" href="{{ url_for(request.endpoint, page=page - 1, **args) }}" rel="prev">← Previous</a>
+    {%- endif %}
+    <form class="page-jump" method="get" action="{{ url_for(request.endpoint) }}">
+        {%- for key, value in args.items() %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {%- endfor %}
+        <label>Page <input type="number" name="page" value="{{ page }}" min="1" max="{{ total_pages }}"
+               inputmode="numeric" aria-label="Page number, press Enter to go"
+               onfocus="this.select()"> of {{ '{:,}'.format(total_pages) }}</label>
+    </form>
+    {%- if page < total_pages %}
+    <a class="page-btn" href="{{ url_for(request.endpoint, page=page + 1, **args) }}" rel="next">Next →</a>
+    <a class="page-btn" href="{{ url_for(request.endpoint, page=total_pages, **args) }}" aria-label="Last page">Last »</a>
+    {%- endif %}
+</nav>
+{%- endif -%}
+{%- endmacro %}

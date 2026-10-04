@@ -1,3 +1,4 @@
+{% from 'pagination.html' import pager %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
 {% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
@@ -424,34 +425,6 @@
 
         .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
 
-        .pagination {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            padding: 40px 0 80px 0;
-        }
-
-        .page-btn {
-            background: var(--surface);
-            color: var(--text);
-            border: 1px solid var(--input-border);
-            padding: 10px 20px;
-            border-radius: 12px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-            box-shadow: var(--shadow);
-        }
-
-        .page-btn:hover { border-color: var(--accent); color: var(--accent-text); transform: translateY(-1px); }
-
-        .page-info {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
 
         .scrape-filter-row {
             margin-bottom: 22px;
@@ -777,19 +750,7 @@
             </div>
         {% endif %}
 
-        {% if total_pages > 1 %}
-        <div class="pagination">
-            {% if page > 1 %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page-1, q=active_search_query or '', range=active_range) }}" class="page-btn">← Previous</a>
-            {% endif %}
-
-            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
-
-            {% if page < total_pages %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page+1, q=active_search_query or '', range=active_range) }}" class="page-btn">Next →</a>
-            {% endif %}
-        </div>
-        {% endif %}
+        {{ pager(page, total_pages) }}
 
     </div>
 </div>

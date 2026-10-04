@@ -44,7 +44,7 @@ def list_articles(per_page=25, force_multi=False):
     active_label = request.args.get("topic", None)
     active_scrape_status = request.args.get("scrape_status", "").strip().lower() or None
     active_search_query = request.args.get("q", "").strip() or None
-    page = request.args.get("page", 1, type=int)
+    page = max(1, request.args.get("page", 1, type=int) or 1)
     # On by default: "All Stories" includes single-article stories; "false" hides them.
     show_single = request.args.get("show_single", "true") != "false"
     story_id = request.args.get("story_id", type=int)
@@ -125,6 +125,10 @@ def list_articles(per_page=25, force_multi=False):
     pagination = query.order_by(*order_by).paginate(
         page=page, per_page=per_page, error_out=False
     )
+    if pagination.pages and page > pagination.pages:
+        # Past the end (e.g. typed into the page box): show the last page.
+        page = pagination.pages
+        pagination = query.order_by(*order_by).paginate(page=page, per_page=per_page, error_out=False)
 
     stories = pagination.items if pagination else []
     total_pages = pagination.pages if pagination else 0

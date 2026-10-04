@@ -45,6 +45,7 @@ def headlines_feed():
     if latest_edition:
         all_edition_stories = latest_edition.edition_stories.order_by(EditionStory.rank).all()
         total_stories = len(all_edition_stories)
+        page = min(page, max(1, (total_stories + per_page - 1) // per_page))
         start = (page - 1) * per_page
         stories = annotate_edition_story_flags(all_edition_stories[start:start + per_page])
         edition_label = f"{latest_edition.edition_type.title()} Edition — {latest_edition.date.strftime('%B %d, %Y')}"
@@ -58,6 +59,7 @@ def headlines_feed():
             Story.headline_score > 0
         ).order_by(Story.headline_score.desc()).limit(20).all()
         total_stories = len(all_stories)
+        page = min(page, max(1, (total_stories + per_page - 1) // per_page))
         start = (page - 1) * per_page
         stories = all_stories[start:start + per_page]
         edition_label = "Latest Headlines"
@@ -74,8 +76,6 @@ def headlines_feed():
         edition=latest_edition,
         page=page,
         total_pages=total_pages,
-        has_next=page < total_pages,
-        has_prev=page > 1,
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_nav="headlines",
     )
