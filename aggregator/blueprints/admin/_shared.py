@@ -113,8 +113,9 @@ def redirect_to_articles(label=None, scrape_status=None):
         referrer = urlparse(request.referrer)
         if referrer.netloc == request.host:
             show_single = parse_qs(referrer.query).get("show_single", [""])[0]
-    if show_single == "true":
-        params["show_single"] = "true"
+    # Showing single-article stories is the default, so only "off" needs sending.
+    if show_single == "false":
+        params["show_single"] = "false"
     # Carry the time range through the same way; list_articles() treats a
     # missing or unknown value as the default, so only a non-default needs sending.
     time_range = request.form.get("range", "").strip().lower()

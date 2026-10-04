@@ -515,7 +515,7 @@
             <span class="active-topic-label">{{ active_label }}</span>
         {% endif %}
 
-        <form method="GET" action="{{ url_for('admin.list_articles') }}" class="search-bar">
+        <form method="GET" action="{{ url_for(list_endpoint) }}" class="search-bar">
             <input type="hidden" name="topic" value="{{ active_label or '' }}">
             <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
             <input type="hidden" name="show_single" value="{{ show_single|string|lower }}">
@@ -524,7 +524,7 @@
             <div class="search-actions">
                 <button type="submit">Search</button>
                 {% if active_search_query %}
-                <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, range=active_range) }}" class="clear-search">Clear</a>
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, range=active_range) }}" class="clear-search">Clear</a>
                 {% endif %}
             </div>
         </form>
@@ -533,7 +533,7 @@
         <div class="scrape-filter-row">
             <span class="scrape-filter-label">Time Range</span>
             {% for value, label in time_ranges %}
-                <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '', range=value) }}"
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '', range=value) }}"
                    class="scrape-filter-link {% if active_range == value %}active{% endif %}">{{ label }}</a>
             {% endfor %}
         </div>
@@ -543,10 +543,10 @@
 
         <div class="scrape-filter-row">
             <span class="scrape-filter-label">Scrape Filter</span>
-            <a href="{{ url_for('admin.list_articles', topic=active_label, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
+            <a href="{{ url_for(list_endpoint, topic=active_label, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
                class="scrape-filter-link {% if not active_scrape_status %}active{% endif %}">All</a>
             {% for status in scrape_status_filters %}
-                <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=status, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=status, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
                    class="scrape-filter-link {% if active_scrape_status == status %}active{% endif %}">{{ status }}</a>
             {% endfor %}
         </div>
@@ -554,7 +554,7 @@
         {% if not is_multi_view %}
         <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 10px; margin-left: 4px;">
             <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Show single-article stories:</span>
-            <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
+            <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
                style="font-size: 13px; font-weight: 700; color: var(--accent-text); text-decoration: none;">
                 {{ '✓ ON' if show_single else '✗ OFF' }}
             </a>
@@ -638,7 +638,7 @@
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="label" value="{{ active_label or '' }}">
                                         <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-                                        <input type="hidden" name="next" value="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
+                                        <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
                                         <button type="submit" class="btn btn-muted" style="width: 100%; padding: 10px 12px; font-weight: 700;">
                                             {% if story.enrichment_direction == 'right' %}
                                                 Fetch More Right-Leaning Coverage
@@ -715,7 +715,7 @@
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="label" value="{{ active_label or '' }}">
                                                 <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-                                                <input type="hidden" name="next" value="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
+                                                <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
                                                 <button type="submit" class="btn btn-orange"
                                                     title="Rate Bias">
                                                     ✦ Bias
@@ -768,13 +768,13 @@
         {% if total_pages > 1 %}
         <div class="pagination">
             {% if page > 1 %}
-                <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page-1, q=active_search_query or '', range=active_range) }}" class="page-btn">← PREVIOUS</a>
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page-1, q=active_search_query or '', range=active_range) }}" class="page-btn">← PREVIOUS</a>
             {% endif %}
 
             <span class="page-info">PAGE {{ page }} OF {{ total_pages }}</span>
 
             {% if page < total_pages %}
-                <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page+1, q=active_search_query or '', range=active_range) }}" class="page-btn">NEXT →</a>
+                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page+1, q=active_search_query or '', range=active_range) }}" class="page-btn">NEXT →</a>
             {% endif %}
         </div>
         {% endif %}

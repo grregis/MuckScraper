@@ -6,14 +6,14 @@
                         <span class="full-text">Headlines</span>
                     </a>
                 </div>
-                <div class="topic-block {% if active_nav == 'all' %}active{% endif %}">
-                    <a href="{{ url_for('admin.list_articles', scrape_status=active_scrape_status|default(none), show_single=show_single|default(false)|string|lower, q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
-                        <span class="full-text">All Stories</span>
-                    </a>
-                </div>
                 <div class="topic-block {% if active_nav == 'grouped' %}active{% endif %}">
                     <a href="{{ url_for('admin.multi_article_stories', topic=active_label|default(none), scrape_status=active_scrape_status|default(none), q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
                         <span class="full-text">Grouped Stories</span>
+                    </a>
+                </div>
+                <div class="topic-block {% if active_nav == 'all' %}active{% endif %}">
+                    <a href="{{ url_for('admin.list_articles', scrape_status=active_scrape_status|default(none), show_single=show_single|default(true)|string|lower, q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
+                        <span class="full-text">All Stories</span>
                     </a>
                 </div>
                 <div class="topic-block {% if active_nav == 'fetch' %}active{% endif %}">
@@ -32,7 +32,7 @@
 
                 {% for topic in topics|default([]) %}
                 <div class="topic-block {% if active_label|default(none) == topic.name %}active{% endif %}">
-                    <a href="{{ url_for('admin.list_articles', topic=topic.name, scrape_status=active_scrape_status|default(none), show_single=show_single|default(false)|string|lower, q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
+                    <a href="{{ url_for('admin.list_articles', topic=topic.name, scrape_status=active_scrape_status|default(none), show_single=show_single|default(true)|string|lower, q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
                         <span class="full-text">{{ topic.name }}</span>
                     </a>
                 </div>

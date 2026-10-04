@@ -45,7 +45,8 @@ def list_articles(per_page=25, force_multi=False):
     active_scrape_status = request.args.get("scrape_status", "").strip().lower() or None
     active_search_query = request.args.get("q", "").strip() or None
     page = request.args.get("page", 1, type=int)
-    show_single = request.args.get("show_single", "false") == "true"
+    # On by default: "All Stories" includes single-article stories; "false" hides them.
+    show_single = request.args.get("show_single", "true") != "false"
     story_id = request.args.get("story_id", type=int)
     active_range = request.args.get("range", DEFAULT_TIME_RANGE)
     if active_range not in TIME_RANGES:
@@ -57,9 +58,6 @@ def list_articles(per_page=25, force_multi=False):
     if story_id:
         return redirect(url_for("public.view_story", story_id=story_id))
 
-    if force_multi:
-        show_single = False
-
     query = Story.query.join(Article).group_by(Story.id)
     meili_story_ids = None
 
@@ -70,7 +68,9 @@ def list_articles(per_page=25, force_multi=False):
     if cutoff is not None:
         query = query.filter(Story.articles.any(Article.date >= cutoff))
 
-    if not show_single:
+    # Grouped Stories always hides single-article stories; show_single stays
+    # the reader's All Stories choice, so links back to All Stories keep it.
+    if force_multi or not show_single:
         query = query.having(func.count(Article.id) > 1)
 
     if active_label:
@@ -152,6 +152,8 @@ def list_articles(per_page=25, force_multi=False):
         total_pages=total_pages,
         show_single=show_single,
         is_multi_view=force_multi,
+        # Filter, search and page links stay on the page they came from.
+        list_endpoint="admin.multi_article_stories" if force_multi else "admin.list_articles",
         active_nav=active_nav,
         active_range=active_range,
         time_ranges=[("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days"), ("all", "All time")],
