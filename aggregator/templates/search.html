@@ -9,6 +9,7 @@
     <style>
         :root {
             --accent:        #5a5f52;
+            --accent-text: #5a5f52;
             --accent-light:  #7a8172;
             --accent-dark:   #464b40;
 
@@ -17,7 +18,7 @@
             --surface:       #ffffff;
             --text:          #1a1a1a;
             --text-muted:    #555;
-            --text-faint:    #888;
+            --text-faint:    #6c6c6c;
             --border:        #eef0f2;
             --row-hover:     #f4f6f8;
             --input-border:  #dde1e7;
@@ -25,17 +26,18 @@
             --btn-muted-text:#4a5568;
             --shadow:        0 2px 8px rgba(0,0,0,0.05);
             --bias-left:     #2b6cb0;
-            --bias-center:   #718096;
+            --bias-center:   #5f6b7d;
             --bias-right:    #c53030;
             --bias-unrated:  #a0aec0;
         }
 
         [data-theme="dark"] {
+            --accent-text: #a9b19c;
             --bg:            #0f0f17;
             --surface:       #1a1a26;
             --text:          #e2e8f0;
             --text-muted:    #a0aec0;
-            --text-faint:    #718096;
+            --text-faint:    #8b97ab;
             --border:        #2d2d3f;
             --row-hover:     #222230;
             --input-border:  #3f3f5a;
@@ -83,7 +85,7 @@
         }
         [data-theme="dark"] .main-header { background: rgba(15, 15, 23, 0.85); }
 
-        h1 { font-size: 24px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+        h1 { font-size: 24px; font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; }
 
         .theme-toggle {
             background: var(--surface);
@@ -188,7 +190,7 @@
             white-space: nowrap;
         }
         table.results th a { color: inherit; text-decoration: none; }
-        table.results th a:hover { color: var(--accent); }
+        table.results th a:hover { color: var(--accent-text); }
         table.results td {
             padding: 6px 10px;
             border-bottom: 1px solid var(--border);
@@ -196,7 +198,7 @@
         }
         table.results tbody tr:hover { background: var(--row-hover); }
         table.results td a { color: var(--text); text-decoration: none; }
-        table.results td a:hover { color: var(--accent); text-decoration: underline; }
+        table.results td a:hover { color: var(--accent-text); text-decoration: underline; }
         .col-title { min-width: 280px; }
         .col-topics, .col-outlet, .col-story { color: var(--text-muted); }
         .col-num, th.col-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

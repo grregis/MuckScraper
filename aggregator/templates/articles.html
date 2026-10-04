@@ -12,21 +12,20 @@
     <title>MuckScraper: All the muck that's fit to scrape</title>
     <style>
         :root {
+            --bias-left-text: #1a6bb5;
+            --bias-right-text: #b51a1a;
+            --bias-center-text: #6c6c6c;
             --accent:        #5a5f52;
+            --accent-text: #5a5f52;
             --accent-light:  #7a8172;
             --accent-dark:   #464b40;
 
             /* Light mode */
             --bg:            #f8f9fa;
             --surface:       #ffffff;
-            --sidebar-bg:    #1e1e2e;
-            --sidebar-text:  #cdd6f4;
-            --sidebar-muted: #888;
-            --sidebar-hover: #ffffff;
-            --sidebar-active-bg: #2a2a3e;
             --text:          #1a1a1a;
             --text-muted:    #555;
-            --text-faint:    #888;
+            --text-faint:    #6c6c6c;
             --border:        #eef0f2;
             --summary-bg:    #fdfbff;
             --input-border:  #dde1e7;
@@ -37,16 +36,15 @@
         }
 
         [data-theme="dark"] {
+            --bias-left-text: #5b9be0;
+            --bias-right-text: #ef6b6b;
+            --bias-center-text: #a0aec0;
+            --accent-text: #a9b19c;
             --bg:            #0f0f17;
             --surface:       #1a1a26;
-            --sidebar-bg:    #030308;
-            --sidebar-text:  #cdd6f4;
-            --sidebar-muted: #666;
-            --sidebar-hover: #ffffff;
-            --sidebar-active-bg: #121220;
             --text:          #e2e8f0;
             --text-muted:    #a0aec0;
-            --text-faint:    #718096;
+            --text-faint:    #8b97ab;
             --border:        #2d2d3f;
             --summary-bg:    #222230;
             --input-border:  #3f3f5a;
@@ -95,7 +93,7 @@
             background: rgba(15, 15, 23, 0.85);
         }
 
-        h1 { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+        h1 { font-size: 26px; font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; }
 
         .header-controls {
             display: flex;
@@ -119,7 +117,7 @@
 
         .theme-toggle:hover {
             border-color: var(--accent);
-            color: var(--accent);
+            color: var(--accent-text);
             transform: translateY(-1px);
         }
 
@@ -140,7 +138,7 @@
             transition: all 0.2s;
             box-shadow: var(--shadow);
         }
-        .icon-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent-text); transform: translateY(-1px); }
 
         .action-dropdown {
             position: absolute;
@@ -178,7 +176,7 @@
             border-radius: 8px;
             transition: all 0.2s;
         }
-        .menu-item:hover { background: var(--btn-muted-bg); color: var(--accent); }
+        .menu-item:hover { background: var(--btn-muted-bg); color: var(--accent-text); }
 
         .menu-divider {
             height: 1px;
@@ -250,7 +248,7 @@
         .clear-search {
             font-size: 13px;
             font-weight: 700;
-            color: var(--accent);
+            color: var(--accent-text);
             text-decoration: none;
         }
 
@@ -329,7 +327,7 @@
             font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-text);
             letter-spacing: 1.5px;
             margin-bottom: 8px;
         }
@@ -338,7 +336,7 @@
         .summary p:last-child { margin-bottom: 0; }
 
         .summary-section-label {
-            color: var(--accent);
+            color: var(--accent-text);
             font-size: 13px;
             font-weight: 700;
             text-transform: uppercase;
@@ -399,7 +397,7 @@
             flex-basis: 100%;
             margin-bottom: 4px;
         }
-        .article-title:hover { color: var(--accent); text-decoration: underline; }
+        .article-title:hover { color: var(--accent-text); text-decoration: underline; }
 
         .full-text-link       { font-size: 12px; font-weight: 600; color: var(--accent-light); text-decoration: none; }
         .full-text-link:hover { text-decoration: underline; }
@@ -449,9 +447,9 @@
         }
 
         .bias-1    { background-color: #1a6bb5; color: white; }
-        .bias-2    { background-color: #6aaee0; color: white; }
-        .bias-3    { background-color: #888;    color: white; }
-        .bias-4    { background-color: #e07b6a; color: white; }
+        .bias-2    { background-color: #6aaee0; color: #1a1a1a; }
+        .bias-3    { background-color: #6c6c6c;    color: white; }
+        .bias-4    { background-color: #e07b6a; color: #1a1a1a; }
         .bias-5    { background-color: #b51a1a; color: white; }
         .bias-none { background-color: #ddd;    color: #666;  }
 
@@ -480,7 +478,7 @@
             box-shadow: var(--shadow);
         }
 
-        .page-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+        .page-btn:hover { border-color: var(--accent); color: var(--accent-text); transform: translateY(-1px); }
 
         .page-info {
             font-size: 14px;
@@ -590,7 +588,7 @@
         <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 10px; margin-left: 4px;">
             <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Show single-article stories:</span>
             <a href="{{ url_for('admin.list_articles', topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
-               style="font-size: 13px; font-weight: 700; color: var(--accent); text-decoration: none;">
+               style="font-size: 13px; font-weight: 700; color: var(--accent-text); text-decoration: none;">
                 {{ '✓ ON' if show_single else '✗ OFF' }}
             </a>
         </div>
@@ -652,17 +650,17 @@
                                 <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1px solid var(--border);">
                                     <!-- Left Group -->
                                     <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: #1a6bb5; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #1a6bb5; padding-bottom: 4px;">Left</div>
+                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-left-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-left-text); padding-bottom: 4px;">Left</div>
                                         <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b1 + counts.b2 }}</div>
                                     </div>
                                     <!-- Center Group -->
                                     <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #888; padding-bottom: 4px;">Center</div>
+                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-center-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-center-text); padding-bottom: 4px;">Center</div>
                                         <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b3 }}</div>
                                     </div>
                                     <!-- Right Group -->
                                     <div style="flex: 1; text-align: center; padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: #b51a1a; text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid #b51a1a; padding-bottom: 4px;">Right</div>
+                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-right-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-right-text); padding-bottom: 4px;">Right</div>
                                         <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b4 + counts.b5 }}</div>
                                     </div>
                                 </div>

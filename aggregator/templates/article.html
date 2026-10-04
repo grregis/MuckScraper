@@ -12,7 +12,10 @@
     <title>{{ article.title }} — MuckScraper</title>
     <style>
         :root {
+            --bias-left-text: #1a6bb5;
+            --bias-right-text: #b51a1a;
             --accent:        #5a5f52;
+            --accent-text: #5a5f52;
             --accent-light:  #7a8172;
             --accent-dark:   #464b40;
 
@@ -23,7 +26,7 @@
             --topbar-text:   #cdd6f4;
             --text:          #1a1a1a;
             --text-muted:    #555;
-            --text-faint:    #888;
+            --text-faint:    #6c6c6c;
             --border:        #eef0f2;
             --summary-bg:    #fdfbff;
             --shadow:        0 10px 30px rgba(0,0,0,0.08);
@@ -31,11 +34,14 @@
         }
 
         [data-theme="dark"] {
+            --bias-left-text: #5b9be0;
+            --bias-right-text: #ef6b6b;
+            --accent-text: #a9b19c;
             --bg:            #0f0f17;
             --surface:       #1a1a26;
             --text:          #e2e8f0;
             --text-muted:    #a0aec0;
-            --text-faint:    #718096;
+            --text-faint:    #8b97ab;
             --border:        #2d2d3f;
             --summary-bg:    #222230;
             --shadow:        0 15px 40px rgba(0,0,0,0.4);
@@ -118,9 +124,9 @@
         }
 
         .bias-1 { background-color: #1a6bb5; color: white; }
-        .bias-2 { background-color: #6aaee0; color: white; }
-        .bias-3 { background-color: #888;    color: white; }
-        .bias-4 { background-color: #e07b6a; color: white; }
+        .bias-2 { background-color: #6aaee0; color: #1a1a1a; }
+        .bias-3 { background-color: #6c6c6c;    color: white; }
+        .bias-4 { background-color: #e07b6a; color: #1a1a1a; }
         .bias-5 { background-color: #b51a1a; color: white; }
         .bias-none { background-color: #ddd; color: #666;  }
 
@@ -166,7 +172,7 @@
             font-size: 11px;
             font-weight: 800;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-text);
             letter-spacing: 2px;
             margin-bottom: 12px;
         }
@@ -175,7 +181,7 @@
         .summary p:last-child { margin-bottom: 0; }
 
         .summary-section-label {
-            color: var(--accent);
+            color: var(--accent-text);
             font-size: 15px;
             font-weight: 700;
             text-transform: uppercase;
@@ -318,7 +324,7 @@
         }
 
         .article-body a:not(.btn) {
-            color: var(--accent);
+            color: var(--accent-text);
             text-decoration: underline;
             text-underline-offset: 4px;
         }
@@ -341,7 +347,7 @@
         }
 
         .source-link a {
-            color: var(--accent);
+            color: var(--accent-text);
             text-decoration: none;
             font-weight: 700;
         }
@@ -473,7 +479,7 @@
             <button type="button" class="btn" onclick="startAiTask('article_summary', {{ article.id }}, this)">Summarize</button>
             <form method="POST" action="{{ url_for('admin.rate_article', article_id=article.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn" style="background: var(--bg); color: var(--accent); border: 1px solid var(--accent);">Rate Bias</button>
+                <button type="submit" class="btn" style="background: var(--bg); color: var(--accent-text); border: 1px solid var(--accent);">Rate Bias</button>
             </form>
         </div>
 

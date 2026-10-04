@@ -14,6 +14,7 @@
     <style>
         :root {
             --accent: #5a5f52;
+            --accent-text: #5a5f52;
             --accent-light: #7a8172;
             --accent-dark: #464b40;
             --broad: #b08a22;
@@ -28,18 +29,19 @@
             --topbar-text: #cdd6f4;
             --text: #1a1a1a;
             --text-muted: #555;
-            --text-faint: #888;
+            --text-faint: #6c6c6c;
             --border: #eef0f2;
             --warning-bg: #f1f3f4;
             --warning-border: #d7dcdf;
             --shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         [data-theme="dark"] {
+            --accent-text: #a9b19c;
             --bg: #0f0f17;
             --surface: #1a1a26;
             --text: #e2e8f0;
             --text-muted: #a0aec0;
-            --text-faint: #718096;
+            --text-faint: #8b97ab;
             --border: #2d2d3f;
             --broad-soft: rgba(176, 138, 34, 0.18);
             --danger-soft: rgba(154, 114, 91, 0.18);
@@ -197,7 +199,7 @@
         }
         .btn-secondary {
             background: transparent;
-            color: var(--accent);
+            color: var(--accent-text);
             border: 1px solid var(--border);
         }
         .btn-secondary:hover {

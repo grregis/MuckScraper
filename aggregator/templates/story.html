@@ -14,13 +14,14 @@
     <style>
         :root {
             --accent:        #5a5f52;
+            --accent-text: #5a5f52;
             --accent-light:  #7a8172;
             --accent-dark:   #464b40;
             --bg:            #f8f9fa;
             --surface:       #ffffff;
             --text:          #1a1a1a;
             --text-muted:    #555;
-            --text-faint:    #888;
+            --text-faint:    #6c6c6c;
             --border:        #eef0f2;
             --summary-bg:    #fdfbff;
             --shadow:        0 10px 30px rgba(0,0,0,0.08);
@@ -29,11 +30,12 @@
         }
 
         [data-theme="dark"] {
+            --accent-text: #a9b19c;
             --bg:            #0f0f17;
             --surface:       #1a1a26;
             --text:          #e2e8f0;
             --text-muted:    #a0aec0;
-            --text-faint:    #718096;
+            --text-faint:    #8b97ab;
             --border:        #2d2d3f;
             --summary-bg:    #222230;
         }
@@ -85,13 +87,13 @@
             font-size: 11px;
             font-weight: 800;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-text);
             letter-spacing: 2px;
             margin-bottom: 16px;
         }
 
         .analysis-content p { margin-bottom: 1.2em; line-height: 1.6; }
-        .analysis-content strong { color: var(--accent); }
+        .analysis-content strong { color: var(--accent-text); }
 
         .article-list { list-style: none; margin-top: 48px; }
         .article-item {
@@ -109,7 +111,7 @@
             text-decoration: none;
             line-height: 1.4;
         }
-        .article-link:hover { color: var(--accent); text-decoration: underline; }
+        .article-link:hover { color: var(--accent-text); text-decoration: underline; }
 
         .article-meta { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
 
@@ -123,11 +125,11 @@
             color: white;
         }
         .bias-1 { background: #1a6bb5; }
-        .bias-2 { background: #6aaee0; }
-        .bias-3 { background: #888; }
-        .bias-4 { background: #e07b6a; }
+        .bias-2 { background: #6aaee0; color: #1a1a1a; }
+        .bias-3 { background: #6c6c6c; }
+        .bias-4 { background: #e07b6a; color: #1a1a1a; }
         .bias-5 { background: #b51a1a; }
-        .bias-none { background: #ddd; color: #666; }
+        .bias-none { background: #ddd; color: #4a4a4a; }
 
         .source-badge {
             font-size: 9px;
@@ -144,7 +146,7 @@
         .btn-view {
             display: inline-block;
             background: var(--bg);
-            color: var(--accent);
+            color: var(--accent-text);
             border: 1px solid var(--accent);
             padding: 6px 16px;
             border-radius: 8px;
@@ -177,7 +179,7 @@
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 2px;
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 10px;
         }
         .editors-note-text {
