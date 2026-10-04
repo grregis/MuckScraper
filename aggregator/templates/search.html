@@ -290,6 +290,7 @@
             {{ '{:,}'.format(total) }} {{ 'stories' if tab == 'stories' else 'articles' }}
             {% if q %}matching “{{ q }}”{% endif %}
             {% if window.range == 'all' %}· all time{% elif window.range == 'custom' %}· {{ window.start }} to {{ window.end }}{% else %}· last {{ {'24h': '24 hours', '7d': '7 days', '30d': '30 days'}[window.range] }}{% endif %}
+            {% if sorted_by_relevance %}· best match first{% elif relevance_url %}· <a href="{{ relevance_url }}">sort by best match</a>{% endif %}
         </div>
 
         <div class="table-wrap">

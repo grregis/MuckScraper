@@ -57,6 +57,20 @@ STORY_SORTABLE = {"headline", "articles", "left", "center", "right", "created", 
 ARTICLE_SORTABLE = {"title", "outlet", "date", "bias", "story", "story_articles"}
 
 
+# With a text query the rows default to Meilisearch's own ranking, best match
+# first. Sorting the <= 1000 candidates by date instead put strong matches
+# pages behind weak recent ones.
+RELEVANCE = "relevance"
+
+
+def _relevance_order(id_column, ranked_ids):
+    """ORDER BY position in Meilisearch's ranked id list, or None if there is
+    no ranked list (no query, or the SQL fallback)."""
+    if not ranked_ids:
+        return None
+    return case({row_id: index for index, row_id in enumerate(ranked_ids)}, value=id_column)
+
+
 def _parse_day(value):
     if not value:
         return None
@@ -131,8 +145,10 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
         "created": Story.created_at,
         "updated": last_update,
     }
-    order = sort_columns[sort_key]
-    order = order.desc() if descending else order.asc()
+    order = _relevance_order(Story.id, story_ids) if sort_key == RELEVANCE else None
+    if order is None:
+        order = sort_columns[sort_key if sort_key in sort_columns else "updated"]
+        order = order.desc() if descending else order.asc()
 
     query = (
         db.session.query(
@@ -207,8 +223,10 @@ def _article_rows(article_ids, window, sort_key, descending, page, text_query):
         "story": func.lower(Story.title),
         "story_articles": story_article_count,
     }
-    order = sort_columns[sort_key]
-    order = order.desc() if descending else order.asc()
+    order = _relevance_order(Article.id, article_ids) if sort_key == RELEVANCE else None
+    if order is None:
+        order = sort_columns[sort_key if sort_key in sort_columns else "date"]
+        order = order.desc() if descending else order.asc()
 
     query = (
         db.session.query(
@@ -297,9 +315,10 @@ def search_page():
     window = _resolve_window(args)
 
     sortable = STORY_SORTABLE if tab == "stories" else ARTICLE_SORTABLE
-    default_sort = "updated" if tab == "stories" else "date"
+    column_default = "updated" if tab == "stories" else "date"
+    default_sort = RELEVANCE if text_query else column_default
     sort_key = args.get("sort", default_sort)
-    if sort_key not in sortable:
+    if sort_key not in sortable and not (sort_key == RELEVANCE and text_query):
         sort_key = default_sort
     descending = args.get("dir", "desc") != "asc"
 
@@ -314,13 +333,21 @@ def search_page():
     if text_query:
         try:
             if tab == "stories":
-                candidate_ids = search_story_ids(text_query, limit=SEARCH_CANDIDATE_LIMIT, since=window["since"])
+                candidate_ids = search_story_ids(
+                    text_query, limit=SEARCH_CANDIDATE_LIMIT, since=window["since"], until=window["until"]
+                )
             else:
-                candidate_ids = search_article_ids(text_query, limit=SEARCH_CANDIDATE_LIMIT, since=window["since"])
+                candidate_ids = search_article_ids(
+                    text_query, limit=SEARCH_CANDIDATE_LIMIT, since=window["since"], until=window["until"]
+                )
         except SearchUnavailableError as exc:
             logger.warning("Meilisearch unavailable for search page, using SQL match: %s", exc)
             degraded = True
             candidate_ids = None
+
+    if sort_key == RELEVANCE and candidate_ids is None:
+        # SQL fallback has no ranking to follow.
+        sort_key = column_default
 
     if tab == "stories":
         rows, pagination = _story_rows(candidate_ids, window, sort_key, descending, page, text_query)
@@ -356,6 +383,9 @@ def search_page():
         prev_url=page_url(pagination.page - 1) if pagination.has_prev else None,
         next_url=page_url(pagination.page + 1) if pagination.has_next else None,
         degraded=degraded,
+        sorted_by_relevance=sort_key == RELEVANCE,
+        relevance_url=url_for("admin.search_page", tab=tab, sort=RELEVANCE, **base_args)
+        if text_query and candidate_ids is not None else None,
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         time_ranges=[("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days"), ("all", "All time"), ("custom", "Custom")],
         active_nav="search",

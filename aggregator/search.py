@@ -345,13 +345,29 @@ def index_changed_since(since):
     }
 
 
-def search_story_ids(query, limit=250, since=None):
+def _article_date_filter(since=None, until=None):
+    """Meilisearch filter for since <= article date < until (either optional)."""
+    clauses = []
+    if since is not None:
+        clauses.append(f"date_ts >= {_epoch_seconds(since)}")
+    if until is not None:
+        clauses.append(f"date_ts < {_epoch_seconds(until)}")
+    return " AND ".join(clauses) or None
+
+
+def search_story_ids(query, limit=250, since=None, until=None):
     """Story ids matching `query`, best first.
 
     `since` (naive UTC datetime, or None for all time) is applied inside
     Meilisearch, so the `limit` candidates are already inside the window. A
     story matches when any of its articles is in the window, which is the
     same as its latest article being in it, so both indexes filter on that.
+
+    `until` (exclusive, for a custom range in the past) can only bound the
+    article index: a story document carries its latest article date, not its
+    earliest, so story-index hits can still run past `until`. The article
+    hits are what keep a past window from being crowded out by later stories
+    under the `limit` cap; the caller applies the exact window in SQL.
     """
     _ensure_index_exists(STORY_INDEX)
     _ensure_index_exists(ARTICLE_INDEX)
@@ -359,9 +375,10 @@ def search_story_ids(query, limit=250, since=None):
     story_body = {"q": query, "limit": limit}
     article_body = {"q": query, "limit": limit}
     if since is not None:
-        since_ts = _epoch_seconds(since)
-        story_body["filter"] = f"latest_article_ts >= {since_ts}"
-        article_body["filter"] = f"date_ts >= {since_ts}"
+        story_body["filter"] = f"latest_article_ts >= {_epoch_seconds(since)}"
+    article_filter = _article_date_filter(since, until)
+    if article_filter:
+        article_body["filter"] = article_filter
 
     story_payload = _request(
         "POST",
@@ -392,15 +409,17 @@ def search_story_ids(query, limit=250, since=None):
     return ordered_story_ids
 
 
-def search_article_ids(query, limit=250, since=None):
-    """Article ids matching `query`, best first. `since` works as in
-    search_story_ids(): applied inside Meilisearch as a superset filter, and
-    the caller applies the exact window in SQL."""
+def search_article_ids(query, limit=250, since=None, until=None):
+    """Article ids matching `query`, best first. `since`/`until` bound the
+    article publish date inside Meilisearch, so a custom range in the past is
+    not crowded out by later articles under the `limit` cap; the caller
+    applies the exact window in SQL."""
     _ensure_index_exists(ARTICLE_INDEX)
 
     body = {"q": query, "limit": limit}
-    if since is not None:
-        body["filter"] = f"date_ts >= {_epoch_seconds(since)}"
+    article_filter = _article_date_filter(since, until)
+    if article_filter:
+        body["filter"] = article_filter
     payload = _request("POST", f"/indexes/{ARTICLE_INDEX}/search", json=body)
 
     ordered_ids = []
