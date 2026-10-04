@@ -137,6 +137,12 @@
             box-shadow: var(--shadow);
             overflow-x: auto;
         }
+        /* On wide screens let the page scroll the table, so the header row can
+           stick (a scrolling wrapper would trap it). Narrow screens keep the
+           sideways scroll and lose the sticky header. */
+        @media (min-width: 901px) {
+            .table-wrap { overflow: visible; }
+        }
 
         table.results {
             width: 100%;
@@ -146,7 +152,8 @@
         }
         table.results th {
             position: sticky;
-            top: 0;
+            top: var(--sticky-header-height, 0px);
+            z-index: 2;
             background: var(--surface);
             text-align: left;
             font-weight: 700;
@@ -156,6 +163,8 @@
             border-bottom: 1px solid var(--input-border);
             white-space: nowrap;
         }
+        table.results thead th:first-child { border-top-left-radius: 12px; }
+        table.results thead th:last-child { border-top-right-radius: 12px; }
         table.results th a { color: inherit; text-decoration: none; }
         table.results th a:hover { color: var(--accent-text); }
         table.results td {
@@ -326,6 +335,14 @@
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('muckscraper-theme', next);
     }
+
+    // Table header rows stick just below the sticky page header
+    function setStickyOffset() {
+        const header = document.querySelector('.main-header');
+        if (header) document.documentElement.style.setProperty('--sticky-header-height', header.offsetHeight + 'px');
+    }
+    setStickyOffset();
+    window.addEventListener('resize', setStickyOffset);
 
     {% include 'sidebar_script.html' %}
 </script>
