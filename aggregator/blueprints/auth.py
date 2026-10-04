@@ -8,7 +8,7 @@ auth = Blueprint("auth", __name__)
 @auth.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("admin.list_articles"))
+        return redirect(url_for("public.headlines_feed"))
     
     if request.method == "POST":
         username = request.form.get("username")
@@ -20,7 +20,7 @@ def login():
             login_user(user, remember=remember)
             next_page = request.args.get("next")
             if not next_page or urlparse(next_page).netloc != "":
-                next_page = url_for("admin.list_articles")
+                next_page = url_for("public.headlines_feed")
             return redirect(next_page)
         else:
             flash("Invalid username or password")

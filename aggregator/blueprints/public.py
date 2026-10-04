@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
+from flask_login import current_user
 from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
@@ -13,7 +14,12 @@ public = Blueprint("public", __name__)
 
 @public.route("/")
 def index():
-    return redirect(url_for("admin.list_articles"))
+    # Land on Headlines (Regis, 2026-10-04: the more natural starting page).
+    # /headlines itself is public, so send signed-out visitors through login
+    # first to keep the old "the site asks you to sign in" behaviour.
+    if current_user.is_authenticated:
+        return redirect(url_for("public.headlines_feed"))
+    return redirect(url_for("auth.login", next=url_for("public.headlines_feed")))
 
 
 @public.route("/headlines")
