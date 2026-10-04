@@ -43,7 +43,7 @@ STORY_COLUMNS = [
     ("center", "Center", True, "desc"),
     ("right", "Right", True, "desc"),
     ("created", "Created", False, "desc"),
-    ("updated", "Last update", False, "desc"),
+    ("updated", "Latest article", False, "desc"),
 ]
 ARTICLE_COLUMNS = [
     ("title", "Title", False, "asc"),
