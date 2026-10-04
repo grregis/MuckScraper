@@ -656,9 +656,10 @@ def llm_status_detail():
 def llm_status_detail_public():
     """llm_status_detail() with host/role stripped from every entry.
 
-    The public /ollama-status route is unauthenticated, and host/role would
-    leak internal network details (a LAN IP, and which box is covering for
-    which) to anyone who asks.
+    The /ollama-status route was unauthenticated until 2026-10-04 and now
+    requires login, but keep stripping anyway: host/role would leak internal
+    network details (a LAN IP, and which box is covering for which) into a
+    response the browser caches and any page script can read.
     """
     detail = llm_status_detail()
     return {
