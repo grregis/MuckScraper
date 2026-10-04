@@ -7,7 +7,8 @@ search = types.ModuleType("aggregator.search")
 search.__dict__.update(
     SearchUnavailableError=Exception,
     reindex_all=lambda: None,
-    search_story_ids=lambda query: [],
+    search_story_ids=lambda query, limit=250, since=None, until=None: [],
+    search_article_ids=lambda query, limit=250, since=None, until=None: [],
 )
 story_view = types.ModuleType("aggregator.story_view")
 story_view.__dict__["apply_aggregator_filter"] = lambda story: None
@@ -15,7 +16,8 @@ story_view.__dict__["apply_aggregator_filter"] = lambda story: None
 sys.modules.setdefault("aggregator.search", search)
 sys.modules.setdefault("aggregator.story_view", story_view)
 
-from aggregator.blueprints.admin import admin, redirect_to_articles
+from aggregator.blueprints.admin import admin
+from aggregator.blueprints.admin._shared import redirect_to_articles
 
 
 def test_redirect_to_articles_preserves_single_article_view_from_referrer():
