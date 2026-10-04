@@ -1,4 +1,11 @@
+from aggregator.html_safety import clean_html, plain_text_br
+
+
 def register_filters(app):
+    # Untrusted text (scraped HTML, LLM output) must go through one of these,
+    # never `| safe`. See aggregator/html_safety.py.
+    app.add_template_filter(clean_html, "clean_html")
+    app.add_template_filter(plain_text_br, "plain_text_br")
 
     @app.template_filter("get_whats_happening")
     def get_whats_happening(summary):

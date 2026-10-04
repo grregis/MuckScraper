@@ -460,7 +460,7 @@
 
         <div class="article-body">
             {% if article.content and article.content|length > 100 %}
-                {{ article.content | safe }}
+                {{ article.content | clean_html }}
             {% else %}
                 <div style="padding: 40px; background: var(--bg); border-radius: 16px; text-align: center; border: 1px dashed var(--border);">
                     <p style="color: var(--text-muted); margin-bottom: 16px;">Full scrape unavailable for this article.</p>

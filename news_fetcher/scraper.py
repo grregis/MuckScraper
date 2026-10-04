@@ -24,21 +24,9 @@ HEADERS_GOOGLEBOT = {
     "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 }
 
-ALLOWED_TAGS = [
-    "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
-    "strong", "em", "b", "i", "u",
-    "ul", "ol", "li",
-    "blockquote", "pre", "code",
-    "a", "img",
-    "table", "thead", "tbody", "tr", "th", "td",
-]
-
-ALLOWED_ATTRIBUTES = {
-    "a":   ["href", "title"],
-    "img": ["src", "alt", "title"],
-    "td":  ["colspan", "rowspan"],
-    "th":  ["colspan", "rowspan"],
-}
+# The allowlist lives in aggregator/html_safety.py so the templates filter
+# with exactly the same rules at render time.
+from aggregator.html_safety import ALLOWED_ATTRIBUTES, ALLOWED_TAGS, sanitize_html  # noqa: E402,F401
 
 # Sites that need Playwright (heavy JS)
 PLAYWRIGHT_DOMAINS = [
@@ -539,15 +527,6 @@ def needs_playwright(url):
 
 def use_googlebot(url):
     return any(domain in url.lower() for domain in GOOGLEBOT_DOMAINS)
-
-
-def sanitize_html(raw_html):
-    return bleach.clean(
-        raw_html,
-        tags=ALLOWED_TAGS,
-        attributes=ALLOWED_ATTRIBUTES,
-        strip=True,
-    )
 
 
 def _fetch_html(url, headers=None, timeout=10):
