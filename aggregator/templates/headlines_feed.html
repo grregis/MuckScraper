@@ -160,7 +160,7 @@
                     <div style="font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         {% if story.last_updated %}
                             <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-light);"></span>
-                            Last updated: {{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}
+                            Last updated: <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }} UTC</span>
                         {% endif %}
                         {% if story.deep_report %}
                             <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">ANALYSIS AVAILABLE</span>
@@ -256,5 +256,6 @@
 
     {% include 'sidebar_script.html' %}
 </script>
+<script src="{{ url_for('static', filename='js/local_time.js') }}"></script>
 </body>
 </html>

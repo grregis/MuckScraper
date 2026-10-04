@@ -566,27 +566,8 @@
         await pollAiTask(taskType, resourceId, button);
     }
 
-    // ── Local Timezone Conversion ──
-    function convertToLocalTime() {
-        const dateElements = document.querySelectorAll('.local-date');
-        dateElements.forEach(el => {
-            const utcDate = el.getAttribute('data-utc');
-            if (utcDate) {
-                const date = new Date(utcDate);
-                const options = { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: '2-digit',
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: false 
-                };
-                el.textContent = date.toLocaleString(undefined, options).replace(',', '');
-            }
-        });
-    }
-    document.addEventListener('DOMContentLoaded', convertToLocalTime);
 </script>
 
+<script src="{{ url_for('static', filename='js/local_time.js') }}"></script>
 </body>
 </html>

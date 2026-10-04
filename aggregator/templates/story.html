@@ -225,7 +225,7 @@
     <div style="font-size: 12px; font-weight: 600; color: var(--text-faint); margin-bottom: 32px; display: flex; align-items: center; gap: 12px;">
         <span>{{ story.articles|length }} SOURCES</span>
         <span style="width: 4px; height: 4px; border-radius: 50%; background: var(--border);"></span>
-        <span>PUBLISHED {{ story.created_at.strftime('%b %d, %Y') }}</span>
+        <span>PUBLISHED <span class="local-date" data-utc="{{ story.created_at.isoformat() }}Z">{{ story.created_at.strftime('%b %d, %Y') }}</span></span>
         {% if story.last_updated %}
             <span style="width: 4px; height: 4px; border-radius: 50%; background: var(--border);"></span>
             <span>LAST UPDATED: <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%b %d, %Y %H:%M') }}</span></span>
@@ -458,27 +458,8 @@
         await pollAiTask(taskType, resourceId, button);
     }
 
-    // ── Local Timezone Conversion ──
-    function convertToLocalTime() {
-        const dateElements = document.querySelectorAll('.local-date');
-        dateElements.forEach(el => {
-            const utcDate = el.getAttribute('data-utc');
-            if (utcDate) {
-                const date = new Date(utcDate);
-                const options = { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: '2-digit',
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: false 
-                };
-                el.textContent = date.toLocaleString(undefined, options).replace(',', '');
-            }
-        });
-    }
-    document.addEventListener('DOMContentLoaded', convertToLocalTime);
 </script>
 
+<script src="{{ url_for('static', filename='js/local_time.js') }}"></script>
 </body>
 </html>
