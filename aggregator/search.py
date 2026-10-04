@@ -392,6 +392,27 @@ def search_story_ids(query, limit=250, since=None):
     return ordered_story_ids
 
 
+def search_article_ids(query, limit=250, since=None):
+    """Article ids matching `query`, best first. `since` works as in
+    search_story_ids(): applied inside Meilisearch as a superset filter, and
+    the caller applies the exact window in SQL."""
+    _ensure_index_exists(ARTICLE_INDEX)
+
+    body = {"q": query, "limit": limit}
+    if since is not None:
+        body["filter"] = f"date_ts >= {_epoch_seconds(since)}"
+    payload = _request("POST", f"/indexes/{ARTICLE_INDEX}/search", json=body)
+
+    ordered_ids = []
+    seen_ids = set()
+    for hit in payload.get("hits", []):
+        article_id = hit.get("id")
+        if article_id and article_id not in seen_ids:
+            seen_ids.add(article_id)
+            ordered_ids.append(article_id)
+    return ordered_ids
+
+
 def healthcheck():
     if not meili_enabled():
         return False

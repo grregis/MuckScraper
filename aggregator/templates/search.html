@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <title>MuckScraper: Search</title>
+    <style>
+        :root {
+            --accent:        #5a5f52;
+            --accent-light:  #7a8172;
+            --accent-dark:   #464b40;
+
+            /* Light mode */
+            --bg:            #f8f9fa;
+            --surface:       #ffffff;
+            --text:          #1a1a1a;
+            --text-muted:    #555;
+            --text-faint:    #888;
+            --border:        #eef0f2;
+            --row-hover:     #f4f6f8;
+            --input-border:  #dde1e7;
+            --btn-muted-bg:  #f0f2f5;
+            --btn-muted-text:#4a5568;
+            --shadow:        0 2px 8px rgba(0,0,0,0.05);
+            --bias-left:     #2b6cb0;
+            --bias-center:   #718096;
+            --bias-right:    #c53030;
+            --bias-unrated:  #a0aec0;
+        }
+
+        [data-theme="dark"] {
+            --bg:            #0f0f17;
+            --surface:       #1a1a26;
+            --text:          #e2e8f0;
+            --text-muted:    #a0aec0;
+            --text-faint:    #718096;
+            --border:        #2d2d3f;
+            --row-hover:     #222230;
+            --input-border:  #3f3f5a;
+            --btn-muted-bg:  #2d2d3f;
+            --btn-muted-text:#cbd5e0;
+            --shadow:        0 4px 12px rgba(0,0,0,0.25);
+            --bias-left:     #63b3ed;
+            --bias-center:   #a0aec0;
+            --bias-right:    #fc8181;
+            --bias-unrated:  #4a5568;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.2s, color 0.2s;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        {% include 'sidebar_styles.html' %}
+
+        .main {
+            flex: 1;
+            padding: 0 32px;
+            max-width: 1400px;
+            min-width: 0;
+            position: relative;
+        }
+
+        .main-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            background: rgba(248, 249, 250, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 16px 0;
+            z-index: 10;
+        }
+        [data-theme="dark"] .main-header { background: rgba(15, 15, 23, 0.85); }
+
+        h1 { font-size: 24px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+
+        .theme-toggle {
+            background: var(--surface);
+            border: 1px solid var(--input-border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+        .tab {
+            padding: 8px 18px;
+            border-radius: 10px;
+            border: 1px solid var(--input-border);
+            background: var(--surface);
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .tab.active { color: white; background: var(--accent); border-color: var(--accent); }
+
+        .search-form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .search-form input[type="text"] {
+            flex: 1 1 280px;
+            max-width: 420px;
+            padding: 10px 14px;
+            font-size: 14px;
+            border: 1px solid var(--input-border);
+            border-radius: 10px;
+            background: var(--surface);
+            color: var(--text);
+        }
+        .search-form select,
+        .search-form input[type="date"] {
+            padding: 9px 10px;
+            font-size: 13px;
+            border: 1px solid var(--input-border);
+            border-radius: 10px;
+            background: var(--surface);
+            color: var(--text);
+        }
+        .search-form button {
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .search-form button:hover { background: var(--accent-dark); }
+        .date-label { font-size: 12px; color: var(--text-faint); }
+
+        .notice {
+            font-size: 13px;
+            color: var(--text-muted);
+            background: var(--surface);
+            border: 1px dashed var(--input-border);
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+
+        .summary-line { font-size: 12px; color: var(--text-faint); margin: 6px 2px 10px; }
+
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+
+        table.results {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+        table.results th {
+            position: sticky;
+            top: 0;
+            background: var(--surface);
+            text-align: left;
+            font-weight: 700;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 9px 10px;
+            border-bottom: 1px solid var(--input-border);
+            white-space: nowrap;
+        }
+        table.results th a { color: inherit; text-decoration: none; }
+        table.results th a:hover { color: var(--accent); }
+        table.results td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        table.results tbody tr:hover { background: var(--row-hover); }
+        table.results td a { color: var(--text); text-decoration: none; }
+        table.results td a:hover { color: var(--accent); text-decoration: underline; }
+        .col-title { min-width: 280px; }
+        .col-topics, .col-outlet, .col-story { color: var(--text-muted); }
+        .col-num, th.col-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .col-date { white-space: nowrap; color: var(--text-muted); }
+        .col-left { color: var(--bias-left); }
+        .col-right { color: var(--bias-right); }
+        .col-center { color: var(--bias-center); }
+
+        .bias {
+            display: inline-block;
+            min-width: 38px;
+            text-align: center;
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: white;
+        }
+        .bias-left { background: var(--bias-left); }
+        .bias-center { background: var(--bias-center); }
+        .bias-right { background: var(--bias-right); }
+        .bias-unrated { background: var(--bias-unrated); }
+
+        .empty { padding: 28px; text-align: center; color: var(--text-faint); }
+
+        .pager {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .pager a {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--input-border);
+            padding: 7px 14px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .pager a.disabled { opacity: 0.4; pointer-events: none; }
+
+        @media (max-width: 900px) {
+            .main { padding: 0 16px; }
+            .col-title { min-width: 200px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout">
+
+    {% include 'sidebar_nav.html' %}
+
+    <div class="main">
+        <div class="main-header">
+            <h1>Search</h1>
+            <div class="header-controls">
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+            </div>
+        </div>
+
+        <nav class="tabs">
+            <a href="{{ tab_urls.stories }}" class="tab {{ 'active' if tab == 'stories' }}">Stories</a>
+            <a href="{{ tab_urls.articles }}" class="tab {{ 'active' if tab == 'articles' }}">Articles</a>
+        </nav>
+
+        <form method="get" action="{{ url_for('admin.search_page') }}" class="search-form">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <input type="text" name="q" value="{{ q }}" placeholder="{{ 'Search story titles, headlines, summaries, article titles…' if tab == 'stories' else 'Search article titles, outlets, sources…' }}">
+            <select name="range" aria-label="Time range">
+                {% for value, label in time_ranges %}
+                <option value="{{ value }}" {{ 'selected' if window.range == value }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <span class="date-label">From</span>
+            <input type="date" name="start" value="{{ window.start }}" aria-label="Custom start date">
+            <span class="date-label">To</span>
+            <input type="date" name="end" value="{{ window.end }}" aria-label="Custom end date">
+            <button type="submit">Search</button>
+        </form>
+
+        {% if degraded %}
+        <div class="notice">Meilisearch is unavailable, so this text match is a simple substring search.</div>
+        {% endif %}
+
+        <div class="summary-line">
+            {{ '{:,}'.format(total) }} {{ 'stories' if tab == 'stories' else 'articles' }}
+            {% if q %}matching “{{ q }}”{% endif %}
+            {% if window.range == 'all' %}· all time{% elif window.range == 'custom' %}· {{ window.start }} to {{ window.end }}{% else %}· last {{ {'24h': '24 hours', '7d': '7 days', '30d': '30 days'}[window.range] }}{% endif %}
+        </div>
+
+        <div class="table-wrap">
+            <table class="results">
+                <thead>
+                    <tr>
+                        {% for col in columns %}
+                        <th class="{{ 'col-num' if col.numeric }} col-{{ col.key }}">
+                            {% if col.href %}<a href="{{ col.href }}">{{ col.label }} {{ col.arrow }}</a>{% else %}{{ col.label }}{% endif %}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    {% if tab == 'stories' %}
+                    <tr>
+                        <td class="col-title"><a href="{{ url_for('public.view_story', story_id=row.id) }}">{{ row.headline }}</a></td>
+                        <td class="col-topics">{{ row.topics|join(', ') }}</td>
+                        <td class="col-num">{{ row.articles }}</td>
+                        <td class="col-num col-left">{{ row.left }}</td>
+                        <td class="col-num col-center">{{ row.center }}</td>
+                        <td class="col-num col-right">{{ row.right }}</td>
+                        <td class="col-date">{{ row.created.strftime('%Y-%m-%d %H:%M') if row.created else '' }}</td>
+                        <td class="col-date">{{ row.updated.strftime('%Y-%m-%d %H:%M') if row.updated else '' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td class="col-title"><a href="{{ url_for('public.view_article', article_id=row.id) }}">{{ row.title }}</a></td>
+                        <td class="col-outlet">{{ row.outlet_name }}</td>
+                        <td class="col-date">{{ row.date.strftime('%Y-%m-%d %H:%M') if row.date else '' }}</td>
+                        <td class="col-num"><span class="bias {{ row.bias_class }}">{{ '%.1f'|format(row.bias) if row.bias is not none else '—' }}</span></td>
+                        <td class="col-story">{% if row.story_id %}<a href="{{ url_for('public.view_story', story_id=row.story_id) }}">{{ row.story_title }}</a>{% endif %}</td>
+                        <td class="col-num">{{ row.story_articles }}</td>
+                    </tr>
+                    {% endif %}
+                {% else %}
+                    <tr><td colspan="{{ columns|length }}" class="empty">No results in this window.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="pager">
+            <a href="{{ prev_url or '#' }}" class="{{ '' if prev_url else 'disabled' }}">← Previous</a>
+            <span>Page {{ page }} of {{ total_pages }}</span>
+            <a href="{{ next_url or '#' }}" class="{{ '' if next_url else 'disabled' }}">Next →</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    (function () {
+        const saved = localStorage.getItem('muckscraper-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved);
+    })();
+
+    function syncThemeButton() {
+        const btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        btn.textContent = dark ? '☀️ Light' : '🌙 Dark';
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('muckscraper-theme', next);
+        syncThemeButton();
+    }
+
+    syncThemeButton();
+</script>
+{% include 'sidebar_script.html' %}
+</body>
+</html>

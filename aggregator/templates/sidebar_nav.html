@@ -21,6 +21,11 @@
                         <span class="full-text">Fetch Articles</span>
                     </a>
                 </div>
+                <div class="topic-block {% if active_nav == 'search' %}active{% endif %}">
+                    <a href="{{ url_for('admin.search_page') }}">
+                        <span class="full-text">Search</span>
+                    </a>
+                </div>
                 <hr class="sidebar-divider">
 
                 <h2>Topics</h2>
