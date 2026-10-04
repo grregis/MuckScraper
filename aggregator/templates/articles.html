@@ -461,6 +461,16 @@
             flex-wrap: wrap;
         }
 
+        /* Show single-article stories: a link styled as a switch (it reloads the list) */
+        .single-toggle-row { margin: 0 0 24px 4px; }
+        .switch { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+        .switch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
+        .switch-track { position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--text-faint); transition: background 0.15s; flex-shrink: 0; }
+        .switch-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform 0.15s; }
+        .switch[aria-checked="true"] .switch-track { background: var(--accent-text); }
+        .switch[aria-checked="true"] .switch-thumb { transform: translateX(14px); }
+        .switch:hover .switch-label { color: var(--text); }
+
         .scrape-filter-label {
             font-size: 12px;
             font-weight: 800;
@@ -552,11 +562,11 @@
         </div>
 
         {% if not is_multi_view %}
-        <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 10px; margin-left: 4px;">
-            <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Show single-article stories:</span>
+        <div class="single-toggle-row">
             <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
-               style="font-size: 13px; font-weight: 700; color: var(--accent-text); text-decoration: none;">
-                {{ '✓ ON' if show_single else '✗ OFF' }}
+               class="switch" role="switch" aria-checked="{{ 'true' if show_single else 'false' }}">
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-label">Show single-article stories</span>
             </a>
         </div>
         {% endif %}
@@ -886,6 +896,10 @@
         await pollAiTask(taskType, resourceId, button);
     }
 
+
+    document.querySelectorAll('a[role="switch"]').forEach(function (el) {
+        el.addEventListener('keydown', function (e) { if (e.key === ' ') { e.preventDefault(); el.click(); } });
+    });
 
     // ── Scroll Position ──
     function saveStoryPosition(storyId) {
