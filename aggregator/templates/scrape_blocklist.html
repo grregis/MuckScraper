@@ -1,3 +1,4 @@
+{% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -137,7 +138,7 @@
 
     <form method="POST" action="/audit-scrapes">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="audit-btn">⚡ Run Scrape Audit Now</button>
+        <button type="submit" class="audit-btn">{{ icon('zap') }} Run Scrape Audit Now</button>
     </form>
 
     <div class="metrics-grid">

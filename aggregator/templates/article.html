@@ -1,4 +1,5 @@
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/article.html -->
+{% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -346,7 +347,7 @@
         <span class="topbar-title">MuckScraper</span>
         <a href="{{ url_for('public.view_story', story_id=article.story_id) if article.story_id else url_for('admin.list_articles') }}">← Back to Story</a>
     </div>
-    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
 </div>
 
 <div class="container">
@@ -470,8 +471,6 @@
 
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
     }
 
     function toggleTheme() {

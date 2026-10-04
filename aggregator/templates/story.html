@@ -1,3 +1,4 @@
+{% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -213,9 +214,7 @@
     <button id="theme-toggle" onclick="toggleTheme()"
         style="background:none; border:1px solid #444; color:#cdd6f4;
                padding:6px 14px; border-radius:8px; cursor:pointer;
-               font-size:13px; font-weight:600;">
-        🌙 Dark
-    </button>
+               font-size:13px; font-weight:600;">{{ theme_toggle_label() }}</button>
 </div>
 
 <div class="container">
@@ -364,8 +363,6 @@
 
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        if (btn) btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
     }
 
     function toggleTheme() {

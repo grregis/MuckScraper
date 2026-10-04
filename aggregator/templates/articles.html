@@ -1,4 +1,5 @@
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
+{% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -505,8 +506,8 @@
             <h1>MuckScraper</h1>
 
             <div class="header-controls">
-                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
-                <a href="{{ url_for('admin.tools_page') }}" class="theme-toggle" style="text-decoration: none;">🛠 Admin Tools</a>
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
+                <a href="{{ url_for('admin.tools_page') }}" class="theme-toggle" style="text-decoration: none;">{{ icon('wrench') }} Admin Tools</a>
             </div>
         </div>
 
@@ -570,7 +571,7 @@
                             <img src="{{ featured_article.image_url }}" alt="Story Image" loading="lazy">
                         {% else %}
                             <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:40px; background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);">
-                                📰
+                                {{ icon('newspaper') }}
                             </div>
                         {% endif %}
                     </div>
@@ -787,8 +788,6 @@
     // ── Theme ──
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
     }
 
     function toggleTheme() {

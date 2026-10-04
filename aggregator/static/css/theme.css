@@ -79,3 +79,12 @@
     --bias-center-text: #a0aec0;
     --bias-right-text:  #ef6b6b;
 }
+
+/* Inline SVG icons (templates/icons.html) */
+.icon { display: inline-block; vertical-align: -0.125em; flex-shrink: 0; }
+
+/* Theme button label: one of the two spans shows, by theme */
+.theme-when-light, .theme-when-dark { display: inline-flex; align-items: center; gap: 0.4em; }
+.theme-when-dark { display: none; }
+[data-theme="dark"] .theme-when-light { display: none; }
+[data-theme="dark"] .theme-when-dark { display: inline-flex; }

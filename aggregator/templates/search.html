@@ -1,3 +1,4 @@
+{% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -226,7 +227,7 @@
         <div class="main-header">
             <h1>Search</h1>
             <div class="header-controls">
-                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
             </div>
         </div>
 
@@ -319,22 +320,12 @@
         document.documentElement.setAttribute('data-theme', saved);
     })();
 
-    function syncThemeButton() {
-        const btn = document.getElementById('theme-toggle');
-        if (!btn) return;
-        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-        btn.textContent = dark ? '☀️ Light' : '🌙 Dark';
-    }
-
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
         const next = current === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('muckscraper-theme', next);
-        syncThemeButton();
     }
-
-    syncThemeButton();
 
     {% include 'sidebar_script.html' %}
 </script>
