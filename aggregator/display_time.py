@@ -1,8 +1,7 @@
 """The time zone the aggregator shows times in.
 
-Timestamps are stored as naive UTC. DISPLAY_TIMEZONE (an IANA name, default
-America/New_York, the zone news_fetcher/scheduler.py runs the pipeline
-schedule in) decides how they are shown: the server-rendered dates in tables,
+Timestamps are stored as naive UTC. DISPLAY_TIMEZONE (an IANA name such as
+America/New_York; default UTC) decides how they are shown: the server-rendered dates in tables,
 the custom date ranges on the search page, and the hover times from
 static/js/local_time.js all use it, so every page agrees.
 """
@@ -15,7 +14,7 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DISPLAY_TIMEZONE = "America/New_York"
+DEFAULT_DISPLAY_TIMEZONE = "UTC"
 
 
 def configured_timezone_name() -> str:
