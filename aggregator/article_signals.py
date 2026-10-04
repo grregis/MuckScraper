@@ -52,6 +52,11 @@ LOW_VALUE_URL_HINTS = (
     # $200"), which BETTING_TITLE_PATTERNS does not match. 129 of the 142 are
     # New York Post, which files them consistently under /betting/.
     "/betting/",
+    # Fox News files the same sportsbook promo-code spam under
+    # /outkick-betting/, which "/betting/" does not match. All 124 in the DB
+    # (2026-10-03) are promos, sportsbook guides or betting previews; five had
+    # reached published editions, one at rank 4.
+    "/outkick-betting/",
 )
 
 # Sports-betting tipster content: odds, picks, parlays, prop bets. It is not
@@ -82,6 +87,10 @@ BETTING_TITLE_PATTERNS = (
     re.compile(r"\bexpert picks\b", re.IGNORECASE),
     re.compile(r"\bdfs lineup\b", re.IGNORECASE),
     re.compile(r"\bprop bets?\b", re.IGNORECASE),
+    # Sportsbook affiliate promos ("Promo Code FOXNEWS350: Bet $20, Get $350",
+    # "bet365 bonus code: ..."). All 181 titles in the DB matching this were
+    # promos (2026-10-03); a backstop for outlets that move the URL section.
+    re.compile(r"\b(?:promo|bonus) code\b", re.IGNORECASE),
 )
 
 # Syndicated personal-advice columns. Not news, but they arrive through ordinary
