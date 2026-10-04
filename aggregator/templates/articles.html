@@ -465,10 +465,11 @@
         .single-toggle-row { margin: 0 0 24px 4px; }
         .switch { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-muted); font-size: 13px; font-weight: 600; }
         .switch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
-        .switch-track { position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--text-faint); transition: background 0.15s; flex-shrink: 0; }
-        .switch-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform 0.15s; }
-        .switch[aria-checked="true"] .switch-track { background: var(--accent-text); }
-        .switch[aria-checked="true"] .switch-thumb { transform: translateX(14px); }
+        /* Off: an empty outline with a grey knob. On: filled, knob on the right. */
+        .switch-track { position: relative; width: 34px; height: 20px; border-radius: 10px; background: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); transition: background 0.15s, box-shadow 0.15s; flex-shrink: 0; }
+        .switch-thumb { position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-faint); transition: transform 0.15s, background 0.15s; }
+        .switch[aria-checked="true"] .switch-track { background: var(--accent-text); box-shadow: none; }
+        .switch[aria-checked="true"] .switch-thumb { background: var(--surface); transform: translateX(14px); }
         .switch:hover .switch-label { color: var(--text); }
 
         .scrape-filter-label {
