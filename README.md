@@ -14,11 +14,12 @@
 
 ## Screenshots
 
-### Main Feed
-![MuckScraper Light Mode](screenshots/light_mode.png)
+### Headlines
+The latest published edition, with each story's Left / Center / Right coverage count and summary.
+![Headlines in light mode](screenshots/light_mode.png)
 
-### Dark Mode
-![MuckScraper Dark Mode](screenshots/dark_mode.png)
+### Grouped Stories (dark mode)
+![Grouped Stories in dark mode](screenshots/dark_mode.png)
 
 ### Multi-Source Story View
 ![Story Reader](screenshots/story_reader1.png)
@@ -27,6 +28,10 @@
 ### Bias Tags
 ![Bias Tags](screenshots/bias_tags1.png)
 ![Bias Tags](screenshots/bias_tags2.png)
+
+### Search
+Stories and articles in dense, sortable tables, filtered by time window, with Left / Center / Right counts per story.
+![Search](screenshots/search.png)
 
 ### Article Reader
 ![Article Reader](screenshots/article_reader1.png)
@@ -75,6 +80,9 @@ muckscraper/
 │   ├── models.py                   # SQLAlchemy models
 │   ├── filters.py                  # Jinja filters and display helpers
 │   ├── constants.py                # Shared constants (AGGREGATORS; TOPICS is dead, topics are DB-backed)
+│   ├── display_time.py             # DISPLAY_TIMEZONE handling for shown dates
+│   ├── html_safety.py              # Sanitising filters for scraped and LLM text
+│   ├── seed_defaults.py            # Default topics, feeds, prompts and schedule for a fresh install
 │   ├── article_signals.py          # Ingest heuristics: roundup/betting patterns, bias bucketing, independent-source checks
 │   ├── search.py                   # Meilisearch integration
 │   ├── story_view.py               # Story view helpers
@@ -82,12 +90,17 @@ muckscraper/
 │   │   ├── admin/                  # Admin and maintenance routes (package: articles, bulk_actions, config_crud, tools, ...)
 │   │   ├── auth.py                 # Login/logout routes
 │   │   └── public.py               # Public reader routes
-│   ├── static/                     # Shared static assets
+│   ├── static/                     # Shared static assets (css/theme.css holds the colour tokens)
 │   └── templates/                  # Jinja templates
+├── docker_restart_proxy/           # Small service that lets the admin UI restart containers
 ├── migrations/                     # Alembic migration files
 ├── news_fetcher/
 │   ├── Dockerfile                  # Scheduler image
 │   ├── fetch_and_store_articles/   # Ingestion, grouping, and edition publishing (package)
+│   ├── llm_client.py               # LLM provider dispatch (Ollama, Gemini, Groq, OpenAI-compatible)
+│   ├── prompt_registry.py          # DB-backed prompt templates
+│   ├── quality_checks.py           # Output-quality detectors (pure functions)
+│   ├── quality_report.py           # Read-only quality report for a run
 │   ├── rss_fetcher.py              # RSS ingestion helpers
 │   ├── scheduler.py                # Scheduled fetch runner
 │   ├── scraper.py                  # Scrape pipeline and fallback logic
@@ -99,9 +112,10 @@ muckscraper/
 │   ├── outlet_bias_llm.py          # LLM-based outlet bias scoring
 │   ├── backfill_images.py          # Utility: backfill missing story images
 │   ├── cleanup_duplicates.py       # Utility: deduplicate articles and stories
-│   └── merge_outlets.py            # Utility: merge duplicate outlet records
+│   └── merge_outlets.py            # Legacy script; use Merge Outlets in Admin Tools instead
 ├── tests/                          # Automated tests
 ├── boot.sh                         # Docker app entrypoint
+├── install.sh                      # First-time setup and upgrades
 ├── bootstrap_admin.py              # Admin user creation script
 ├── docker-compose.yml              # Local stack definition
 ├── Dockerfile                      # App image
@@ -113,7 +127,7 @@ muckscraper/
 
 ## Security Warning
 
-Do not expose admin routes directly to the public internet.
+Every page requires a login, but the app is built as a private admin tool. Do not expose it directly to the public internet.
 
 Recommended deployment:
 - keep the admin interface on a local network
@@ -123,11 +137,10 @@ Recommended deployment:
 
 ## Requirements
 
-- Docker and Docker Compose
-- NewsAPI key
-- GNews API key
-- Ollama or another compatible local model endpoint
-- PostgreSQL with pgvector support
+- Docker and Docker Compose (PostgreSQL with pgvector and Meilisearch run as part of the stack)
+- An LLM provider: Ollama by default, or Gemini, Groq, or any OpenAI-compatible endpoint
+- An embedding provider: Ollama (`nomic-embed-text`) or Gemini
+- Optional: NewsAPI and GNews API keys. Each source is skipped if its key is unset; RSS feeds work without either.
 
 ---
 
@@ -147,7 +160,9 @@ existing install it applies any pending migrations rather than skipping them.
 (A very old install with tables but no migration history stops with
 instructions instead of guessing its schema version.)
 
-Then open `http://localhost:5000`.
+Then open `http://localhost:5000` and sign in with the admin login from `.env`. You land on Headlines.
+
+Dates are shown in the time zone set by `DISPLAY_TIMEZONE` in `.env` (an IANA name such as `America/New_York`; default `UTC`). After changing it, run `docker compose up -d app`; a plain restart doesn't re-read `.env`.
 
 <details>
 <summary>Manual steps (if you'd rather not use install.sh)</summary>
@@ -196,7 +211,7 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 - NewsAPI and GNews support
 - RSS ingestion support
 - Duplicate article detection by URL and normalized title/outlet checks
-- Full-text search across articles and stories via Meilisearch
+- Full-text search across articles and stories via Meilisearch, updated automatically after every run
 
 ### Scraping and reliability
 - Full article scraping during ingestion
@@ -214,6 +229,13 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 - Per-article summaries
 - Stable-story skipping so unchanged stories do not keep reprocessing
 
+### Reading and search
+- Headlines, Grouped Stories (two or more articles) and All Stories views, with topic filters
+- Time windows (24 hours, 7 days, 30 days, all time) on the story lists and search
+- Search page with sortable Stories and Articles tables and custom date ranges
+- Relative timestamps ("3 hours ago") with the exact local time on hover
+- Light and dark themes
+
 ### Bias and metadata
 - Outlet bias labels with AllSides or model-based sourcing
 - Topic classification
@@ -224,10 +246,11 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 - Manual scrape and rescrape actions
 - Bulk scrape-missing workflow
 - Scrape audits
-- Story regrouping and topic reclassification
+- Ollama catch-up (missing embeddings, regrouping of single-article stories, headlines) and topic reclassification
 - Outlet merge tooling
 - Ollama wake and catch-up helpers
-- Topic and RSS feed management
+- Topic, RSS feed, scheduled fetch and ingestion blocklist management
+- Search index rebuild
 - Editable LLM prompts, each resettable back to its original default
 - Pipeline run schedule management (add/edit/delete when fetch-only vs. full-pipeline runs happen)
 - Container restart from the admin UI, blocked automatically while a fetch or other background task is running
