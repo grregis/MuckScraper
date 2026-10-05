@@ -139,10 +139,11 @@
             box-shadow: var(--shadow);
             overflow-x: auto;
         }
-        /* On wide screens let the page scroll the table, so the header row can
-           stick (a scrolling wrapper would trap it). Narrow screens keep the
-           sideways scroll and lose the sticky header. */
-        @media (min-width: 901px) {
+        /* Where the whole table fits (the Stories table needs ~975px beside
+           the sidebar), let the page scroll it so the header row can stick; a
+           scrolling wrapper would trap it. Narrower screens keep the sideways
+           scroll inside the box and lose the sticky header. */
+        @media (min-width: 1280px) {
             .table-wrap { overflow: visible; }
         }
 
