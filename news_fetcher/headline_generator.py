@@ -77,6 +77,36 @@ def _looks_like_llm_failure(headline):
     return bool(_LLM_FAILURE_RE.match(headline)) or "please provide" in headline.lower()
 
 
+
+# Matching open/close pairs the model wraps a whole headline in.
+_WRAPPING_QUOTES = {'"': '"', "'": "'", "\u201c": "\u201d", "\u2018": "\u2019"}
+
+
+def _strip_wrapping_quotes(headline):
+    """Remove quotes the model put around the whole headline, and nothing else.
+
+    A plain ``strip('"\\'')`` also ate the closing quote of a headline that ends
+    on a quotation: 'gang rape "deeply disturbing"' was stored as
+    'gang rape "deeply disturbing' (19 stored headlines, May to Oct 2026).
+    A wrapper is stripped only when no other opening quote of that kind sits
+    inside it; a lone unmatched quote at either end is still dropped.
+    """
+    text = headline.strip()
+    while len(text) >= 2 and text[0] in _WRAPPING_QUOTES and text[-1] == _WRAPPING_QUOTES[text[0]]:
+        inner = text[1:-1]
+        if text[0] == "'":
+            # Apostrophes ("Trump's") are fine; another quote opening after a
+            # space means the ends belong to two different quotations.
+            if re.search(r"(?:^|\s)'", inner):
+                break
+        elif text[0] in inner:
+            break
+        text = inner.strip()
+    if text.count('"') == 1 and (text.startswith('"') or text.endswith('"')):
+        text = text.strip('"').strip()
+    return text
+
+
 @observe()
 def generate_story_headline(story):
     """
@@ -125,7 +155,7 @@ def generate_story_headline(story):
     langfuse_context.update_current_observation(output=headline)
 
     # Clean up common LLM artifacts
-    headline = headline.strip('"\'').strip()
+    headline = _strip_wrapping_quotes(headline)
 
     if _looks_like_llm_failure(headline):
         logger.warning(f"Rejected non-headline LLM output for '{story.title}': '{headline}'")
