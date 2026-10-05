@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <title>Users — MuckScraper</title>
+{% include '_account_page_head.html' %}
+</head>
+<body>
+{% include '_account_topbar.html' %}
+
+<div class="container wide">
+    <h1>Users</h1>
+    <p class="subtitle">Add accounts and choose what each one can do. You can't change your own role or disable yourself, and there must always be at least one active admin.</p>
+
+    {% include '_flashes.html' %}
+
+    <div class="card">
+        <div class="table-scroll">
+        <table>
+            <thead>
+                <tr><th>Username</th><th>Email</th><th>Role</th><th>Active</th><th>Last sign-in</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for user in users %}
+                {% set is_me = user.id == current_user.id %}
+                <tr class="{{ 'disabled' if not user.is_active }}">
+                    <td><strong>{{ user.username }}</strong>{% if is_me %}<span class="you">You</span>{% endif %}</td>
+                    <td><input type="email" name="email" value="{{ user.email }}" form="user-{{ user.id }}" aria-label="Email for {{ user.username }}" required></td>
+                    <td>
+                        <select name="role" form="user-{{ user.id }}" aria-label="Role for {{ user.username }}" {{ 'disabled' if is_me }}>
+                            {% for role in roles %}<option value="{{ role }}" {{ 'selected' if role == user.role }}>{{ role_labels[role] }}</option>{% endfor %}
+                        </select>
+                        {% if is_me %}<input type="hidden" name="role" value="{{ user.role }}" form="user-{{ user.id }}">{% endif %}
+                    </td>
+                    <td>
+                        <input type="checkbox" name="is_active" form="user-{{ user.id }}" aria-label="{{ user.username }} can sign in" {{ 'checked' if user.is_active }} {{ 'disabled' if is_me }}>
+                        {% if is_me %}<input type="hidden" name="is_active" value="on" form="user-{{ user.id }}">{% endif %}
+                    </td>
+                    <td><span class="muted">{{ user.last_login_at | local_datetime if user.last_login_at else 'Never' }}</span></td>
+                    <td>
+                        <form id="user-{{ user.id }}" method="POST" action="{{ url_for('admin.update_user', user_id=user.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </form>
+                    </td>
+                </tr>
+                {% if not is_me %}
+                <tr class="{{ 'disabled' if not user.is_active }}">
+                    <td colspan="6" style="padding-top: 0;">
+                        <details>
+                            <summary>Set password or delete {{ user.username }}</summary>
+                            <div class="more">
+                                <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=user.id) }}" style="display:flex; gap:10px; align-items:center;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="password" name="password" placeholder="New password" minlength="8" required autocomplete="new-password" aria-label="New password for {{ user.username }}">
+                                    <button type="submit" class="btn btn-muted">Set password</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('Delete {{ user.username }}? This can\'t be undone.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </details>
+                    </td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Add a user</h2>
+        <p class="hint">Give them the password you set here; they can change it on their profile.</p>
+        <form method="POST" action="{{ url_for('admin.add_user') }}" class="add-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field"><label for="new-username">Username</label><input type="text" id="new-username" name="username" required autocomplete="off"></div>
+            <div class="field"><label for="new-email">Email</label><input type="email" id="new-email" name="email" required autocomplete="off"></div>
+            <div class="field"><label for="new-role">Role</label>
+                <select id="new-role" name="role">{% for role in roles %}<option value="{{ role }}">{{ role_labels[role] }}</option>{% endfor %}</select>
+            </div>
+            <div class="field"><label for="new-password">Password</label><input type="password" id="new-password" name="password" minlength="8" required autocomplete="new-password"></div>
+            <div><button type="submit" class="btn btn-primary">Add user</button></div>
+        </form>
+        <div class="role-help">
+            <strong>Reader</strong> can read everything, including full article text and search, but can't change anything.<br>
+            <strong>Scraper</strong> can also fetch articles and run summaries, analysis, bias ratings and scrapes.<br>
+            <strong>Admin</strong> can also use Admin Tools, change all configuration, and manage users.
+        </div>
+    </div>
+</div>
+</body>
+</html>

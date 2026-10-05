@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from flask import render_template, request, redirect, url_for, jsonify
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, ROLE_READER, ROLE_SCRAPER, role_required
 from sqlalchemy import case, func, or_
 from aggregator import db
 from aggregator.models import Article, Outlet, Story, Topic
@@ -28,7 +28,7 @@ DEFAULT_TIME_RANGE = "7d"
 
 
 @admin.route("/fetch-page")
-@login_required
+@role_required(ROLE_SCRAPER)
 def fetch_page():
     return render_template(
         "fetch.html",
@@ -39,7 +39,7 @@ def fetch_page():
 
 
 @admin.route("/articles")
-@login_required
+@role_required(ROLE_READER)
 def list_articles(per_page=25, force_multi=False):
     active_label = request.args.get("topic", None)
     active_scrape_status = request.args.get("scrape_status", "").strip().lower() or None
@@ -165,13 +165,13 @@ def list_articles(per_page=25, force_multi=False):
 
 
 @admin.route("/multi-stories")
-@login_required
+@role_required(ROLE_READER)
 def multi_article_stories():
     return list_articles(per_page=50, force_multi=True)
 
 
 @admin.route("/fetch", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def fetch_articles():
     mode = request.form.get("mode", "top").strip()
     query = request.form.get("query", "").strip() or None
@@ -213,7 +213,7 @@ def fetch_articles():
 
 
 @admin.route("/enrich-story-balance/<int:story_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def enrich_story_balance(story_id):
     story = Story.query.get_or_404(story_id)
     label = request.form.get("label", "")
@@ -239,7 +239,7 @@ def enrich_story_balance(story_id):
 
 
 @admin.route("/summarize/<int:story_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def summarize_story_route(story_id):
     story = Story.query.get_or_404(story_id)
     label = request.form.get("label", "")
@@ -257,7 +257,7 @@ def summarize_story_route(story_id):
 
 
 @admin.route("/summarize-article/<int:article_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def summarize_article_route(article_id):
     article = Article.query.get_or_404(article_id)
     try:
@@ -273,7 +273,7 @@ def summarize_article_route(article_id):
 
 
 @admin.route("/rerank-outlet/<int:outlet_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def rerank_outlet(outlet_id):
     from aggregator.models import Outlet
     outlet = Outlet.query.get_or_404(outlet_id)
@@ -293,7 +293,7 @@ def rerank_outlet(outlet_id):
 
 
 @admin.route("/rate-article/<int:article_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def rate_article(article_id):
     article = Article.query.get_or_404(article_id)
     label = request.form.get("label", "")
@@ -310,7 +310,7 @@ def rate_article(article_id):
 
 
 @admin.route("/scrape-article/<int:article_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def scrape_article_route(article_id):
     article = Article.query.get_or_404(article_id)
     label = request.form.get("label", "")
@@ -326,7 +326,7 @@ def scrape_article_route(article_id):
 
 
 @admin.route("/scrape-all-missing", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def scrape_all_missing():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
@@ -351,7 +351,7 @@ def _scrape_all_missing_task():
 
 
 @admin.route("/rescrape-article/<int:article_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def rescrape_article_route(article_id):
     article = Article.query.get_or_404(article_id)
     label = request.form.get("label", "")
@@ -367,7 +367,7 @@ def rescrape_article_route(article_id):
 
 
 @admin.route("/deep-report/<int:story_id>", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def deep_report_route(story_id):
     story = Story.query.get_or_404(story_id)
     label = request.form.get("label", "")
@@ -387,7 +387,7 @@ def deep_report_route(story_id):
 
 
 @admin.route("/metrics")
-@login_required
+@role_required(ROLE_ADMIN)
 def metrics():
     return jsonify({
         "last_run_metrics": _load_json_setting("last_run_metrics"),

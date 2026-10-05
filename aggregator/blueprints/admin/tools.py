@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 import requests
 from flask import render_template, request, redirect, url_for
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, role_required
 from aggregator.models import AppSetting
 
 from . import admin, DOCKER_RESTART_PROXY_URL, CONTAINER_SERVICE_NAMES, MANUAL_FETCH_STATUS_KEY, FETCH_RUN_STATUS_KEY, BULK_TASK_ACTIONS, ORPHANED_TASK_STALE_AFTER
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @admin.route("/tools")
-@login_required
+@role_required(ROLE_ADMIN)
 def tools_page():
     from news_fetcher.fetch_and_store_articles import (
         AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY,
@@ -41,7 +41,7 @@ def tools_page():
 
 
 @admin.route("/toggle-auto-article-deep-analysis", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def toggle_auto_article_deep_analysis():
     from news_fetcher.fetch_and_store_articles import (
         AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY,
@@ -53,7 +53,7 @@ def toggle_auto_article_deep_analysis():
 
 
 @admin.route("/containers/<name>/restart", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def restart_container(name):
     force = request.form.get("force") == "true"
     blocking = _blocking_operations_for(name)
@@ -79,7 +79,7 @@ def restart_container(name):
 
 
 @admin.route("/containers/restart-all", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def restart_all_containers():
     force = request.form.get("force") == "true"
     blocking = _running_operations()

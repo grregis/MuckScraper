@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'pagination.html' import pager %}
 <!DOCTYPE html>
@@ -222,6 +223,7 @@
             <h1>Search</h1>
             <div class="header-controls">
                 <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
+                {{ account_menu() }}
             </div>
         </div>
 

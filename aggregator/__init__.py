@@ -31,6 +31,11 @@ def create_app():
     from aggregator.display_time import configured_timezone_name
     app.config["DISPLAY_TIMEZONE"] = configured_timezone_name()
 
+    # Off by default: every page needs an account. On: signed-out visitors can
+    # read Headlines, story pages and article summaries (aggregator/permissions.py).
+    from aggregator.permissions import public_read_access_from_env
+    app.config["PUBLIC_READ_ACCESS"] = public_read_access_from_env()
+
     db.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)
@@ -39,7 +44,20 @@ def create_app():
     @login.user_loader
     def load_user(id):
         from aggregator.models import User
-        return User.query.get(int(id))
+        user = User.query.get(int(id))
+        # A disabled account loses any session it already had.
+        return user if user and user.is_active else None
+
+    @app.context_processor
+    def inject_permissions():
+        from aggregator.models import ROLE_LABELS
+        from aggregator.permissions import can, public_read_enabled
+        return {"can": can, "public_read": public_read_enabled(), "role_labels": ROLE_LABELS}
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        from flask import render_template
+        return render_template("forbidden.html"), 403
 
     from aggregator.filters import register_filters
     register_filters(app)

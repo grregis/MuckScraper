@@ -39,7 +39,7 @@ BULK_TASK_ACTIONS = {
 # order among them matters only where one depends on another's names at
 # import time -- config_crud before tools, since tools.py imports
 # pipeline_schedule_restart_needed from it.
-from . import _shared, _tasks, articles, bulk_actions, scrape_blocklist, config_crud, tools, search_page  # noqa: E402,F401
+from . import _shared, _tasks, articles, bulk_actions, scrape_blocklist, config_crud, tools, search_page, users  # noqa: E402,F401
 
 # Re-exported because aggregator/app.py does
 # `from aggregator.blueprints.admin import reconcile_orphaned_task_statuses`.

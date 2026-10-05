@@ -127,7 +127,7 @@ muckscraper/
 
 ## Security Warning
 
-Every page requires a login, but the app is built as a private admin tool. Do not expose it directly to the public internet.
+By default every page requires a login. The app is built as a private admin tool, so even with public read access turned on (below), don't expose it directly to the public internet.
 
 Recommended deployment:
 - keep the admin interface on a local network
@@ -161,6 +161,18 @@ existing install it applies any pending migrations rather than skipping them.
 instructions instead of guessing its schema version.)
 
 Then open `http://localhost:5000` and sign in with the admin login from `.env`. You land on Headlines.
+
+### Accounts and public access
+
+Add accounts at **Users** in the account menu (top right). Each has one of three roles:
+
+- **Reader**: reads everything, including full article text and search, and changes nothing.
+- **Scraper**: also fetches articles and runs summaries, analysis, bias ratings and scrapes.
+- **Admin**: also uses Admin Tools, changes all configuration, and manages users.
+
+Everyone can change their own email and password on their **Profile**.
+
+Set `PUBLIC_READ_ACCESS=true` in `.env` to let signed-out visitors read Headlines, story pages and article summaries. They never see scraped full text or any button that runs work. It is off by default.
 
 Dates are shown in the time zone set by `DISPLAY_TIMEZONE` in `.env` (an IANA name such as `America/New_York`; default `UTC`). After changing it, run `docker compose up -d app`; a plain restart doesn't re-read `.env`.
 
@@ -235,6 +247,7 @@ MuckScraper can be extended with personal workflow hooks, such as n8n webhooks f
 - Search page with sortable Stories and Articles tables and custom date ranges
 - Relative timestamps ("3 hours ago") with the exact local time on hover
 - Light and dark themes
+- Reader, Scraper and Admin accounts, and optional public read-only access
 
 ### Bias and metadata
 - Outlet bias labels with AllSides or model-based sourcing

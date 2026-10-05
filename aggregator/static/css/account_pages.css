@@ -1,0 +1,51 @@
+/* Profile, Users and the no-access page. Linked after theme.css. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+.topbar { background: var(--topbar-bg); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.topbar-left { display: flex; align-items: center; gap: 24px; }
+.topbar-left a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
+.topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
+.container { max-width: var(--width-read); margin: 48px auto; padding: 0 20px 64px; }
+.container.wide { max-width: var(--width-list); }
+h1 { font-size: var(--fs-page-title); font-weight: 800; margin-bottom: 8px; }
+.subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; line-height: 1.5; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 24px; }
+.card + .card { margin-top: 24px; }
+.card h2 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+.card .hint { color: var(--text-muted); font-size: var(--fs-meta); margin-bottom: 18px; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 10px 24px; font-size: 14px; }
+.facts dt { color: var(--text-muted); font-weight: 600; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; max-width: 420px; }
+.field label { font-size: var(--fs-meta); font-weight: 700; color: var(--text-muted); }
+input[type="text"], input[type="email"], input[type="password"], select {
+    font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px;
+}
+input:focus, select:focus { outline: 2px solid var(--accent-text); outline-offset: 1px; border-color: transparent; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 10px; padding: 9px 16px; font: inherit; font-size: var(--fs-meta); font-weight: 700; cursor: pointer; text-decoration: none; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-muted { background: var(--btn-muted-bg); color: var(--btn-muted-text); }
+.btn-danger { background: transparent; color: var(--bias-right-text); border: 1px solid currentColor; }
+.flash { padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; margin-bottom: 20px; border: 1px solid; }
+.flash-success { color: #1d6f42; background: rgba(29, 111, 66, 0.08); border-color: rgba(29, 111, 66, 0.3); }
+.flash-error { color: #a33636; background: rgba(163, 54, 54, 0.08); border-color: rgba(163, 54, 54, 0.3); }
+[data-theme="dark"] .flash-success { color: #7fd6a2; }
+[data-theme="dark"] .flash-error { color: #f2a0a0; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 12px; font-size: var(--fs-label); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.disabled td { color: var(--text-faint); }
+td .muted { color: var(--text-muted); font-size: var(--fs-meta); }
+.you { font-size: var(--fs-label); font-weight: 700; color: var(--accent-text); margin-left: 6px; }
+details summary { cursor: pointer; color: var(--accent-text); font-size: var(--fs-meta); font-weight: 700; }
+details .more { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-top: 10px; }
+.add-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+.add-grid .field { margin: 0; max-width: none; }
+.role-help { margin-top: 18px; font-size: var(--fs-meta); color: var(--text-muted); line-height: 1.6; }
+.role-help strong { color: var(--text); }
+@media (max-width: 700px) {
+    .topbar { padding: 12px 16px; }
+    .table-scroll { overflow-x: auto; }
+}

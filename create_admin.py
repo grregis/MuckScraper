@@ -1,6 +1,6 @@
 import os
 from aggregator import create_app, db
-from aggregator.models import User
+from aggregator.models import ROLE_ADMIN, User
 import sys
 
 def create_admin(username, email, password):
@@ -12,7 +12,8 @@ def create_admin(username, email, password):
             print(f"User {username} or email {email} already exists.")
             return
 
-        user = User(username=username, email=email, is_admin=True)
+        user = User(username=username, email=email)
+        user.set_role(ROLE_ADMIN)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()

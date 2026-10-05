@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -352,8 +353,8 @@
         <a href="{{ url_for('admin.list_articles') }}">← Back to Feed</a>
     </div>
     <div class="topbar-left">
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
         <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
+        {{ account_menu() }}
     </div>
 </div>
 

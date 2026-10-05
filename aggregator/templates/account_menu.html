@@ -1,0 +1,34 @@
+{#- Top-right account control. Signed out: a "Sign in" button. Signed in: a
+    round person button that opens Profile, Users and Admin Tools (admins) and
+    Sign out. Import it with context, since it reads current_user and can():
+        {% from 'account_menu.html' import account_menu with context %}
+    Styles are in static/css/theme.css; behaviour in static/js/account_menu.js. -#}
+{% from 'icons.html' import icon %}
+{%- macro account_menu() -%}
+<div class="account-area">
+{%- if current_user.is_authenticated %}
+    <div class="account-menu">
+        <button type="button" class="account-button" aria-haspopup="menu" aria-expanded="false"
+                aria-label="Account menu for {{ current_user.username }}" title="{{ current_user.username }}">{{ icon('user') }}</button>
+        <div class="account-dropdown" role="menu" hidden>
+            <div class="account-who">
+                <strong>{{ current_user.username }}</strong>
+                <span>{{ current_user.role_label }}</span>
+            </div>
+            <a role="menuitem" href="{{ url_for('auth.profile') }}">{{ icon('user') }} Profile</a>
+            {%- if can('admin') %}
+            <a role="menuitem" href="{{ url_for('admin.users_page') }}">{{ icon('users') }} Users</a>
+            <a role="menuitem" href="{{ url_for('admin.tools_page') }}">{{ icon('wrench') }} Admin Tools</a>
+            {%- endif %}
+            <form method="POST" action="{{ url_for('auth.logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" role="menuitem">{{ icon('log-out') }} Sign out</button>
+            </form>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/account_menu.js') }}" defer></script>
+{%- else %}
+    <a class="account-signin" href="{{ url_for('auth.login', next=request.full_path if request.query_string else request.path) }}">{{ icon('log-in') }} Sign in</a>
+{%- endif %}
+</div>
+{%- endmacro -%}

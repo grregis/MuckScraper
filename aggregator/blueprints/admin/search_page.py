@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timedelta
 
 from flask import render_template, request, url_for
-from flask_login import login_required
+from aggregator.permissions import ROLE_READER, role_required
 from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import aliased
 
@@ -325,7 +325,7 @@ def _sort_links(tab, base_args, sort_key, descending):
 
 
 @admin.route("/search")
-@login_required
+@role_required(ROLE_READER)
 def search_page():
     args = request.args
     tab = args.get("tab", "stories")

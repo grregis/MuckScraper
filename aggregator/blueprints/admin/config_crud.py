@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from flask import render_template, request, redirect, url_for
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, role_required
 from sqlalchemy import func
 from aggregator import db
 from aggregator.models import AppSetting, Topic, RssFeed, PromptTemplate, PipelineSchedule, ScheduledFetch, IngestionBlock
@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 @admin.route("/topics")
-@login_required
+@role_required(ROLE_ADMIN)
 def topics_page():
     topics = Topic.query.order_by(Topic.sort_order.asc().nullslast(), Topic.name.asc()).all()
     return render_template("topics.html", topics=topics)
 
 
 @admin.route("/topics/add", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def add_topic():
     name = request.form.get("name", "").strip()
     icon = request.form.get("icon", "").strip()[:4] or None
@@ -40,7 +40,7 @@ def add_topic():
 
 
 @admin.route("/topics/<int:topic_id>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_topic(topic_id):
     topic = Topic.query.get_or_404(topic_id)
     icon = request.form.get("icon", "").strip()[:4]
@@ -58,7 +58,7 @@ RSS_FEED_BUCKETS = ["general", "right_enrichment", "left_enrichment"]
 
 
 @admin.route("/rss-feeds")
-@login_required
+@role_required(ROLE_ADMIN)
 def rss_feeds_page():
     feeds_by_bucket = {
         bucket: RssFeed.query.filter_by(bucket=bucket).order_by(RssFeed.url.asc()).all()
@@ -68,7 +68,7 @@ def rss_feeds_page():
 
 
 @admin.route("/rss-feeds/add", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def add_rss_feed():
     url = request.form.get("url", "").strip()
     bucket = request.form.get("bucket", "").strip()
@@ -82,7 +82,7 @@ def add_rss_feed():
 
 
 @admin.route("/rss-feeds/<int:feed_id>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_rss_feed(feed_id):
     feed = RssFeed.query.get_or_404(feed_id)
     feed.label = request.form.get("label", "").strip() or None
@@ -92,7 +92,7 @@ def update_rss_feed(feed_id):
 
 
 @admin.route("/rss-feeds/<int:feed_id>/delete", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def delete_rss_feed(feed_id):
     feed = RssFeed.query.get_or_404(feed_id)
     db.session.delete(feed)
@@ -101,14 +101,14 @@ def delete_rss_feed(feed_id):
 
 
 @admin.route("/prompts")
-@login_required
+@role_required(ROLE_ADMIN)
 def prompts_page():
     prompts = PromptTemplate.query.order_by(PromptTemplate.key.asc()).all()
     return render_template("prompts.html", prompts=prompts)
 
 
 @admin.route("/prompts/<key>/edit")
-@login_required
+@role_required(ROLE_ADMIN)
 def edit_prompt(key):
     prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
     saved = request.args.get("saved") == "1"
@@ -119,7 +119,7 @@ def edit_prompt(key):
 
 
 @admin.route("/prompts/<key>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_prompt(key):
     prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
     text = request.form.get("current_text", "")
@@ -146,7 +146,7 @@ def update_prompt(key):
 
 
 @admin.route("/prompts/<key>/reset", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def reset_prompt(key):
     prompt = PromptTemplate.query.filter_by(key=key).first_or_404()
     prompt.current_text = prompt.default_text
@@ -182,7 +182,7 @@ def pipeline_schedule_restart_needed():
 
 
 @admin.route("/pipeline-schedule")
-@login_required
+@role_required(ROLE_ADMIN)
 def pipeline_schedule_page():
     entries = PipelineSchedule.query.order_by(PipelineSchedule.hour.asc()).all()
     return render_template(
@@ -191,7 +191,7 @@ def pipeline_schedule_page():
 
 
 @admin.route("/pipeline-schedule/add", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def add_pipeline_schedule():
     hour = request.form.get("hour", type=int)
     run_full_pipeline = request.form.get("run_full_pipeline") == "on"
@@ -209,7 +209,7 @@ def add_pipeline_schedule():
 
 
 @admin.route("/pipeline-schedule/<int:entry_id>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_pipeline_schedule(entry_id):
     entry = PipelineSchedule.query.get_or_404(entry_id)
     hour = request.form.get("hour", type=int)
@@ -224,7 +224,7 @@ def update_pipeline_schedule(entry_id):
 
 
 @admin.route("/pipeline-schedule/<int:entry_id>/delete", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def delete_pipeline_schedule(entry_id):
     entry = PipelineSchedule.query.get_or_404(entry_id)
     db.session.delete(entry)
@@ -237,7 +237,7 @@ INGESTION_BLOCK_KINDS = ["source", "title_keyword"]
 
 
 @admin.route("/ingestion-blocks")
-@login_required
+@role_required(ROLE_ADMIN)
 def ingestion_blocks_page():
     blocks_by_kind = {
         kind: IngestionBlock.query.filter_by(kind=kind).order_by(
@@ -251,7 +251,7 @@ def ingestion_blocks_page():
 
 
 @admin.route("/ingestion-blocks/add", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def add_ingestion_block():
     kind = request.form.get("kind", "").strip()
     # Stored lowercase because that is how both checks compare -- normalizing
@@ -268,7 +268,7 @@ def add_ingestion_block():
 
 
 @admin.route("/ingestion-blocks/<int:block_id>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_ingestion_block(block_id):
     block = IngestionBlock.query.get_or_404(block_id)
     pattern = request.form.get("pattern", "").strip().lower()
@@ -287,7 +287,7 @@ def update_ingestion_block(block_id):
 
 
 @admin.route("/ingestion-blocks/<int:block_id>/delete", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def delete_ingestion_block(block_id):
     block = IngestionBlock.query.get_or_404(block_id)
     db.session.delete(block)
@@ -327,7 +327,7 @@ def _scheduled_fetch_form_values(form):
 
 
 @admin.route("/scheduled-fetches")
-@login_required
+@role_required(ROLE_ADMIN)
 def scheduled_fetches_page():
     fetches = ScheduledFetch.query.order_by(
         ScheduledFetch.sort_order.asc(), ScheduledFetch.id.asc()
@@ -338,7 +338,7 @@ def scheduled_fetches_page():
 
 
 @admin.route("/scheduled-fetches/add", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def add_scheduled_fetch():
     label = request.form.get("label", "").strip()
 
@@ -354,7 +354,7 @@ def add_scheduled_fetch():
 
 
 @admin.route("/scheduled-fetches/<int:fetch_id>/update", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def update_scheduled_fetch(fetch_id):
     fetch = ScheduledFetch.query.get_or_404(fetch_id)
     label = request.form.get("label", "").strip()
@@ -378,7 +378,7 @@ def update_scheduled_fetch(fetch_id):
 
 
 @admin.route("/scheduled-fetches/<int:fetch_id>/delete", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def delete_scheduled_fetch(fetch_id):
     fetch = ScheduledFetch.query.get_or_404(fetch_id)
     db.session.delete(fetch)

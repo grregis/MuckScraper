@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from flask import render_template
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, role_required
 from aggregator.models import Article
 
 from . import admin
@@ -8,7 +8,7 @@ from ._shared import _load_json_setting, article_domain
 
 
 @admin.route("/scrape-blocklist")
-@login_required
+@role_required(ROLE_ADMIN)
 def scrape_blocklist():
     from aggregator.models import ScrapeBlocklist
     cutoff = datetime.utcnow() - timedelta(hours=24)

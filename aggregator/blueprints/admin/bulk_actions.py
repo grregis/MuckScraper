@@ -2,7 +2,7 @@ import logging
 import threading
 from datetime import datetime
 from flask import request, redirect, url_for, jsonify, current_app
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, role_required
 from aggregator import db
 
 from . import admin, SEARCH_REINDEX_STATUS_KEY
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @admin.route("/ollama-catchup", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def ollama_catchup_route():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
@@ -23,7 +23,7 @@ def ollama_catchup_route():
 
 
 @admin.route("/force-resummarize", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def force_resummarize():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
@@ -33,7 +33,7 @@ def force_resummarize():
 
 
 @admin.route("/wake-ollama", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def wake_ollama():
     import os
     import wakeonlan
@@ -49,7 +49,7 @@ def wake_ollama():
 
 
 @admin.route("/reindex-search", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def reindex_search():
     started_at = datetime.utcnow().isoformat()
     claimed = _try_claim_task_status(
@@ -80,14 +80,14 @@ def reindex_search():
 
 
 @admin.route("/ollama-status")
-@login_required
+@role_required(ROLE_SCRAPER)
 def ollama_status_detail():
     from news_fetcher.llm_client import llm_status_detail
     return jsonify(llm_status_detail())
 
 
 @admin.route("/reclassify-articles", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def reclassify_articles():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
@@ -97,7 +97,7 @@ def reclassify_articles():
 
 
 @admin.route("/audit-scrapes", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def audit_scrapes():
     from news_fetcher.fetch_and_store_articles import audit_existing_scrapes
     _start_bulk_task("audit_scrapes", audit_existing_scrapes)
@@ -105,7 +105,7 @@ def audit_scrapes():
 
 
 @admin.route("/unblock-domain", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def unblock_domain():
     from aggregator.models import ScrapeBlocklist
     domain = request.form.get("domain", "").strip()
@@ -119,7 +119,7 @@ def unblock_domain():
 
 
 @admin.route("/sync-allsides", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def sync_allsides():
     label = request.form.get("label", "")
     scrape_status = request.form.get("scrape_status", "").strip() or None
@@ -132,7 +132,7 @@ def sync_allsides():
 
 
 @admin.route("/merge-outlets", methods=["POST"])
-@login_required
+@role_required(ROLE_ADMIN)
 def merge_outlets():
     from news_fetcher.fetch_and_store_articles import merge_duplicate_outlets
     try:

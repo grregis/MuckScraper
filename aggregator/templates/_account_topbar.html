@@ -1,0 +1,8 @@
+{%- from 'account_menu.html' import account_menu with context -%}
+<div class="topbar">
+    <div class="topbar-left">
+        <span class="topbar-title">MuckScraper</span>
+        <a href="{{ url_for('public.headlines_feed') }}">← Back to Headlines</a>
+    </div>
+    {{ account_menu() }}
+</div>

@@ -3,7 +3,7 @@ import logging
 import threading
 from datetime import datetime
 from flask import current_app, request, jsonify
-from flask_login import login_required
+from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, role_required
 from sqlalchemy import or_
 from aggregator import db
 from aggregator.models import AppSetting, Article, Story
@@ -339,7 +339,7 @@ def _start_bulk_task(action, fn):
 
 
 @admin.route("/bulk-task-status/<action>")
-@login_required
+@role_required(ROLE_ADMIN)
 def bulk_task_status(action):
     if action not in BULK_TASK_ACTIONS:
         return jsonify({"status": "error", "message": "Unknown action."}), 404
@@ -347,7 +347,7 @@ def bulk_task_status(action):
 
 
 @admin.route("/ai-task/start", methods=["POST"])
-@login_required
+@role_required(ROLE_SCRAPER)
 def start_ai_task():
     payload = request.get_json(silent=True) or request.form
     task_type = (payload.get("task_type") or "").strip()
@@ -400,7 +400,7 @@ def start_ai_task():
 
 
 @admin.route("/ai-task-status/<task_type>/<int:resource_id>")
-@login_required
+@role_required(ROLE_SCRAPER)
 def ai_task_status(task_type, resource_id):
     if task_type not in {"story_summary", "story_deep_report", "article_summary"}:
         return jsonify({
@@ -411,6 +411,6 @@ def ai_task_status(task_type, resource_id):
 
 
 @admin.route("/reindex-search-status")
-@login_required
+@role_required(ROLE_ADMIN)
 def reindex_search_status():
     return jsonify(_search_reindex_status_payload())

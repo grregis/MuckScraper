@@ -8,7 +8,7 @@ from flask_migrate import stamp, upgrade
 
 from aggregator import db
 from aggregator.app import app, init_db
-from aggregator.models import User
+from aggregator.models import ROLE_ADMIN, User
 from aggregator.seed_defaults import seed_defaults
 
 
@@ -116,11 +116,13 @@ def bootstrap_admin():
 
         if user:
             user.email = email
-            user.is_admin = True
+            user.set_role(ROLE_ADMIN)
+            user.is_active = True
             user.set_password(password)
             action = "updated"
         else:
-            user = User(username=username, email=email, is_admin=True)
+            user = User(username=username, email=email)
+            user.set_role(ROLE_ADMIN)
             user.set_password(password)
             db.session.add(user)
             action = "created"

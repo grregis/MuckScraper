@@ -120,3 +120,39 @@
 }
 .page-jump input::-webkit-outer-spin-button, .page-jump input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .page-jump input:focus { outline: 2px solid var(--accent-text); outline-offset: 1px; border-color: transparent; }
+
+/* Account control, top right (templates/account_menu.html). Sits on both the
+   dark top bar and the light page header, so it carries its own colours. */
+.account-area { display: inline-flex; align-items: center; }
+.account-menu { position: relative; }
+.account-button {
+    width: 36px; height: 36px; border-radius: 50%; padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 18px;
+    background: var(--accent); color: #fff; border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: var(--shadow);
+}
+.account-button:hover { background: var(--accent-dark); }
+.account-button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.account-dropdown {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 300; min-width: 210px; padding: 6px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18); text-align: left;
+}
+.account-dropdown[hidden] { display: none; }
+.account-who { padding: 8px 12px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.account-who strong { display: block; color: var(--text); font-size: 14px; }
+.account-who span { color: var(--text-muted); font-size: var(--fs-label); }
+.account-menu .account-dropdown a,
+.account-menu .account-dropdown button {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 8px;
+    background: none; border: none; cursor: pointer; text-decoration: none; text-align: left;
+    color: var(--text); font: inherit; font-size: 14px; font-weight: 500;
+}
+.account-menu .account-dropdown a:hover,
+.account-menu .account-dropdown button:hover { background: var(--btn-muted-bg); color: var(--accent-text); }
+.account-area a.account-signin {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 12px;
+    background: var(--accent); color: #fff; text-decoration: none; font-size: 13px; font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.account-area a.account-signin:hover { background: var(--accent-dark); }

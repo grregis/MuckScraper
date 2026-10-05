@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 {% from 'pagination.html' import pager %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
 {% from 'icons.html' import icon, theme_toggle_label %}
@@ -387,7 +388,7 @@
 
             <div class="header-controls">
                 <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-                <a href="{{ url_for('admin.tools_page') }}" class="theme-toggle" style="text-decoration: none;">{{ icon('wrench') }} Admin Tools</a>
+                {{ account_menu() }}
             </div>
         </div>
 
@@ -487,7 +488,7 @@
 
                             <div class="card-actions">
                                 <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark">View full coverage & analysis →</a>
-                                {% if story.enrichment_direction and story.bias_gap >= 2 %}
+                                {% if story.enrichment_direction and story.bias_gap >= 2 and can('scraper') %}
                                 <form method="POST" action="{{ url_for('admin.enrich_story_balance', story_id=story.id) }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="label" value="{{ active_label or '' }}">
@@ -546,6 +547,7 @@
                                             {% endif %}
                                         {% endif %}
 
+                                        {% if can('scraper') %}
                                         <span class="article-actions">
                                             <button type="button" class="btn btn-muted"
                                                 title="AI Summary"
@@ -563,6 +565,7 @@
                                                 </button>
                                             </form>
                                         </span>
+                                        {% endif %}
 
                                         <div class="scrape-meta">
                                             {% set scrape_status = article.scrape_status or 'pending' %}

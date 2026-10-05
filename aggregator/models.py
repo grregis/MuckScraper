@@ -172,6 +172,17 @@ class EditorialHistory(db.Model):
     story = db.relationship('Story', backref=db.backref('editorial_history', lazy='dynamic', cascade='all, delete-orphan'))
 
 
+# Account roles, lowest to highest; each includes everything below it.
+# reader:  read every page, change nothing.
+# scraper: also run work (fetch, summarize, analyze, rate bias, scrape).
+# admin:   also Admin Tools, all configuration, and managing users.
+ROLE_READER = "reader"
+ROLE_SCRAPER = "scraper"
+ROLE_ADMIN = "admin"
+ROLES = (ROLE_READER, ROLE_SCRAPER, ROLE_ADMIN)
+ROLE_LABELS = {ROLE_READER: "Reader", ROLE_SCRAPER: "Scraper", ROLE_ADMIN: "Admin"}
+
+
 class User(db.Model, UserMixin):
     __tablename__ = "users"
 
@@ -179,7 +190,30 @@ class User(db.Model, UserMixin):
     username      = db.Column(db.String(64), unique=True, nullable=False)
     email         = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256))
+    # Kept in step with role (set_role) for anything that still reads it.
     is_admin      = db.Column(db.Boolean, default=False)
+    role          = db.Column(db.String(16), nullable=False, default=ROLE_READER, server_default=ROLE_READER)
+    # Overrides UserMixin.is_active: a disabled account can't sign in, and
+    # load_user() drops an existing session for it.
+    is_active     = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login_at = db.Column(db.DateTime)
+
+    def has_role(self, minimum):
+        """True when this user's role is `minimum` or higher."""
+        if self.role not in ROLES:
+            return False
+        return ROLES.index(self.role) >= ROLES.index(minimum)
+
+    def set_role(self, role):
+        if role not in ROLES:
+            raise ValueError(f"unknown role {role!r}")
+        self.role = role
+        self.is_admin = role == ROLE_ADMIN
+
+    @property
+    def role_label(self):
+        return ROLE_LABELS.get(self.role, self.role)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

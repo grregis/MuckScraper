@@ -1,3 +1,6 @@
+{#- Signed-out visitors (PUBLIC_READ_ACCESS) see Headlines only; the story
+    lists, Search and topic filters need an account, and Fetch Articles needs
+    the Scraper role. -#}
     <div class="sidebar" id="sidebar">
         <div class="sidebar-inner">
             <div class="sidebar-content">
@@ -6,6 +9,7 @@
                         <span class="full-text">Headlines</span>
                     </a>
                 </div>
+                {%- if current_user.is_authenticated %}
                 <div class="topic-block {% if active_nav == 'grouped' %}active{% endif %}">
                     <a href="{{ url_for('admin.multi_article_stories', topic=active_label|default(none), scrape_status=active_scrape_status|default(none), q=active_search_query|default(none) or '', range=active_range|default('7d')) }}">
                         <span class="full-text">Grouped Stories</span>
@@ -16,11 +20,13 @@
                         <span class="full-text">All Stories</span>
                     </a>
                 </div>
+                {%- if can('scraper') %}
                 <div class="topic-block {% if active_nav == 'fetch' %}active{% endif %}">
                     <a href="{{ url_for('admin.fetch_page') }}">
                         <span class="full-text">Fetch Articles</span>
                     </a>
                 </div>
+                {%- endif %}
                 <div class="topic-block {% if active_nav == 'search' %}active{% endif %}">
                     <a href="{{ url_for('admin.search_page') }}">
                         <span class="full-text">Search</span>
@@ -37,6 +43,7 @@
                     </a>
                 </div>
                 {% endfor %}
+                {%- endif %}
             </div>
 
             <div class="sidebar-footer">

@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'pagination.html' import pager %}
 <!DOCTYPE html>
@@ -65,7 +66,7 @@
     </div>
     <div class="header-controls">
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-        <a href="{{ url_for('admin.tools_page') }}" class="theme-toggle" style="text-decoration: none;">{{ icon('wrench') }} Admin Tools</a>
+        {{ account_menu() }}
     </div>
 </div>
 

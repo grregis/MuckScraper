@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -139,7 +140,10 @@
     <div class="topbar-left">
         <span class="topbar-title">MuckScraper</span>
     </div>
-    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
+    <div style="display:flex; align-items:center; gap:12px;">
+        <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
+        {{ account_menu() }}
+    </div>
 </div>
 
 <div class="container">

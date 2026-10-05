@@ -69,6 +69,9 @@
             margin-bottom: 24px;
             text-align: center;
         }
+        .back-link { margin-top: 24px; text-align: center; font-size: 14px; }
+        .back-link a { color: var(--accent-text); font-weight: 600; text-decoration: none; }
+        .back-link a:hover { text-decoration: underline; }
         .remember-me {
             display: flex;
             align-items: center;
@@ -83,7 +86,7 @@
 
 <div class="login-card">
     <h1>MuckScraper</h1>
-    <p class="subtitle">Please sign in to access admin tools</p>
+    <p class="subtitle">Sign in to your account</p>
 
     {% with messages = get_flashed_messages() %}
       {% if messages %}
@@ -105,11 +108,14 @@
         </div>
         <div class="form-group">
             <label class="remember-me">
-                <input type="checkbox" name="remember"> Remember Me
+                <input type="checkbox" name="remember"> Remember me
             </label>
         </div>
-        <button type="submit" class="btn">Sign In</button>
+        <button type="submit" class="btn">Sign in</button>
     </form>
+    {% if public_read %}
+    <p class="back-link"><a href="{{ url_for('public.headlines_feed') }}">← Back to Headlines</a></p>
+    {% endif %}
 </div>
 
 <script>

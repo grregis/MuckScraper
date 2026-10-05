@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
 <html data-theme="light">
@@ -211,10 +212,13 @@
     <div class="topbar-left" style="display:flex; align-items:center; gap:24px;">
         <span class="topbar-title">MuckScraper</span>
     </div>
-    <button id="theme-toggle" onclick="toggleTheme()"
-        style="background:none; border:1px solid #444; color:#cdd6f4;
-               padding:6px 14px; border-radius:8px; cursor:pointer;
-               font-size:13px; font-weight:600;">{{ theme_toggle_label() }}</button>
+    <div style="display:flex; align-items:center; gap:12px;">
+        <button id="theme-toggle" onclick="toggleTheme()"
+            style="background:none; border:1px solid #444; color:#cdd6f4;
+                   padding:6px 14px; border-radius:8px; cursor:pointer;
+                   font-size:13px; font-weight:600;">{{ theme_toggle_label() }}</button>
+        {{ account_menu() }}
+    </div>
 </div>
 
 <div class="container">
@@ -257,7 +261,7 @@
 	    <div class="analysis-box">
             <div class="analysis-label" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>Executive Summary</span>
-                {% if ollama_online and (not story.summary or story.summary == story.title or not story.deep_report) %}
+                {% if can('scraper') and ollama_online and (not story.summary or story.summary == story.title or not story.deep_report) %}
                     <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: var(--fs-label);" onclick="startAiTask('story_summary', {{ story.id }}, this)">Summarize Story</button>
                 {% endif %}
             </div>
@@ -276,7 +280,7 @@
                 </div>
             {% else %}
                 <div class="status-msg">
-                    No executive summary has been generated yet. Use the summarize action to process this story.
+                    No executive summary has been generated yet.{% if can('scraper') %} Use the summarize action to process this story.{% endif %}
                 </div>
             {% endif %}
         </div>
@@ -284,7 +288,7 @@
         <div class="analysis-box">
             <div class="analysis-label" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>Multi-Source Analysis</span>
-                {% if ollama_online and story.articles|length >= 2 and not story.deep_report %}
+                {% if can('scraper') and ollama_online and story.articles|length >= 2 and not story.deep_report %}
                     <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: var(--fs-label);" onclick="startAiTask('story_deep_report', {{ story.id }}, this)">Analyze Story</button>
                 {% endif %}
             </div>
@@ -341,9 +345,9 @@
                         </div>
 
 	                    <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
-                        <a href="{{ url_for('public.view_article', article_id=article.id) }}" class="btn-view">Read Summary & Text →</a>
+                        <a href="{{ url_for('public.view_article', article_id=article.id) }}" class="btn-view">{{ 'Read Summary & Text →' if current_user.is_authenticated else 'Read Summary →' }}</a>
                         
-                        {% if not article.summary and ollama_online %}
+                        {% if not article.summary and ollama_online and can('scraper') %}
                             <button type="button" class="btn-view" style="cursor: pointer;" onclick="startAiTask('article_summary', {{ article.id }}, this)">Summarize</button>
                         {% endif %}
 

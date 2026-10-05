@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <title>Profile — MuckScraper</title>
+{% include '_account_page_head.html' %}
+</head>
+<body>
+{% include '_account_topbar.html' %}
+
+<div class="container">
+    <h1>Your profile</h1>
+    <p class="subtitle">Your account details. Changing your email or password asks for your current password first.</p>
+
+    {% include '_flashes.html' %}
+
+    <div class="card">
+        <dl class="facts">
+            <dt>Username</dt><dd>{{ current_user.username }}</dd>
+            <dt>Role</dt><dd>{{ current_user.role_label }}</dd>
+            <dt>Email</dt><dd>{{ current_user.email }}</dd>
+            {% if current_user.created_at %}<dt>Member since</dt><dd>{{ current_user.created_at | local_datetime('%B %d, %Y') }}</dd>{% endif %}
+            {% if current_user.last_login_at %}<dt>Last sign-in</dt><dd>{{ current_user.last_login_at | local_datetime }}</dd>{% endif %}
+        </dl>
+    </div>
+
+    <div class="card">
+        <h2>Change email</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="email">
+            <div class="field">
+                <label for="email">New email address</label>
+                <input type="email" id="email" name="email" value="{{ current_user.email }}" required autocomplete="email">
+            </div>
+            <div class="field">
+                <label for="email-current">Current password</label>
+                <input type="password" id="email-current" name="current_password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary">Save email</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Change password</h2>
+        <p class="hint">At least 8 characters.</p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="password">
+            <div class="field">
+                <label for="pw-current">Current password</label>
+                <input type="password" id="pw-current" name="current_password" required autocomplete="current-password">
+            </div>
+            <div class="field">
+                <label for="pw-new">New password</label>
+                <input type="password" id="pw-new" name="new_password" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="field">
+                <label for="pw-confirm">New password again</label>
+                <input type="password" id="pw-confirm" name="confirm_password" required minlength="8" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary">Change password</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

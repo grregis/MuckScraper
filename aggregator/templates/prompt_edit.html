@@ -1,3 +1,4 @@
+{% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
@@ -97,6 +98,7 @@
         <span class="topbar-title">MuckScraper</span>
         <a href="{{ url_for('admin.prompts_page') }}" style="margin-left: 24px;">← Back to Prompts</a>
     </div>
+    {{ account_menu() }}
 </div>
 
 <div class="container">
