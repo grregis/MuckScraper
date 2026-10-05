@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>MuckScraper: All the muck that's fit to scrape</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/story_card.css') }}">
     <style>
         :root {
             --menu-bg:       #ffffff;
@@ -38,7 +39,8 @@
         .main {
             flex: 1;
             padding: 0 40px;
-            max-width: 1000px;
+            max-width: var(--width-list);
+            margin: 0 auto;
             position: relative;
         }
 
@@ -61,7 +63,7 @@
             background: rgba(15, 15, 23, 0.85);
         }
 
-        h1 { font-size: 26px; font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; }
+        h1 { font-size: var(--fs-page-title); font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; }
 
         .header-controls {
             display: flex;
@@ -221,88 +223,6 @@
         }
 
         /* ── Story cards ── */
-        .story {
-            background: var(--surface);
-            border-radius: 16px;
-            padding: 0;
-            margin-bottom: 32px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            border: 1px solid var(--border);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .story:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
-        }
-
-        .story-layout {
-            display: flex;
-            gap: 0;
-        }
-
-        .story-image {
-            width: 280px;
-            min-width: 280px;
-            height: auto;
-            min-height: 200px;
-            background: var(--btn-muted-bg);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .story-image img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.5s ease;
-        }
-
-        .story:hover .story-image img {
-            transform: scale(1.05);
-        }
-
-        .story-content {
-            flex: 1;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .story-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            gap: 16px;
-        }
-
-        .story h2 { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.3; letter-spacing: -0.3px; }
-
-        .summary {
-            background: var(--summary-bg);
-            border-left: 4px solid var(--accent);
-            padding: 16px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--text);
-            border-radius: 0 12px 12px 0;
-        }
-
-        .summary-label {
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            color: var(--accent-text);
-            letter-spacing: 1.5px;
-            margin-bottom: 8px;
-        }
-
-        .summary p           { margin-bottom: 0.8em; }
-        .summary p:last-child { margin-bottom: 0; }
-
         .summary-section-label {
             color: var(--accent-text);
             font-size: 13px;
@@ -316,31 +236,8 @@
             list-style: disc;
         }
 
-        .btn {
-            display: inline-block;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s;
-        }
-
-        .btn-dark         { background: var(--accent); color: white; }
-        .btn-dark:hover   { background: var(--accent-dark); transform: translateY(-1px); }
-        .btn-muted        { background: var(--btn-muted-bg); color: var(--btn-muted-text); }
-        .btn-muted:hover  { background: var(--input-border); }
         .btn-orange       { background: #fab387; color: #1e1e2e; }
         .btn-orange:hover { background: #f9a070; }
-
-        .action-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
 
         .story ul.article-list { list-style: none; padding: 0; }
 
@@ -378,7 +275,7 @@
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            font-size: 11px;
+            font-size: var(--fs-label);
             color: var(--text-muted);
         }
         .scrape-chip {
@@ -400,13 +297,13 @@
         .scrape-chip.scrape-skipped { color: #666; border-color: rgba(102,102,102,0.25); background: rgba(102,102,102,0.08); }
         .scrape-detail {
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 10px;
+            font-size: var(--fs-label);
             color: var(--text-faint);
         }
 
         .bias-tag {
             display: inline-block;
-            font-size: 10px;
+            font-size: var(--fs-label);
             font-weight: 800;
             padding: 2px 8px;
             border-radius: 6px;
@@ -474,8 +371,6 @@
         }
 
         @media (max-width: 900px) {
-            .story-layout { flex-direction: column; }
-            .story-image { width: 100%; height: 200px; min-width: unset; }
             .main { padding: 0 20px; }
         }
     </style>
@@ -553,93 +448,54 @@
                     {% set featured_article = story.articles|selectattr('image_url')|first %}
                     <div class="story-image">
                         {% if featured_article and featured_article.image_url %}
-                            <img src="{{ featured_article.image_url }}" alt="Story Image" loading="lazy">
+                            <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
                         {% else %}
-                            <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:40px; background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);">
-                                {{ icon('newspaper') }}
-                            </div>
+                            <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
                         {% endif %}
                     </div>
 
                     <div class="story-content">
-                        <div class="story-header">
-                            <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}" style="color: inherit; text-decoration: none;">{{ story.display_headline }}</a></h2>
-                        </div>
+                        <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a></h2>
 
-                        <div style="font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        {% set article_count = story.articles|length %}
+                        <div class="card-meta">
                             {% if story.last_updated %}
-                                <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-light);"></span>
-                                Last updated: <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}</span>
+                                <span class="meta-item">Updated <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}</span></span>
                             {% endif %}
-
-                            {% if story.deep_report %}
-                                <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">ANALYSIS AVAILABLE</span>
-                            {% endif %}
-
-                            {% if story.has_ai_headline %}
-                                <span style="margin-left:auto; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:4px; font-style:normal;">AI HEADLINE</span>
-                            {% endif %}
+                            <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
+                            {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
+                            {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
                         </div>
 
                         {% if story.articles|length > 1 %}
                             {# Multi-article Story Uniform Layout #}
-                            <div style="margin-bottom: 20px;">
-                                <div style="font-size: 14px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-                                    <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ story.articles|length }} ARTICLES</span>
-                                    <span>IN THIS STORY</span>
-                                </div>
-
-                                {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
-                                {% for art in story.articles %}
-                                    {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
-                                    {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
-                                    {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
-                                    {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
-                                    {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
-                                    {% endif %}
-                                {% endfor %}
-
-                                <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1px solid var(--border);">
-                                    <!-- Left Group -->
-                                    <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-left-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-left-text); padding-bottom: 4px;">Left</div>
-                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b1 + counts.b2 }}</div>
-                                    </div>
-                                    <!-- Center Group -->
-                                    <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-center-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-center-text); padding-bottom: 4px;">Center</div>
-                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b3 }}</div>
-                                    </div>
-                                    <!-- Right Group -->
-                                    <div style="flex: 1; text-align: center; padding: 0 5px;">
-                                        <div style="font-size: 11px; font-weight: 800; color: var(--bias-right-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-right-text); padding-bottom: 4px;">Right</div>
-                                        <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b4 + counts.b5 }}</div>
-                                    </div>
-                                </div>
-
-                                {% if story.enrichment_direction and story.bias_gap >= 2 %}
-                                <div class="action-row" style="margin-bottom: 12px;">
-                                    <form method="POST" action="{{ url_for('admin.enrich_story_balance', story_id=story.id) }}" style="width: 100%;">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <input type="hidden" name="label" value="{{ active_label or '' }}">
-                                        <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-                                        <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
-                                        <button type="submit" class="btn btn-muted" style="width: 100%; padding: 10px 12px; font-weight: 700;">
-                                            {% if story.enrichment_direction == 'right' %}
-                                                Fetch more right-leaning coverage
-                                            {% else %}
-                                                Fetch more left-leaning coverage
-                                            {% endif %}
-                                        </button>
-                                    </form>
-                                </div>
+                            {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
+                            {% for art in story.articles %}
+                                {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
+                                {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
+                                {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
+                                {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
+                                {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
                                 {% endif %}
+                            {% endfor %}
 
-                                <div class="action-row" style="margin-bottom: 0;">
-                                    <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="text-decoration: none; width: 100%; text-align: center; padding: 12px; font-weight: 700;">
-                                        View full coverage & analysis →
-                                    </a>
-                                </div>
+                            <div class="bias-balance">
+                                <div class="bias-col left"><div class="bias-col-label">Left</div><div class="bias-col-count">{{ counts.b1 + counts.b2 }}</div></div>
+                                <div class="bias-col center"><div class="bias-col-label">Center</div><div class="bias-col-count">{{ counts.b3 }}</div></div>
+                                <div class="bias-col right"><div class="bias-col-label">Right</div><div class="bias-col-count">{{ counts.b4 + counts.b5 }}</div></div>
+                            </div>
+
+                            <div class="card-actions">
+                                <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark">View full coverage & analysis →</a>
+                                {% if story.enrichment_direction and story.bias_gap >= 2 %}
+                                <form method="POST" action="{{ url_for('admin.enrich_story_balance', story_id=story.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="label" value="{{ active_label or '' }}">
+                                    <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
+                                    <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
+                                    <button type="submit" class="btn btn-muted">Fetch more {{ story.enrichment_direction }}-leaning coverage</button>
+                                </form>
+                                {% endif %}
                             </div>
                         {% else %}
                             {# Single Article Story Layout (Original) #}
@@ -676,7 +532,7 @@
                                         {% endif %}
 
                                         {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
-                                            <span style="color:var(--text-faint); font-size:10px;">•</span>
+                                            <span style="color:var(--text-faint); font-size: var(--fs-label);">•</span>
                                             {% if article.bias_score == 1 %}
                                                 <span class="bias-tag bias-1">Article: Left</span>
                                             {% elif article.bias_score == 2 %}

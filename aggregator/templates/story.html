@@ -41,7 +41,7 @@
         .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
         .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
 
-        .container { max-width: 900px; margin: 60px auto; padding: 0 20px; }
+        .container { max-width: var(--width-read); margin: 60px auto; padding: 0 20px; }
 
         .story-card {
             background: var(--surface);
@@ -62,7 +62,7 @@
         }
 
         .analysis-label {
-            font-size: 11px;
+            font-size: var(--fs-label);
             font-weight: 800;
             text-transform: uppercase;
             color: var(--accent-text);
@@ -94,7 +94,7 @@
         .article-meta { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
 
         .bias-tag {
-            font-size: 10px;
+            font-size: var(--fs-label);
             font-weight: 800;
             padding: 2px 8px;
             border-radius: 6px;
@@ -110,7 +110,7 @@
         .bias-none { background: #ddd; color: #4a4a4a; }
 
         .source-badge {
-            font-size: 9px;
+            font-size: var(--fs-label);
             font-weight: 800;
             padding: 2px 5px;
             border-radius: 4px;
@@ -153,7 +153,7 @@
             border-radius: 16px;
         }
         .editors-note-label {
-            font-size: 11px;
+            font-size: var(--fs-label);
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -172,7 +172,7 @@
             margin-top: 14px;
         }
         .note-chip {
-            font-size: 10px;
+            font-size: var(--fs-label);
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.6px;
@@ -183,7 +183,7 @@
         }
         .scrape-note {
             display: inline-block;
-            font-size: 10px;
+            font-size: var(--fs-label);
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.7px;
@@ -258,7 +258,7 @@
             <div class="analysis-label" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>Executive Summary</span>
                 {% if ollama_online and (not story.summary or story.summary == story.title or not story.deep_report) %}
-                    <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: 10px;" onclick="startAiTask('story_summary', {{ story.id }}, this)">Summarize Story</button>
+                    <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: var(--fs-label);" onclick="startAiTask('story_summary', {{ story.id }}, this)">Summarize Story</button>
                 {% endif %}
             </div>
             {% if story.summary %}
@@ -285,7 +285,7 @@
             <div class="analysis-label" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>Multi-Source Analysis</span>
                 {% if ollama_online and story.articles|length >= 2 and not story.deep_report %}
-                    <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: 10px;" onclick="startAiTask('story_deep_report', {{ story.id }}, this)">Analyze Story</button>
+                    <button type="button" class="btn-view" style="cursor: pointer; padding: 4px 12px; font-size: var(--fs-label);" onclick="startAiTask('story_deep_report', {{ story.id }}, this)">Analyze Story</button>
                 {% endif %}
             </div>
             {% if story.deep_report %}

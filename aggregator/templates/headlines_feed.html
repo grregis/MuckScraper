@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
     <title>Headlines — MuckScraper</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/story_card.css') }}">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -39,64 +40,15 @@
             font-size: 13px;
             font-weight: 600;
         }
-        .main { max-width: 1000px; margin: 0 auto; padding: 0 40px; }
+        .main { max-width: var(--width-list); margin: 0 auto; padding: 0 40px; }
         .main-header { padding: 24px 0 8px; }
-        h1 { font-size: 26px; font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; margin-bottom: 4px; }
+        h1 { font-size: var(--fs-page-title); font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; margin-bottom: 4px; }
         .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
-
-        .story {
-            background: var(--surface);
-            border-radius: 16px;
-            padding: 0;
-            margin-bottom: 32px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            border: 1px solid var(--border);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .story:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
-        .story-layout { display: flex; gap: 0; }
-        .story-image {
-            width: 280px;
-            min-width: 280px;
-            height: auto;
-            min-height: 200px;
-            background: var(--btn-muted-bg);
-            position: relative;
-            overflow: hidden;
-        }
-        .story-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
-        .story:hover .story-image img { transform: scale(1.05); }
-        .story-content { flex: 1; padding: 24px; display: flex; flex-direction: column; }
-        .story-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; gap: 16px; }
-        .story h2 { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.3; letter-spacing: -0.3px; }
-        .story h2 a { color: inherit; text-decoration: none; }
-        .story h2 a:hover { color: var(--accent-text); text-decoration: underline; }
-
-        .summary {
-            background: var(--summary-bg);
-            border-left: 4px solid var(--accent);
-            padding: 16px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--text);
-            border-radius: 0 12px 12px 0;
-        }
-        .summary.pending { color: var(--text-faint); font-style: italic; background: var(--btn-muted-bg); border-left-color: var(--border); }
-        .summary-label { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent-text); letter-spacing: 1.5px; margin-bottom: 8px; }
-
-        .btn { display: inline-block; border: none; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
-        .btn-dark { background: var(--accent); color: white; }
-        .btn-dark:hover { background: var(--accent-dark); transform: translateY(-1px); }
-        .action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0; }
 
         .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
 
 
         @media (max-width: 900px) {
-            .story-layout { flex-direction: column; }
-            .story-image { width: 100%; height: 200px; min-width: unset; }
             .main { padding: 0 20px; }
         }
         {% include 'sidebar_styles.html' %}
@@ -130,38 +82,24 @@
                 {% set featured_article = story.articles|selectattr('image_url')|first %}
                 <div class="story-image">
                     {% if featured_article and featured_article.image_url %}
-                        <img src="{{ featured_article.image_url }}" alt="Story Image" loading="lazy">
+                        <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
                     {% else %}
-                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:40px; background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);">
-                            {{ icon('newspaper') }}
-                        </div>
+                        <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
                     {% endif %}
                 </div>
 
                 <div class="story-content">
-                    <div class="story-header">
-                        <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a></h2>
-                    </div>
+                    <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a></h2>
 
-                    <div style="font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    {% set article_count = story.articles|length %}
+                    <div class="card-meta">
                         {% if story.last_updated %}
-                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent-light);"></span>
-                            Last updated: <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+                            <span class="meta-item">Updated <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }} UTC</span></span>
                         {% endif %}
-                        {% if story.deep_report %}
-                            <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">ANALYSIS AVAILABLE</span>
-                        {% endif %}
-                        {% if story.edition_has_updates %}
-                            <span style="background: #1a6bb5; color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">NEW UPDATES</span>
-                        {% endif %}
-                        {% if story.has_ai_headline %}
-                            <span style="margin-left:auto; background:rgba(0,0,0,0.05); padding:2px 8px; border-radius:4px; font-style:normal;">AI HEADLINE</span>
-                        {% endif %}
-                    </div>
-
-                    <div style="font-size: 14px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-                        <span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ story.articles|length }} ARTICLE{{ 'S' if story.articles|length != 1 else '' }}</span>
-                        <span>IN THIS STORY</span>
+                        <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
+                        {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
+                        {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
+                        {% if story.edition_has_updates %}<span class="card-flag flag-new">New updates</span>{% endif %}
                     </div>
 
                     {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
@@ -174,19 +112,10 @@
                         {% endif %}
                     {% endfor %}
 
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 12px; border: 1px solid var(--border);">
-                        <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                            <div style="font-size: 11px; font-weight: 800; color: var(--bias-left-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-left-text); padding-bottom: 4px;">Left</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b1 + counts.b2 }}</div>
-                        </div>
-                        <div style="flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 5px;">
-                            <div style="font-size: 11px; font-weight: 800; color: var(--bias-center-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-center-text); padding-bottom: 4px;">Center</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b3 }}</div>
-                        </div>
-                        <div style="flex: 1; text-align: center; padding: 0 5px;">
-                            <div style="font-size: 11px; font-weight: 800; color: var(--bias-right-text); text-transform: uppercase; margin-bottom: 8px; border-bottom: 2px solid var(--bias-right-text); padding-bottom: 4px;">Right</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--text);">{{ counts.b4 + counts.b5 }}</div>
-                        </div>
+                    <div class="bias-balance">
+                        <div class="bias-col left"><div class="bias-col-label">Left</div><div class="bias-col-count">{{ counts.b1 + counts.b2 }}</div></div>
+                        <div class="bias-col center"><div class="bias-col-label">Center</div><div class="bias-col-count">{{ counts.b3 }}</div></div>
+                        <div class="bias-col right"><div class="bias-col-label">Right</div><div class="bias-col-count">{{ counts.b4 + counts.b5 }}</div></div>
                     </div>
 
                     {% if story.summary %}
@@ -198,10 +127,8 @@
                         <div class="summary pending">Analysis pending — this story hasn't been summarized yet.</div>
                     {% endif %}
 
-                    <div class="action-row">
-                        <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark" style="width: 100%; text-align: center; padding: 12px; font-weight: 700;">
-                            View full coverage & analysis →
-                        </a>
+                    <div class="card-actions">
+                        <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark">View full coverage & analysis →</a>
                     </div>
                 </div>
             </div>

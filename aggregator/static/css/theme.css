@@ -9,6 +9,21 @@
  */
 
 :root {
+    /* Type scale. --fs-label is the smallest size anything a reader must
+       read uses (chips, uppercase labels, metadata); nothing goes below it.
+       Keep uppercase for labels of a word or two. */
+    --fs-label:       12px;
+    --fs-meta:        13px;
+    --fs-body:        15px;
+    --fs-card-title:  20px;
+    --fs-page-title:  26px;
+
+    /* Content widths, one per page type, centred in the space beside the
+       sidebar: story lists, reading pages (story, article), wide tables. */
+    --width-list:     1000px;
+    --width-read:     900px;
+    --width-table:    1400px;
+
     /* Accent: --accent is for backgrounds and borders (white text on it);
        --accent-text is for text in the accent colour. */
     --accent:         #5a5f52;
