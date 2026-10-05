@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime, timedelta
 from flask import render_template, request, redirect, url_for, jsonify
-from aggregator.permissions import ROLE_ADMIN, ROLE_READER, ROLE_SCRAPER, role_required
+from flask_login import current_user
+from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, public_or_login, role_required
 from sqlalchemy import case, func, or_
 from aggregator import db
 from aggregator.models import Article, Outlet, Story, Topic
@@ -38,8 +39,11 @@ def fetch_page():
     )
 
 
+# All Stories and Grouped Stories are open to signed-out visitors when
+# PUBLIC_READ_ACCESS is on (Regis, 2026-10-04), like Headlines. They get no
+# scrape-status filter and no scrape details (see articles.html).
 @admin.route("/articles")
-@role_required(ROLE_READER)
+@public_or_login
 def list_articles(per_page=25, force_multi=False):
     active_label = request.args.get("topic", None)
     active_scrape_status = request.args.get("scrape_status", "").strip().lower() or None
@@ -52,7 +56,7 @@ def list_articles(per_page=25, force_multi=False):
     if active_range not in TIME_RANGES:
         active_range = DEFAULT_TIME_RANGE
 
-    if active_scrape_status not in SCRAPE_STATUS_FILTERS:
+    if active_scrape_status not in SCRAPE_STATUS_FILTERS or not current_user.is_authenticated:
         active_scrape_status = None
 
     if story_id:
@@ -165,7 +169,7 @@ def list_articles(per_page=25, force_multi=False):
 
 
 @admin.route("/multi-stories")
-@role_required(ROLE_READER)
+@public_or_login
 def multi_article_stories():
     return list_articles(per_page=50, force_multi=True)
 
