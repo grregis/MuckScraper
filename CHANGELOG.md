@@ -4,6 +4,233 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [0.8.0] - 2026-10-05
+
+Status: beta. This release covers three areas. The first is **a reading and
+search interface you can actually work in**: a new Search page, time windows
+on every list, local-time timestamps, and a full accessibility and layout pass
+over the admin app. The second is **accounts**: Reader, Scraper and Admin
+roles, user management, a profile page, and an optional public read-only
+mode. The third is **making the pipeline harder to fool**: it
+checks that the LLM can really run inference before a run uses it, refuses
+broken generated text instead of publishing it, and stops a single bad scrape
+from blocking a domain for months. It also fixes a fresh install, which used
+to start and then do nothing.
+
+### Added
+
+- **Three account roles.**
+  - **Reader:** reads everything, including full article text and Search, and
+    changes nothing.
+  - **Scraper:** also fetches articles and runs summaries, analysis, bias
+    ratings and scrapes.
+  - **Admin:** also uses Admin Tools, changes all configuration, and manages
+    users.
+
+  Pages hide the buttons a role can't use, and routes refuse the actions
+  (403).
+- **User management** (`/admin/users`, admins only). Add accounts, change
+  their email, role and active status, set a new password, or delete them. You
+  can't change your own role, disable yourself or delete yourself, and the app
+  refuses anything that would leave no active admin. A disabled account can't
+  sign in and loses any session it already had.
+- **A profile page** (`/auth/profile`). It shows your username, role, sign-up
+  date and last sign-in, and lets you change your email or password (both ask
+  for your current password).
+- **An account menu, top right.** Signed out, it's a Sign in button. Signed
+  in, a round person button opens Profile, Users and Admin Tools (admins only)
+  and Sign out. It replaces the Admin Tools header button, and Sign out is now
+  a POST.
+- **`PUBLIC_READ_ACCESS`** (`.env`, default `false`). When on, signed-out
+  visitors can read Headlines, Grouped Stories, All Stories, the topic filters,
+  story pages and article summaries. They never get scraped article text,
+  scrape details, Search, the Fetch page or any action button. An article page
+  shows them the summary and a link to the publisher.
+- **A Search page** (`/admin/search`, in the sidebar). Stories and Articles
+  tabs share the query, time window and sort. Results are dense, sortable
+  tables, 50 rows a page: Left / Center / Right counts and sources per story,
+  and an L / LL / C / LR / R bias chip per article with the exact score on
+  hover. Custom date ranges are supported. With no query, results are newest
+  first; with a query, best match first.
+- **Time windows on the story lists.** All Stories and Grouped Stories default
+  to the last 7 days, with 24 hours, 30 days and All time options. A story is
+  shown if any of its articles falls in the window, and it is shown with all
+  of its articles.
+- **`DISPLAY_TIMEZONE`** (`.env`, IANA name, default `UTC`). The time zone all
+  aggregator dates are shown in. Timestamps now read "3 hours ago", with the
+  exact local time on hover.
+- **Better pagination.** First and Last buttons, and a page-number box for
+  jumping straight to a page.
+- **Default config on a fresh install.** Topics, RSS feeds, prompts,
+  scheduled fetches, the pipeline schedule, ingestion blocks and the scrape
+  blocklist are now seeded by `bootstrap_admin.py` (`aggregator/seed_defaults.py`).
+  Before this, a fresh install started, logged in, and then did nothing: no
+  scheduled runs, nothing fetched, and no prompts to generate with. Seeding
+  only inserts what is missing, so it never overwrites anything you've edited.
+- **Search stays current by itself.** Each run, fetch-only or full, ends by
+  updating Meilisearch with what that run changed (about a minute, and search
+  stays up throughout). Before this, the index only changed when rebuilt by
+  hand. A full rebuild now updates in chunks instead of wiping the index first.
+- **Fetch quality tooling.** `news_fetcher/quality_checks.py` (pure detectors
+  for truncated text, leaked prompt labels, acronym casing and figures that
+  appear in no source) and `news_fetcher/quality_report.py` (a read-only
+  report covering headlines, summaries, grouping, bias and editions). Each
+  run's history entry now records headline, grouping-review and edition
+  counters, and Langfuse traces carry the story, article or outlet they were
+  generated for.
+- **Opinion and shopping filters at ingestion.** Opinion and editorial pieces
+  (`/opinion/`, `/editorials/`, `/commentisfree/`, "Opinion:" titles) and
+  shopping or affiliate roundups (`/shopping/`, `/deals/`) are no longer
+  stored. Betting promos and promo-code titles are caught as well.
+
+### Changed
+
+- **Signed-out access is now a choice, and off by default.** Before this
+  release, Headlines and the story, article and status pages were open to
+  anyone, and `/article/<id>` served the full scraped text of any article
+  (article IDs are sequential). Now every page needs an account unless you
+  turn on `PUBLIC_READ_ACCESS`, and even then scraped text stays private.
+  Signed-in users and public visitors land on Headlines.
+- **All Stories now includes single-article stories by default.** A "Hide
+  single-article stories" switch filters them out. The sidebar order is now
+  Headlines, Grouped Stories, All Stories.
+- **The scrape blocklist needs repeated failures.** A domain used to be
+  blocked indefinitely after one bad scrape. Now it takes 3 failed articles
+  within 48 hours, and the block expires 48 hours after the last failure.
+  Domains marked permanent (hard paywalls) are unaffected. The blocklist page
+  shows hits, expiry, and a Pending state for domains below the threshold.
+- **The pipeline checks for real inference, not just a responding server.** At
+  each checkpoint the scheduler makes one real embedding call. If Ollama's
+  HTTP server answers but the GPU can't run the model, the run treats Ollama
+  as down and degrades the way it does in an ordinary outage, instead of
+  spending hours timing out.
+- **A run on the fallback Ollama host re-checks the primary on schedule.**
+  Before this, a long job that never went idle never noticed the primary
+  coming back.
+- **Story summary prompts have a size limit.** Article text in a summary
+  prompt shares a 9,000-character budget (1,500 per article at most). Very
+  large stories had been overflowing Ollama's default context, and their
+  summaries came back empty or cut off.
+- **The edition duplicate check is stricter.** Two stories that share title
+  words now also need closely matching article embeddings before one is
+  dropped as a duplicate of the other. Some common words are ignored as well.
+  Replayed over 30 editions, wrongly flagged pairs fell from 45 to 6.
+- **The entity veto in grouping** no longer splits one event into two stories
+  just because two headlines name different countries; it stands down when
+  the headlines share a real subject word.
+- **Outlet names.** Bare domains (`nypost.com`, `cnn.com`) map to the outlet's
+  real name, and AllSides name variants (PBS News, The Washington Times,
+  Breitbart News Network) now match their ratings.
+- **Admin UI refresh.**
+  - Text meets WCAG AA contrast in both themes.
+  - Colours live in one shared stylesheet (`aggregator/static/css/theme.css`).
+  - Emoji are replaced with inline SVG icons.
+  - Long button labels use sentence case.
+  - "Hide single-article stories" is a real switch.
+  - Search table headers stay visible while scrolling.
+  - Story cards have one information line, a compact Left / Center / Right box
+    and side-by-side buttons.
+  - No text is smaller than 12px.
+  - Each page type has one centred content width.
+- **Code layout.** `aggregator/blueprints/admin.py` and
+  `news_fetcher/fetch_and_store_articles.py` are now packages. This is pure
+  code motion; no URLs or behaviour changed.
+
+### Removed
+
+- **"Rebuild Story Grouping"** and `force_regroup_all()`. It regenerated
+  every embedding, deleted every story, and then crashed on any install that
+  had ever published an edition, before it finished. For targeted repairs,
+  use Ollama catch-up and Reclassify Articles in Admin Tools instead.
+
+### Fixed
+
+- **`bootstrap_admin.py` on an existing install.** It used to mark pending
+  migrations as already applied, so `flask db upgrade` could never run them.
+  It now stamps only an empty database, upgrades a migrated one, and stops
+  with instructions for anything in between.
+- **Merging duplicate outlets orphaned the moved articles.** Their outlet was
+  set to NULL. Fixed, and the surviving outlet's bias is now copied onto them.
+- **Headlines that were really error messages.** Output such as "(Error: Input
+  transcripts are missing...)" is now rejected and retried next run, instead
+  of being stored as the story's headline.
+- **Acronyms in headlines** ("Gop", "Nato", "Team Usa") are corrected to their
+  usual capitalisation before a headline is stored.
+- **Cut-off summaries.** A story summary under 200 characters, or one that
+  doesn't end a sentence, is rejected and retried next run instead of being
+  published.
+- **One article counted as several blocklist hits**, because each URL variant
+  of the same article was counted separately. A single Fox News article was
+  enough to block the domain.
+- **Grouping merges orphaned articles.** `regroup_ungrouped_stories()` left
+  every article it merged with no story at all, and the grouping review left
+  the stories it emptied behind. Both now also move a vacated story's edition
+  slot to the story it merged into, instead of dropping it.
+- **Long outlet names** in bias tags now truncate instead of overflowing.
+- **The article page's theme button** was unstyled. **The search table** no
+  longer runs off the edge of 1100–1279px screens.
+
+### Security
+
+- **Scraped and generated HTML is cleaned at display time**, not only when
+  it's stored. Two template filters, `clean_html` and `plain_text_br`
+  (`aggregator/html_safety.py`), replace `| safe`. Links and images are limited
+  to `http`, `https` and `mailto` at both stages.
+- See also the accounts and public-access changes under Added and Changed.
+
+### Upgrade Notes
+
+- Pull the update, rebuild, run migrations, and restart the scheduler:
+
+  ```bash
+  docker compose up -d --build
+  docker compose exec app flask db upgrade
+  docker compose restart scheduler
+  ```
+
+  `scheduler` loads pipeline code once at startup, so it needs the restart
+  for the inference check, blocklist, summary and dedupe changes to take
+  effect.
+- **Two migrations.**
+  - **`c8e2f4a6b1d3` (user roles):** adds role, active flag and sign-in
+    timestamps to `users`. **Every existing account becomes Admin**, because
+    before this release any account could do everything, so nobody loses
+    access. Lower roles afterwards at `/admin/users` if you want to. New
+    accounts default to Reader.
+  - **`a4b7f0d92c31` (scrape blocklist hit counts and expiry):** it only adds
+    columns, and then adjusts existing rows:
+    - **Automatic blocks:** domains you blocked automatically stay blocked for
+      one more 48-hour window, then follow the new 3-hit rule, so you won't get
+      a flood of paywall content from every domain at once.
+    - **Permanent paywall domains:** 13 hard-paywall domains from the original
+      seed list are set back to permanent if their rows exist (nytimes.com,
+      wsj.com, ft.com, washingtonpost.com, theathletic.com, bloomberg.com,
+      thetimes.co.uk, economist.com, newyorker.com, foreignpolicy.com, hbr.org,
+      seekingalpha.com, barrons.com). On the maintainer's database an
+      unblock/re-add cycle had silently changed them to non-permanent. If you
+      made one of them non-permanent on purpose, check it after upgrading. Rows
+      you've deleted are not re-added.
+- **New optional settings:**
+  - `DISPLAY_TIMEZONE` (defaults to `UTC`): the time zone dates are shown in.
+  - `PUBLIC_READ_ACCESS` (defaults to `false`): set it to `true` to keep
+    Headlines and story pages readable without an account, as they were
+    before this release (now without scraped text).
+
+  After changing either one in `.env`, run `docker compose up -d app`; a
+  restart doesn't re-read `.env`.
+- **If visitors used to read Headlines or story pages without logging in**,
+  they will get the login page until you set `PUBLIC_READ_ACCESS=true`.
+- **Search after upgrading:** documents now carry time fields that the window
+  filter uses. Until the index is rebuilt, older documents drop out of
+  windowed searches. Rebuild it once, in its own process; on a large database
+  this takes a while (about 80 minutes for 115k articles):
+
+  ```bash
+  docker exec -w /app -e PYTHONPATH=/app muckscraper-app-1 python3 -m aggregator.search
+  ```
+
+---
+
 ## [0.7.0] - 2026-09-08
 
 Status: beta. The theme of this release is **splitting cost from quality in
