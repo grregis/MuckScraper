@@ -191,12 +191,13 @@
             padding: 1px 6px;
             border-radius: 6px;
             font-weight: 700;
-            font-variant-numeric: tabular-nums;
             color: white;
         }
-        .bias-left { background: var(--bias-1-bg); }
-        .bias-center { background: var(--bias-3-bg); }
-        .bias-right { background: var(--bias-5-bg); }
+        .bias-1 { background: var(--bias-1-bg); color: var(--bias-1-fg); }
+        .bias-2 { background: var(--bias-2-bg); color: var(--bias-2-fg); }
+        .bias-3 { background: var(--bias-3-bg); color: var(--bias-3-fg); }
+        .bias-4 { background: var(--bias-4-bg); color: var(--bias-4-fg); }
+        .bias-5 { background: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-unrated { background: var(--bias-unrated-bg); }
 
         .empty { padding: 28px; text-align: center; color: var(--text-faint); }
@@ -284,7 +285,7 @@
                         <td class="col-title"><a href="{{ url_for('public.view_article', article_id=row.id) }}">{{ row.title }}</a></td>
                         <td class="col-outlet">{{ row.outlet_name }}</td>
                         <td class="col-date">{{ row.date | local_datetime }}</td>
-                        <td class="col-num"><span class="bias {{ row.bias_class }}">{{ '%.1f'|format(row.bias) if row.bias is not none else '—' }}</span></td>
+                        {% set chip_label, chip_tooltip, chip_class = row.bias_chip %}<td class="col-num"><span class="bias {{ chip_class }}" title="{{ chip_tooltip }}" aria-label="{{ chip_tooltip }}">{{ chip_label }}</span></td>
                         <td class="col-story">{% if row.story_id %}<a href="{{ url_for('public.view_story', story_id=row.story_id) }}">{{ row.story_title }}</a>{% endif %}</td>
                         <td class="col-num">{{ row.story_articles }}</td>
                     </tr>

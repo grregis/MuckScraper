@@ -18,6 +18,7 @@ from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import aliased
 
 from aggregator import db
+from aggregator.article_signals import bias_bucket_for_score
 from aggregator.display_time import local_day_end_utc, local_day_start_utc
 from aggregator.models import Article, Outlet, Story, Topic, story_topics
 from aggregator.search import SearchUnavailableError, search_article_ids, search_story_ids
@@ -119,14 +120,23 @@ def _in_window(column, since, until):
     return and_(*clauses) if clauses else None
 
 
-def _bias_class(score):
-    if score is None:
-        return "bias-unrated"
-    if score <= LEFT_MAX:
-        return "bias-left"
-    if score <= CENTER_MAX:
-        return "bias-center"
-    return "bias-right"
+# Article bias chips use the five-level scale (bias_bucket_for_score), with
+# the 1-5 chip colours from theme.css; the story columns keep three buckets.
+BIAS_CHIPS = {
+    "left": ("L", "Left", "bias-1"),
+    "lean_left": ("LL", "Lean left", "bias-2"),
+    "center": ("C", "Center", "bias-3"),
+    "lean_right": ("LR", "Lean right", "bias-4"),
+    "right": ("R", "Right", "bias-5"),
+    "unrated": ("—", "Unrated", "bias-unrated"),
+}
+
+
+def _bias_chip(score):
+    """(label, tooltip, css class) for an article's bias score."""
+    label, name, css_class = BIAS_CHIPS[bias_bucket_for_score(score)]
+    tooltip = f"{name} ({score:.1f})" if score is not None else name
+    return label, tooltip, css_class
 
 
 def _effective_bias():
@@ -271,7 +281,7 @@ def _article_rows(article_ids, window, sort_key, descending, page, text_query):
             "outlet_name": outlet.name if outlet else (article.source or ""),
             "date": article.date,
             "bias": bias,
-            "bias_class": _bias_class(bias),
+            "bias_chip": _bias_chip(bias),
             "story_id": story.id if story else None,
             "story_title": (story.headline or story.title) if story else "",
             "story_articles": story_articles or 0,
