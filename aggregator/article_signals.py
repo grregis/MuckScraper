@@ -129,6 +129,18 @@ LOW_VALUE_TITLE_PATTERNS = (
     re.compile(r"\bphoto(?:s| gallery)?\b", re.IGNORECASE),
     re.compile(r"\bgallery\b", re.IGNORECASE),
     re.compile(r"\bnewsletter\b", re.IGNORECASE),
+    # Show/interview transcripts (2026-10-06). CBS posts a transcript next to
+    # its write-up of every 60 Minutes / Face the Nation segment, so one
+    # interview became a two-article "multi-source" story (77726, 77725 and
+    # 77727 took three slots of the 10-05 morning edition). The write-up is
+    # kept; only the raw transcript is dropped. Anchored to the start of the
+    # title on purpose: "Transcript shows campus police's interview..." and
+    # "...releases transcript of Bondi interview" are news and must pass.
+    # Checked against all 136 stored titles containing "transcript".
+    re.compile(r"^\s*(?:60 minutes\s+|video\s*\+\s*)?(?:full\s+)?transcripts?\s*:", re.IGNORECASE),
+    re.compile(r"^\s*(?:read\s+(?:the\s+)?|a\s+)?(?:full\s+)?(?:episode\s+)?transcripts?\s+(?:of|from)\b", re.IGNORECASE),
+    re.compile(r"^\s*read\s+the\s+(?:full\s+)?transcript\s*:", re.IGNORECASE),
+    re.compile(r"\b(?:earnings call|show)\s+transcripts?\b", re.IGNORECASE),
 )
 
 # Opinion/editorial content: op-eds, columns, editorial-board pieces. Not
