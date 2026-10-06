@@ -1,3 +1,4 @@
+{% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
@@ -144,7 +145,7 @@
         <span class="topbar-title">MuckScraper</span>
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
-        <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
+        {{ theme_toggle() }}
         {{ account_menu() }}
     </div>
 </div>
@@ -251,12 +252,10 @@
         const next = current === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('muckscraper-theme', next);
-        document.getElementById('theme-toggle').textContent = next === 'dark' ? 'Light Mode' : 'Dark Mode';
     }
 
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
-    document.getElementById('theme-toggle').textContent = savedTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
 </script>
 </body>
 </html>

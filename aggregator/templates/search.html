@@ -147,6 +147,11 @@
         @media (min-width: 1280px) {
             .table-wrap { overflow: visible; }
         }
+        /* Inside the scrolling box the header offset has nothing to clear and
+           pushed the header row down over the first result (phones). */
+        @media (max-width: 1279px) {
+            .table-wrap table.results th { top: 0; }
+        }
 
         table.results {
             width: 100%;

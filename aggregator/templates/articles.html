@@ -42,6 +42,9 @@
         /* ── Main area ── */
         .main {
             flex: 1;
+            /* A flex item won't shrink below its widest child without this;
+               on a phone All Stories was 564px wide. */
+            min-width: 0;
             padding: 0 40px;
             max-width: var(--width-list);
             margin: 0 auto;
@@ -474,7 +477,7 @@
 
                                     <a class="full-text-link" href="{{ url_for('public.view_article', article_id=article.id, back=current_back()) }}">{{ 'Full Summary & Text →' if current_user.is_authenticated else 'Summary →' }}</a>
 
-                                    <div style="flex-basis: 100%; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                    <div style="flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px;">
                                         {{ bias_tag(article.outlet.bias_score if article.outlet else none) }}
 
                                         {% if article.outlet.bias_source == "allsides" %}

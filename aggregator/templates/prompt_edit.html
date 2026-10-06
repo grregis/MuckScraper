@@ -3,6 +3,7 @@
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
     <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
@@ -24,7 +25,7 @@
         .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
         .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
         .container { max-width: 900px; margin: 48px auto; padding: 0 20px; }
-        h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; font-family: ui-monospace, monospace; }
+        h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
         .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
         .card {
             background: var(--surface);

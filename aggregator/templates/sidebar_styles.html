@@ -185,6 +185,8 @@
     .sidebar-content { scrollbar-width: thin; }
     .sidebar-content::-webkit-scrollbar { display: block; width: 4px; }
     .sidebar-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.35); border-radius: 2px; }
-    .sidebar-toggle-btn { left: 0; top: 12px; }
+    /* Slim enough to sit in the page's side gutter instead of over the
+       first letter of the content (top is set by sidebar_script.html). */
+    .sidebar-toggle-btn { left: 0; top: 12px; padding: 8px 4px; font-size: 14px; border-radius: 0 6px 6px 0; }
     .sidebar.mobile-open + .sidebar-toggle-btn { left: 240px; }
 }

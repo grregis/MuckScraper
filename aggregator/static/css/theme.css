@@ -192,3 +192,11 @@
     font-size: 13px;
     font-weight: 600;
 }
+
+/* Phones: config-page tables scroll sideways inside their card instead of
+   being clipped or squeezing columns to a word per line (mobile pass). */
+@media (max-width: 768px) {
+    .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .card table { min-width: 560px; }
+    .card .url-cell { min-width: 220px; }
+}
