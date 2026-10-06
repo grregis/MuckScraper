@@ -283,10 +283,8 @@ All DB-backed and admin-editable, no code change needed:
 - Ingestion blocklist — sources and headline keywords refused before anything is
   stored: `/admin/ingestion-blocks`
 
-The last two are what closed [issue #1](https://github.com/grregis/MuckScraper/issues/1).
-The shipped defaults reflect the maintainer's reading habits — US-centric topics,
-a gaming-news filter — but they are defaults now rather than the only option, so
-adapting the project to a different beat no longer means a fork.
+The shipped defaults (US-centric topics, a gaming-news filter) are only a
+starting point. Change them on these pages to suit your own beat.
 
 ### LLM behavior
 
@@ -309,15 +307,13 @@ LLM_FAST_PROVIDER=ollama     # the ~1,140 grouping/classification/bias calls
 ```
 
 The volume stays local and free; only the handful of calls a reader actually
-sees go to the cloud. Note the ordering reads backwards from "send simple things
-to Ollama" — the global is the cloud provider and Ollama is the exception —
-because that is the only arrangement where leaving `LLM_FAST_PROVIDER` blank
-keeps single-provider installs behaving exactly as before.
+sees go to the cloud. `LLM_PROVIDER` is the summary provider and
+`LLM_FAST_PROVIDER` overrides it for the mechanical calls; leave
+`LLM_FAST_PROVIDER` blank to send everything to one provider.
 
 Health checks are per-tier, so the pipeline degrades rather than stops: if the
 local box is asleep, summaries still run and only classification is skipped, and
-vice versa. This closed
-[issue #8](https://github.com/grregis/MuckScraper/issues/8).
+vice versa.
 
 **Model tiers (`OLLAMA_FAST_MODEL`).** A full pipeline run makes roughly 1,200
 sequential LLM calls, and about 1,140 of them are mechanical — story-grouping
@@ -333,12 +329,12 @@ that fills the card leaves no room for the embedding model, so Ollama swaps the
 two in and out on every article. A fast model that fits alongside
 `nomic-embed-text` avoids both problems.
 
-Leave it blank to use `OLLAMA_MODEL` for everything (the original behavior).
+Leave it blank to use `OLLAMA_MODEL` for everything.
 `GEMINI_FAST_MODEL` and `GROQ_FAST_MODEL` do the same for those providers.
 
 Prompt wording itself is editable at `/admin/prompts` (see above) with no
 code change needed. The surrounding logic — persona/analysis-type
-selection, story-grouping thresholds, etc. — still lives in:
+selection, story-grouping thresholds, etc. — lives in:
 - `news_fetcher/summarizer.py`
 - `news_fetcher/topic_classifier.py`
 - `news_fetcher/story_grouper.py`
