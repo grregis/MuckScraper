@@ -274,7 +274,7 @@
                 {% for row in rows %}
                     {% if tab == 'stories' %}
                     <tr>
-                        <td class="col-title"><a href="{{ url_for('public.view_story', story_id=row.id) }}">{{ row.headline }}</a></td>
+                        <td class="col-title"><a href="{{ url_for('public.view_story', story_id=row.id, back=current_back()) }}">{{ row.headline }}</a></td>
                         <td class="col-topics">{{ row.topics|join(', ') }}</td>
                         <td class="col-num">{{ row.articles }}</td>
                         <td class="col-num">{{ row.sources }}</td>
@@ -286,11 +286,11 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td class="col-title"><a href="{{ url_for('public.view_article', article_id=row.id) }}">{{ row.title }}</a></td>
+                        <td class="col-title"><a href="{{ url_for('public.view_article', article_id=row.id, back=current_back()) }}">{{ row.title }}</a></td>
                         <td class="col-outlet">{{ row.outlet_name }}</td>
                         <td class="col-date">{{ row.date | local_datetime }}</td>
                         {% set chip_label, chip_tooltip, chip_class = row.bias_chip %}<td class="col-num"><span class="bias {{ chip_class }}" title="{{ chip_tooltip }}" aria-label="{{ chip_tooltip }}">{{ chip_label }}</span></td>
-                        <td class="col-story">{% if row.story_id %}<a href="{{ url_for('public.view_story', story_id=row.story_id) }}">{{ row.story_title }}</a>{% endif %}</td>
+                        <td class="col-story">{% if row.story_id %}<a href="{{ url_for('public.view_story', story_id=row.story_id, back=current_back()) }}">{{ row.story_title }}</a>{% endif %}</td>
                         <td class="col-num">{{ row.story_articles }}</td>
                     </tr>
                     {% endif %}

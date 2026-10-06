@@ -46,6 +46,9 @@
                 {% endfor %}
             </div>
 
+            {# Status lights are for signed-in users only (Regis, 2026-10-06);
+               sidebar_script.html skips the polling to match. #}
+            {% if current_user.is_authenticated %}
             <div class="sidebar-footer">
                 <!-- Rows are rendered by renderLlmStatus(), one per distinct
                      provider. This is a pre-poll placeholder only; the ids are
@@ -61,6 +64,7 @@
                     <span id="meili-label">Meili Search Status</span>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
     <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">«</button>

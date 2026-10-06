@@ -1,8 +1,9 @@
 {%- from 'account_menu.html' import account_menu with context -%}
+{% from 'breadcrumb.html' import back_link %}
 <div class="topbar">
-    <div class="topbar-left">
+    <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('public.headlines_feed') }}">← Back to Headlines</a>
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
     </div>
     {{ account_menu() }}
 </div>

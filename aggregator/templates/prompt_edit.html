@@ -93,10 +93,11 @@
     </style>
 </head>
 <body>
+{% from 'breadcrumb.html' import back_link %}
 <div class="topbar">
-    <div>
+    <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('admin.prompts_page') }}" style="margin-left: 24px;">← Back to Prompts</a>
+        {{ back_link(url_for('admin.prompts_page'), 'Back to Prompts') }}
     </div>
     {{ account_menu() }}
 </div>

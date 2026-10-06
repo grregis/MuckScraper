@@ -148,10 +148,37 @@
     font-size: 16px;
     border-radius: 0 8px 8px 0;
     box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 20;
+    /* Above the pages' sticky top bars (z-index 100), which covered it on
+       phones; below the account dropdown (300). */
+    z-index: 200;
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
 }
 .sidebar-toggle-btn:hover { color: var(--sidebar-hover); }
 .sidebar.collapsed + .sidebar-toggle-btn {
     left: 0;
+}
+
+/* Phones: the menu starts closed and slides over the page instead of
+   squeezing it; the button opens it (Regis, 2026-10-06: on a phone the
+   button was unreachable and the open menu took most of the screen). The
+   rest of the phone layout is the mobile pass. */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        z-index: 150;
+        width: 0;
+        min-width: 0;
+        border-right: none;
+        box-shadow: none;
+    }
+    .sidebar.mobile-open {
+        width: 240px;
+        min-width: 240px;
+        box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+    }
+    .sidebar-toggle-btn { left: 0; top: 12px; }
+    .sidebar.mobile-open + .sidebar-toggle-btn { left: 240px; }
 }

@@ -4,6 +4,8 @@
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
     <link rel="icon" type="image/png" sizes="128x128" href="{{ url_for('static', filename='favicon_128.png') }}">
@@ -90,7 +92,7 @@
                 </div>
 
                 <div class="story-content">
-                    <h2><a href="{{ url_for('public.view_story', story_id=story.id) }}">{{ story.display_headline }}</a></h2>
+                    <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
 
                     {% set article_count = story.articles|length %}
                     <div class="card-meta">
@@ -129,7 +131,7 @@
                     {% endif %}
 
                     <div class="card-actions">
-                        <a href="{{ url_for('public.view_story', story_id=story.id) }}" class="btn btn-dark">View full coverage & analysis →</a>
+                        <a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" class="btn btn-dark">View full coverage & analysis →</a>
                     </div>
                 </div>
             </div>

@@ -15,10 +15,10 @@
                 <strong>{{ current_user.username }}</strong>
                 <span>{{ current_user.role_label }}</span>
             </div>
-            <a role="menuitem" href="{{ url_for('auth.profile') }}">{{ icon('user') }} Profile</a>
+            <a role="menuitem" href="{{ url_for('auth.profile', back=menu_back()) }}">{{ icon('user') }} Profile</a>
             {%- if can('admin') %}
-            <a role="menuitem" href="{{ url_for('admin.users_page') }}">{{ icon('users') }} Users</a>
-            <a role="menuitem" href="{{ url_for('admin.tools_page') }}">{{ icon('wrench') }} Admin Tools</a>
+            <a role="menuitem" href="{{ url_for('admin.users_page', back=menu_back()) }}">{{ icon('users') }} Users</a>
+            <a role="menuitem" href="{{ url_for('admin.tools_page', back=menu_back()) }}">{{ icon('wrench') }} Admin Tools</a>
             {%- endif %}
             <form method="POST" action="{{ url_for('auth.logout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

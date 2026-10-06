@@ -156,3 +156,15 @@
     border: 1px solid rgba(255, 255, 255, 0.25);
 }
 .account-area a.account-signin:hover { background: var(--accent-dark); }
+
+/* Back link in the top bar (templates/breadcrumb.html). The bar is dark in
+   both themes, so one link colour serves both. */
+.crumb-bar { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.topbar a.crumb {
+    color: #89b4fa;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.topbar a.crumb:hover { text-decoration: underline; }

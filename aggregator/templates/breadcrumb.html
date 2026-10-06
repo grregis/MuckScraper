@@ -1,0 +1,6 @@
+{# One back link per page, upper left of the top bar (Regis, 2026-10-06).
+   "Back to Feed" uses feed_back_url(): the list the reader came from, else Headlines.
+   Import with: {% from 'breadcrumb.html' import back_link %} #}
+{% macro back_link(href, label) -%}
+<a class="crumb" href="{{ href }}">&larr; {{ label }}</a>
+{%- endmacro %}

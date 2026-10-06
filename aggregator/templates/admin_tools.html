@@ -347,10 +347,11 @@
     <div class="status-meta" id="bulk-meta-{{ action }}"></div>
 </div>
 {% endmacro %}
+{% from 'breadcrumb.html' import back_link %}
 <div class="topbar">
-    <div class="topbar-left">
+    <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('admin.list_articles') }}">← Back to Feed</a>
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
     </div>
     <div class="topbar-left">
         <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>

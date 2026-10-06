@@ -4,6 +4,8 @@
 <!DOCTYPE html>
 <html data-theme="light">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
@@ -346,10 +348,15 @@
 {% include 'sidebar_nav.html' %}
 <div class="page-body">
 
+{% from 'breadcrumb.html' import back_link %}
 <div class="topbar">
-    <div class="topbar-left">
+    <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
-        <a href="{{ url_for('public.view_story', story_id=article.story_id) if article.story_id else url_for('public.headlines_feed') }}">← Back to Story</a>
+        {% if article.story_id %}
+        {{ back_link(url_for('public.view_story', story_id=article.story_id, back=incoming_back()), 'Back to Story') }}
+        {% else %}
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
+        {% endif %}
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>

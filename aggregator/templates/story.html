@@ -208,9 +208,11 @@
 {% include 'sidebar_nav.html' %}
 <div class="page-body">
 
+{% from 'breadcrumb.html' import back_link %}
 <div class="topbar">
-    <div class="topbar-left" style="display:flex; align-items:center; gap:24px;">
+    <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
         <button id="theme-toggle" onclick="toggleTheme()"
@@ -332,7 +334,7 @@
                         {% endif %}
 	                        <span class="local-date" data-utc="{{ article.date.isoformat() }}Z">{{ article.date.strftime('%b %d, %Y') }}</span>
 	                    </div>
-	                    <a href="{{ url_for('public.view_article', article_id=article.id) }}" class="article-link">{{ article.title }}</a>
+	                    <a href="{{ url_for('public.view_article', article_id=article.id, back=incoming_back()) }}" class="article-link">{{ article.title }}</a>
                         {% set scrape_status = article.scrape_status or 'blocked' %}
                         <div class="scrape-note">
                             {% if scrape_status == 'success' %}
@@ -345,7 +347,7 @@
                         </div>
 
 	                    <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
-                        <a href="{{ url_for('public.view_article', article_id=article.id) }}" class="btn-view">{{ 'Read Summary & Text →' if current_user.is_authenticated else 'Read Summary →' }}</a>
+                        <a href="{{ url_for('public.view_article', article_id=article.id, back=incoming_back()) }}" class="btn-view">{{ 'Read Summary & Text →' if current_user.is_authenticated else 'Read Summary →' }}</a>
                         
                         {% if not article.summary and ollama_online and can('scraper') %}
                             <button type="button" class="btn-view" style="cursor: pointer;" onclick="startAiTask('article_summary', {{ article.id }}, this)">Summarize</button>

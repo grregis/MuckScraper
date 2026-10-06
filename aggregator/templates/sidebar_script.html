@@ -1,16 +1,28 @@
     // ── Sidebar ──
+    // Phones (matches the 768px rule in sidebar_styles.html) start with the
+    // menu closed every time and don't touch the saved desktop preference.
+    const sidebarIsPhone = window.matchMedia('(max-width: 768px)').matches;
+
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const btn = document.getElementById('sidebar-toggle');
+        if (sidebarIsPhone) {
+            const open = sidebar.classList.toggle('mobile-open');
+            btn.textContent = open ? '«' : '»';
+            return;
+        }
         sidebar.classList.toggle('collapsed');
 
         const isCollapsed = sidebar.classList.contains('collapsed');
-        localStorage.setItem('muckscraper-sidebar', isCollapsed ? 'collapsed' : 'expanded');
+        try { localStorage.setItem('muckscraper-sidebar', isCollapsed ? 'collapsed' : 'expanded'); } catch (e) {}
         btn.textContent = isCollapsed ? '»' : '«';
     }
 
-    const savedSidebar = localStorage.getItem('muckscraper-sidebar');
-    if (savedSidebar === 'collapsed') {
+    let savedSidebar = null;
+    try { savedSidebar = localStorage.getItem('muckscraper-sidebar'); } catch (e) {}
+    if (sidebarIsPhone) {
+        document.getElementById('sidebar-toggle').textContent = '»';
+    } else if (savedSidebar === 'collapsed') {
         document.getElementById('sidebar').classList.add('collapsed');
         document.getElementById('sidebar-toggle').textContent = '»';
     }
@@ -88,8 +100,11 @@
             });
     }
 
+    {% if current_user.is_authenticated %}
+    // Signed-out visitors get no status lights, so nothing to poll.
     checkOllamaStatus();
     checkMeiliStatus();
 
     setInterval(checkOllamaStatus, 30000);
     setInterval(checkMeiliStatus, 30000);
+    {% endif %}

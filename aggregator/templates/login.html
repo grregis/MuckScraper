@@ -114,7 +114,7 @@
         <button type="submit" class="btn">Sign in</button>
     </form>
     {% if public_read %}
-    <p class="back-link"><a href="{{ url_for('public.headlines_feed') }}">← Back to Headlines</a></p>
+    <p class="back-link"><a href="{{ feed_back_url() }}">← Back to Feed</a></p>
     {% endif %}
 </div>
 
