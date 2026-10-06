@@ -281,6 +281,18 @@ def _story_primary_outlet(story):
     return max(sorted(outlet_counts.items()), key=lambda item: item[1])[0]
 
 
+def _story_outlet_count(story):
+    """Distinct outlets among a story's articles (articles with no outlet
+    count by their source name, so an unlinked article isn't ignored)."""
+    keys = set()
+    for article in story.articles:
+        if article.outlet_id is not None:
+            keys.add(("id", article.outlet_id))
+        elif article.source:
+            keys.add(("name", article.source.strip().lower()))
+    return len(keys)
+
+
 def _first_story_article(story):
     for article in story.articles:
         if article is not None:
@@ -293,8 +305,8 @@ def publish_edition():
     Create an Edition record for the current fetch cycle.
     Determines edition type (morning: 5am-4:59pm, evening: 5pm-4:59am) from Eastern time.
     Only includes stories that are new since the last edition, or have received
-    new articles since then. Prefers multi-article stories and only falls back to
-    single-article stories when needed to fill the edition.
+    new articles since then. Prefers stories covered by two or more outlets and
+    only falls back to single-outlet stories when needed to fill the edition.
     Skips if this edition slot already exists.
     """
     from zoneinfo import ZoneInfo
@@ -400,7 +412,12 @@ def publish_edition():
         if story.id in seen_story_ids:
             continue
         seen_story_ids.add(story.id)
-        target_eligible = eligible_multi if len(story.articles) >= 2 else eligible_single
+        # "Multi" means two or more OUTLETS, not articles: one outlet's pair
+        # (a 60 Minutes transcript plus its write-up, a run of Fox sportsbook
+        # promos) otherwise jumps ahead of every single-source story.
+        # Replayed over 20 editions on 2026-10-06: ~1.3 swaps per edition,
+        # one-outlet pairs out, multi-outlet stories in.
+        target_eligible = eligible_multi if _story_outlet_count(story) >= 2 else eligible_single
 
         if story.id not in prev_story_ids:
             # New story not in previous edition
