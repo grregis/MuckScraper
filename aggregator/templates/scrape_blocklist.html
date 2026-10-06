@@ -1,3 +1,4 @@
+{% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
@@ -124,6 +125,7 @@
         .unblock-btn:hover { border-color: var(--accent); color: var(--accent-text); }
         .empty { padding: 48px; text-align: center; color: var(--text-faint); font-style: italic; }
     </style>
+    <script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script>
 </head>
 <body>
 {% from 'breadcrumb.html' import back_link %}
@@ -132,7 +134,10 @@
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(url_for('admin.tools_page'), 'Back to Admin Tools') }}
     </div>
-    {{ account_menu() }}
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
 </div>
 
 <div class="container">
@@ -317,9 +322,5 @@
     </div>
 </div>
 
-<script>
-    const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-</script>
 </body>
 </html>

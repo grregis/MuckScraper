@@ -19,6 +19,12 @@
 
 {#- The theme button: shows "Dark" in light mode and "Light" in dark mode,
     switched by CSS in theme.css, so the page script only sets data-theme. -#}
+{#- The Light/Dark button for a dark top bar. Pages using it load
+    static/js/theme_toggle.js (or define their own toggleTheme()). -#}
+{%- macro theme_toggle() -%}
+<button type="button" id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
+{%- endmacro -%}
+
 {%- macro theme_toggle_label() -%}
 <span class="theme-when-light">{{ icon('moon') }} Dark</span><span class="theme-when-dark">{{ icon('sun') }} Light</span>
 {%- endmacro -%}

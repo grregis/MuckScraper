@@ -5,6 +5,4 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/account_pages.css') }}">
-    <script>
-        try { document.documentElement.setAttribute('data-theme', localStorage.getItem('muckscraper-theme') || 'light'); } catch (e) {}
-    </script>
+    <script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script>

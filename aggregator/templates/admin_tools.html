@@ -1,3 +1,4 @@
+{% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
@@ -353,8 +354,8 @@
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(feed_back_url(), 'Back to Feed') }}
     </div>
-    <div class="topbar-left">
-        <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark Mode</button>
+    <div class="topbar-right">
+        {{ theme_toggle() }}
         {{ account_menu() }}
     </div>
 </div>
@@ -666,9 +667,8 @@
 
 <script>
     function applyTheme(theme) {
+        // The button's Dark/Light text is switched by CSS (theme_toggle_label).
         document.documentElement.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        btn.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
     }
 
     function toggleTheme() {

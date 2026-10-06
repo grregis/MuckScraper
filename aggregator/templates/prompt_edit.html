@@ -1,3 +1,4 @@
+{% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 <!DOCTYPE html>
 <html data-theme="light">
@@ -91,6 +92,7 @@
             overflow-y: auto;
         }
     </style>
+    <script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script>
 </head>
 <body>
 {% from 'breadcrumb.html' import back_link %}
@@ -99,7 +101,10 @@
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(url_for('admin.prompts_page'), 'Back to Prompts') }}
     </div>
-    {{ account_menu() }}
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
 </div>
 
 <div class="container">

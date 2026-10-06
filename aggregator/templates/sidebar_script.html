@@ -35,13 +35,34 @@
             btn.textContent = collapsed ? '»' : '«';
         }
     }
+    // On phones the button sits just below the page's top bar instead of on
+    // top of it (it hid the "M" of MuckScraper). The bars differ in height
+    // per page and wrap on narrow screens, so measure rather than hard-code.
+    function placeSidebarToggle() {
+        const btn = document.getElementById('sidebar-toggle');
+        if (!sidebarIsPhone) { btn.style.top = ''; return; }
+        const bar = document.querySelector('.topbar') || document.querySelector('.main-header');
+        // Bottom edge, not height: on All/Grouped/Search the bar starts a little
+        // below the top until it sticks, so follow it while scrolling.
+        const bottom = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+        btn.style.top = (bottom + 8) + 'px';
+    }
+
     applySidebarMode();
+    placeSidebarToggle();
+    window.addEventListener('resize', placeSidebarToggle);
+    let sidebarToggleFrame = 0;
+    window.addEventListener('scroll', () => {
+        if (!sidebarIsPhone || sidebarToggleFrame) return;
+        sidebarToggleFrame = requestAnimationFrame(() => { sidebarToggleFrame = 0; placeSidebarToggle(); });
+    }, { passive: true });
     // Rotating a phone can cross the query (portrait 390x844 is a phone by
     // width, landscape 844x390 by height), so re-apply when it changes.
     sidebarPhoneQuery.addEventListener('change', (e) => {
         sidebarIsPhone = e.matches;
         try { savedSidebar = localStorage.getItem('muckscraper-sidebar'); } catch (err) {}
         applySidebarMode();
+        placeSidebarToggle();
     });
 
     // ── LLM status ──

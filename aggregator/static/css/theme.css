@@ -177,3 +177,18 @@
     white-space: nowrap;
 }
 .topbar a.crumb:hover { text-decoration: underline; }
+
+/* Right side of a dark top bar: Light/Dark button + account menu. Base
+   button style; pages with their own .theme-toggle rule override it. */
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.theme-toggle {
+    display: inline-flex; align-items: center;
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--topbar-text);
+    padding: 6px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}

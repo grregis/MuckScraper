@@ -1,9 +1,13 @@
 {%- from 'account_menu.html' import account_menu with context -%}
 {% from 'breadcrumb.html' import back_link %}
+{% from 'icons.html' import theme_toggle %}
 <div class="topbar">
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(feed_back_url(), 'Back to Feed') }}
     </div>
-    {{ account_menu() }}
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
 </div>
