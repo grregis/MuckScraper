@@ -25,11 +25,13 @@
     --width-table:    1400px;
 
     /* Accent: --accent is for backgrounds and borders (white text on it);
-       --accent-text is for text in the accent colour. */
-    --accent:         #5a5f52;
-    --accent-light:   #7a8172;
-    --accent-dark:    #464b40;
-    --accent-text:    #5a5f52;
+       --accent-text is for text in the accent colour. Indigo, matching the
+       sidebar (Regis, 2026-10-06; was olive #5a5f52). Blue is avoided on
+       purpose: it would read as Left. */
+    --accent:         #4c4c8f;
+    --accent-light:   #7474b8;
+    --accent-dark:    #3a3a72;
+    --accent-text:    #4c4c8f;
 
     --bg:             #f8f9fa;
     --surface:        #ffffff;
@@ -51,7 +53,7 @@
     --sidebar-bg-end:      #50507b;
     --sidebar-text:        #cdd6f4;
     --sidebar-muted:       #c3c8dc;
-    --sidebar-accent-text: #d4dcb8;
+    --sidebar-accent-text: #c9cbff;
     --sidebar-hover:       #ffffff;
     --sidebar-active-bg:   #2a2a3e;
 
@@ -70,7 +72,7 @@
 }
 
 [data-theme="dark"] {
-    --accent-text:    #a9b19c;
+    --accent-text:    #a8abf0;
 
     --bg:             #0f0f17;
     --surface:        #1a1a26;
@@ -94,6 +96,13 @@
     --bias-center-text: #a0aec0;
     --bias-right-text:  #ef6b6b;
 }
+
+/* Bias chips (story_card_macros.html bias_tag). Base .bias-tag sizing is per page. */
+.bias-1 { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
+.bias-2 { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
+.bias-3 { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
+.bias-4 { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
+.bias-5 { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
 
 /* Inline SVG icons (templates/icons.html) */
 .icon { display: inline-block; vertical-align: -0.125em; flex-shrink: 0; }

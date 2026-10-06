@@ -1,3 +1,4 @@
+{% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 <!DOCTYPE html>
@@ -103,11 +104,6 @@
             letter-spacing: 0.5px;
             color: white;
         }
-        .bias-1 { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
-        .bias-2 { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
-        .bias-3 { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
-        .bias-4 { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
-        .bias-5 { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background: #ddd; color: #4a4a4a; }
 
         .source-badge {
@@ -326,12 +322,7 @@
 	                <div class="article-item">
 	                    <div class="article-meta">
                         <span>{{ article.outlet.name }}</span>
-                        {% if article.outlet.bias_score %}
-                            {% set b = article.outlet.bias_score | int %}
-                            <span class="bias-tag bias-{{ b }}">
-                                {% if b == 1 %}Left{% elif b == 2 %}Lean Left{% elif b == 3 %}Center{% elif b == 4 %}Lean Right{% elif b == 5 %}Right{% endif %}
-                            </span>
-                        {% endif %}
+                        {{ bias_tag(article.outlet.bias_score if article.outlet else none, unrated=false) }}
 	                        <span class="local-date" data-utc="{{ article.date.isoformat() }}Z">{{ article.date.strftime('%b %d, %Y') }}</span>
 	                    </div>
 	                    <a href="{{ url_for('public.view_article', article_id=article.id, back=incoming_back()) }}" class="article-link">{{ article.title }}</a>

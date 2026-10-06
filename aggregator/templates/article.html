@@ -1,3 +1,4 @@
+{% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/article.html -->
 {% from 'icons.html' import icon, theme_toggle_label %}
@@ -102,11 +103,6 @@
             letter-spacing: 0.5px;
         }
 
-        .bias-1 { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
-        .bias-2 { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
-        .bias-3 { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
-        .bias-4 { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
-        .bias-5 { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background-color: #ddd; color: #666;  }
 
         .source-badge {
@@ -376,19 +372,7 @@
                 <span class="article-date">Updated: <span class="local-date" data-utc="{{ article.last_updated.isoformat() }}Z">{{ article.last_updated.strftime('%B %d, %Y %H:%M') }}</span></span>
             {% endif %}
 
-            {% if article.outlet.bias_score == 1 %}
-                <span class="bias-tag bias-1">Left</span>
-            {% elif article.outlet.bias_score == 2 %}
-                <span class="bias-tag bias-2">Lean Left</span>
-            {% elif article.outlet.bias_score == 3 %}
-                <span class="bias-tag bias-3">Center</span>
-            {% elif article.outlet.bias_score == 4 %}
-                <span class="bias-tag bias-4">Lean Right</span>
-            {% elif article.outlet.bias_score == 5 %}
-                <span class="bias-tag bias-5">Right</span>
-            {% else %}
-                <span class="bias-tag bias-none">Unrated</span>
-            {% endif %}
+            {{ bias_tag(article.outlet.bias_score if article.outlet else none) }}
         </div>
 
         <h1><a href="{{ article.url }}" target="_blank" style="color: inherit; text-decoration: none;">{{ article.title }}</a></h1>

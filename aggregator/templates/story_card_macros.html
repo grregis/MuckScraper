@@ -1,0 +1,72 @@
+{# Shared story-card pieces for the aggregator's story lists (All / Grouped
+   Stories in articles.html, Headlines in headlines_feed.html) and the bias
+   chips used across pages. Styles: static/css/story_card.css and theme.css.
+   Import WITH CONTEXT (the card uses url_for, current_back, can):
+     {% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
+   muckscraper.news uses macros.html, not this file. #}
+{% from 'icons.html' import icon %}
+
+{% set bias_names = {1: 'Left', 2: 'Lean Left', 3: 'Center', 4: 'Lean Right', 5: 'Right'} %}
+
+{# Bias chip for a 1-5 score. `prefix` labels a second chip ("Article: ");
+   `unrated=false` renders nothing for a missing score. #}
+{% macro bias_tag(score, prefix='', unrated=true) -%}
+{%- set b = score|int if score is not none else 0 -%}
+{%- if b in bias_names -%}
+<span class="bias-tag bias-{{ b }}">{{ prefix }}{{ bias_names[b] }}</span>
+{%- elif unrated -%}
+<span class="bias-tag bias-none">Unrated</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# Left / Center / Right counts from each article's outlet rating
+   (1-2 Left, 3 Center, 4-5 Right). #}
+{% macro bias_balance(story) -%}
+{%- set counts = namespace(left=0, center=0, right=0) -%}
+{%- for art in story.articles -%}
+    {%- set s = art.outlet.bias_score if art.outlet else none -%}
+    {%- if s in [1, 2] %}{% set counts.left = counts.left + 1 %}
+    {%- elif s == 3 %}{% set counts.center = counts.center + 1 %}
+    {%- elif s in [4, 5] %}{% set counts.right = counts.right + 1 %}
+    {%- endif -%}
+{%- endfor -%}
+<div class="bias-balance">
+    <div class="bias-col left"><div class="bias-col-label">Left</div><div class="bias-col-count">{{ counts.left }}</div></div>
+    <div class="bias-col center"><div class="bias-col-label">Center</div><div class="bias-col-count">{{ counts.center }}</div></div>
+    <div class="bias-col right"><div class="bias-col-label">Right</div><div class="bias-col-count">{{ counts.right }}</div></div>
+</div>
+{%- endmacro %}
+
+{# The card shell: image, headline, one metadata row. The page fills the
+   rest through `{% call story_card(story) %} ... {% endcall %}`. #}
+{% macro story_card(story) -%}
+<div class="story" id="story-{{ story.id }}">
+    <div class="story-layout">
+        {% set featured_article = story.articles|selectattr('image_url')|first %}
+        <div class="story-image">
+            {% if featured_article and featured_article.image_url %}
+                <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
+            {% else %}
+                <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
+            {% endif %}
+        </div>
+
+        <div class="story-content">
+            <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
+
+            {% set article_count = story.articles|length %}
+            <div class="card-meta">
+                {% if story.last_updated %}
+                    <span class="meta-item">Updated <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }} UTC</span></span>
+                {% endif %}
+                <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
+                {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
+                {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
+                {% if story.edition_has_updates %}<span class="card-flag flag-new">New updates</span>{% endif %}
+            </div>
+
+            {{ caller() }}
+        </div>
+    </div>
+</div>
+{%- endmacro %}

@@ -1,3 +1,4 @@
+{% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'pagination.html' import pager %}
@@ -80,62 +81,22 @@
 
     {% if stories %}
         {% for story in stories %}
-        <div class="story" id="story-{{ story.id }}">
-            <div class="story-layout">
-                {% set featured_article = story.articles|selectattr('image_url')|first %}
-                <div class="story-image">
-                    {% if featured_article and featured_article.image_url %}
-                        <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
-                    {% else %}
-                        <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
-                    {% endif %}
+        {% call story_card(story) %}
+            {{ bias_balance(story) }}
+
+            {% if story.summary %}
+                <div class="summary">
+                    <div class="summary-label">The Big Picture</div>
+                    {{ story.summary | get_big_picture }}
                 </div>
+            {% else %}
+                <div class="summary pending">Analysis pending — this story hasn't been summarized yet.</div>
+            {% endif %}
 
-                <div class="story-content">
-                    <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
-
-                    {% set article_count = story.articles|length %}
-                    <div class="card-meta">
-                        {% if story.last_updated %}
-                            <span class="meta-item">Updated <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }} UTC</span></span>
-                        {% endif %}
-                        <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
-                        {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
-                        {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
-                        {% if story.edition_has_updates %}<span class="card-flag flag-new">New updates</span>{% endif %}
-                    </div>
-
-                    {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
-                    {% for art in story.articles %}
-                        {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
-                        {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
-                        {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
-                        {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
-                        {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
-                        {% endif %}
-                    {% endfor %}
-
-                    <div class="bias-balance">
-                        <div class="bias-col left"><div class="bias-col-label">Left</div><div class="bias-col-count">{{ counts.b1 + counts.b2 }}</div></div>
-                        <div class="bias-col center"><div class="bias-col-label">Center</div><div class="bias-col-count">{{ counts.b3 }}</div></div>
-                        <div class="bias-col right"><div class="bias-col-label">Right</div><div class="bias-col-count">{{ counts.b4 + counts.b5 }}</div></div>
-                    </div>
-
-                    {% if story.summary %}
-                        <div class="summary">
-                            <div class="summary-label">The Big Picture</div>
-                            {{ story.summary | get_big_picture }}
-                        </div>
-                    {% else %}
-                        <div class="summary pending">Analysis pending — this story hasn't been summarized yet.</div>
-                    {% endif %}
-
-                    <div class="card-actions">
-                        <a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" class="btn btn-dark">View full coverage & analysis →</a>
-                    </div>
-                </div>
+            <div class="card-actions">
+                <a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" class="btn btn-dark">View full coverage & analysis →</a>
             </div>
-        </div>
+        {% endcall %}
         {% endfor %}
 
         {{ pager(page, total_pages) }}

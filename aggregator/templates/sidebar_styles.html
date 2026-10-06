@@ -161,8 +161,9 @@
 /* Phones: the menu starts closed and slides over the page instead of
    squeezing it; the button opens it (Regis, 2026-10-06: on a phone the
    button was unreachable and the open menu took most of the screen). The
-   rest of the phone layout is the mobile pass. */
-@media (max-width: 768px) {
+   rest of the phone layout is the mobile pass. Short, wide windows (a phone
+   in landscape, under 500px tall) count as phones too (Regis, 2026-10-06). */
+@media (max-width: 768px), (max-height: 500px) {
     .sidebar {
         position: fixed;
         left: 0;
@@ -179,6 +180,11 @@
         min-width: 240px;
         box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
     }
+    /* In landscape the menu is taller than the screen: the list scrolls
+       (.sidebar-content), so show a thin scroll bar as the hint. */
+    .sidebar-content { scrollbar-width: thin; }
+    .sidebar-content::-webkit-scrollbar { display: block; width: 4px; }
+    .sidebar-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.35); border-radius: 2px; }
     .sidebar-toggle-btn { left: 0; top: 12px; }
     .sidebar.mobile-open + .sidebar-toggle-btn { left: 240px; }
 }

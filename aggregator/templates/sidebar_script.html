@@ -1,7 +1,9 @@
     // ── Sidebar ──
-    // Phones (matches the 768px rule in sidebar_styles.html) start with the
-    // menu closed every time and don't touch the saved desktop preference.
-    const sidebarIsPhone = window.matchMedia('(max-width: 768px)').matches;
+    // Phones (same query as sidebar_styles.html: narrow, or short and wide as
+    // in landscape) start with the menu closed every time and don't touch
+    // the saved desktop preference.
+    const sidebarPhoneQuery = window.matchMedia('(max-width: 768px), (max-height: 500px)');
+    let sidebarIsPhone = sidebarPhoneQuery.matches;
 
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
@@ -20,12 +22,27 @@
 
     let savedSidebar = null;
     try { savedSidebar = localStorage.getItem('muckscraper-sidebar'); } catch (e) {}
-    if (sidebarIsPhone) {
-        document.getElementById('sidebar-toggle').textContent = '»';
-    } else if (savedSidebar === 'collapsed') {
-        document.getElementById('sidebar').classList.add('collapsed');
-        document.getElementById('sidebar-toggle').textContent = '»';
+    function applySidebarMode() {
+        const sidebar = document.getElementById('sidebar');
+        const btn = document.getElementById('sidebar-toggle');
+        sidebar.classList.remove('mobile-open');
+        if (sidebarIsPhone) {
+            sidebar.classList.remove('collapsed');
+            btn.textContent = '»';
+        } else {
+            const collapsed = savedSidebar === 'collapsed';
+            sidebar.classList.toggle('collapsed', collapsed);
+            btn.textContent = collapsed ? '»' : '«';
+        }
     }
+    applySidebarMode();
+    // Rotating a phone can cross the query (portrait 390x844 is a phone by
+    // width, landscape 844x390 by height), so re-apply when it changes.
+    sidebarPhoneQuery.addEventListener('change', (e) => {
+        sidebarIsPhone = e.matches;
+        try { savedSidebar = localStorage.getItem('muckscraper-sidebar'); } catch (err) {}
+        applySidebarMode();
+    });
 
     // ── LLM status ──
     // One row per *distinct* provider, not per tier: LLM_FAST_PROVIDER

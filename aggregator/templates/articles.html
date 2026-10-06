@@ -1,3 +1,4 @@
+{% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'pagination.html' import pager %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
@@ -160,7 +161,7 @@
         .active-topic-label {
             font-size: 14px;
             font-weight: 600;
-            color: var(--accent-light);
+            color: var(--accent-text);
             margin-bottom: 24px;
             display: inline-block;
             padding: 4px 12px;
@@ -267,7 +268,7 @@
         }
         .article-title:hover { color: var(--accent-text); text-decoration: underline; }
 
-        .full-text-link       { font-size: 12px; font-weight: 600; color: var(--accent-light); text-decoration: none; }
+        .full-text-link       { font-size: 12px; font-weight: 600; color: var(--accent-text); text-decoration: none; }
         .full-text-link:hover { text-decoration: underline; }
 
         .outlet-name { color: var(--text-muted); font-size: 13px; font-weight: 500; }
@@ -314,11 +315,6 @@
             letter-spacing: 0.5px;
         }
 
-        .bias-1    { background-color: var(--bias-1-bg); color: var(--bias-1-fg); }
-        .bias-2    { background-color: var(--bias-2-bg); color: var(--bias-2-fg); }
-        .bias-3    { background-color: var(--bias-3-bg); color: var(--bias-3-fg); }
-        .bias-4    { background-color: var(--bias-4-bg); color: var(--bias-4-fg); }
-        .bias-5    { background-color: var(--bias-5-bg); color: var(--bias-5-fg); }
         .bias-none { background-color: #ddd;    color: #666;  }
 
         .article-actions { margin-left: auto; display: flex; gap: 8px; }
@@ -448,47 +444,10 @@
 
         {% if stories %}
             {% for story in stories %}
-            <div class="story" id="story-{{ story.id }}">
-                <div class="story-layout">
-                    {% set featured_article = story.articles|selectattr('image_url')|first %}
-                    <div class="story-image">
-                        {% if featured_article and featured_article.image_url %}
-                            <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
-                        {% else %}
-                            <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="story-content">
-                        <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
-
-                        {% set article_count = story.articles|length %}
-                        <div class="card-meta">
-                            {% if story.last_updated %}
-                                <span class="meta-item">Updated <span class="local-date" data-utc="{{ story.last_updated.isoformat() }}Z">{{ story.last_updated.strftime('%Y-%m-%d %H:%M') }}</span></span>
-                            {% endif %}
-                            <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
-                            {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
-                            {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
-                        </div>
-
+            {% call story_card(story) %}
                         {% if story.articles|length > 1 %}
                             {# Multi-article Story Uniform Layout #}
-                            {% set counts = namespace(b1=0, b2=0, b3=0, b4=0, b5=0) %}
-                            {% for art in story.articles %}
-                                {% if art.outlet.bias_score == 1 %}{% set counts.b1 = counts.b1 + 1 %}
-                                {% elif art.outlet.bias_score == 2 %}{% set counts.b2 = counts.b2 + 1 %}
-                                {% elif art.outlet.bias_score == 3 %}{% set counts.b3 = counts.b3 + 1 %}
-                                {% elif art.outlet.bias_score == 4 %}{% set counts.b4 = counts.b4 + 1 %}
-                                {% elif art.outlet.bias_score == 5 %}{% set counts.b5 = counts.b5 + 1 %}
-                                {% endif %}
-                            {% endfor %}
-
-                            <div class="bias-balance">
-                                <div class="bias-col left"><div class="bias-col-label">Left</div><div class="bias-col-count">{{ counts.b1 + counts.b2 }}</div></div>
-                                <div class="bias-col center"><div class="bias-col-label">Center</div><div class="bias-col-count">{{ counts.b3 }}</div></div>
-                                <div class="bias-col right"><div class="bias-col-label">Right</div><div class="bias-col-count">{{ counts.b4 + counts.b5 }}</div></div>
-                            </div>
+                            {{ bias_balance(story) }}
 
                             <div class="card-actions">
                                 <a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" class="btn btn-dark">View full coverage & analysis →</a>
@@ -516,19 +475,7 @@
                                     <a class="full-text-link" href="{{ url_for('public.view_article', article_id=article.id, back=current_back()) }}">{{ 'Full Summary & Text →' if current_user.is_authenticated else 'Summary →' }}</a>
 
                                     <div style="flex-basis: 100%; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                                        {% if article.outlet.bias_score == 1 %}
-                                            <span class="bias-tag bias-1">Left</span>
-                                        {% elif article.outlet.bias_score == 2 %}
-                                            <span class="bias-tag bias-2">Lean Left</span>
-                                        {% elif article.outlet.bias_score == 3 %}
-                                            <span class="bias-tag bias-3">Center</span>
-                                        {% elif article.outlet.bias_score == 4 %}
-                                            <span class="bias-tag bias-4">Lean Right</span>
-                                        {% elif article.outlet.bias_score == 5 %}
-                                            <span class="bias-tag bias-5">Right</span>
-                                        {% else %}
-                                            <span class="bias-tag bias-none">Unrated</span>
-                                        {% endif %}
+                                        {{ bias_tag(article.outlet.bias_score if article.outlet else none) }}
 
                                         {% if article.outlet.bias_source == "allsides" %}
                                             <span class="source-badge as-badge" title="Rated by AllSides">AS</span>
@@ -538,17 +485,7 @@
 
                                         {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
                                             <span style="color:var(--text-faint); font-size: var(--fs-label);">•</span>
-                                            {% if article.bias_score == 1 %}
-                                                <span class="bias-tag bias-1">Article: Left</span>
-                                            {% elif article.bias_score == 2 %}
-                                                <span class="bias-tag bias-2">Article: Lean Left</span>
-                                            {% elif article.bias_score == 3 %}
-                                                <span class="bias-tag bias-3">Article: Center</span>
-                                            {% elif article.bias_score == 4 %}
-                                                <span class="bias-tag bias-4">Article: Lean Right</span>
-                                            {% elif article.bias_score == 5 %}
-                                                <span class="bias-tag bias-5">Article: Right</span>
-                                            {% endif %}
+                                            {{ bias_tag(article.bias_score, prefix='Article: ', unrated=false) }}
                                         {% endif %}
 
                                         {% if can('scraper') %}
@@ -605,9 +542,7 @@
                                 {% endfor %}
                             </ul>
                         {% endif %}
-                    </div>
-                </div>
-            </div>
+            {% endcall %}
             {% endfor %}
         {% else %}
             <div class="empty">
