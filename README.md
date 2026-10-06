@@ -127,7 +127,7 @@ muckscraper/
 
 ## Security Warning
 
-By default every page requires a login. The app is built as a private admin tool, so even with public read access turned on (below), don't expose it directly to the public internet.
+By default every page requires a login. Setting `PUBLIC_READ_ACCESS=true` (see Accounts and public access) opens the reading pages to signed-out visitors. The app is built as a private admin tool either way, so don't expose it directly to the public internet.
 
 Recommended deployment:
 - keep the admin interface on a local network
@@ -172,7 +172,7 @@ Add accounts at **Users** in the account menu (top right). Each has one of three
 
 Everyone can change their own email and password on their **Profile**.
 
-Set `PUBLIC_READ_ACCESS=true` in `.env` to let signed-out visitors read Headlines, story pages and article summaries. They never see scraped full text or any button that runs work. It is off by default.
+Set `PUBLIC_READ_ACCESS=true` in `.env` to let signed-out visitors read Headlines, All Stories, Grouped Stories (with the topic filters), story pages and article summaries. Search and Fetch still need an account. Signed-out visitors never see scraped full text, scrape details or any button that runs work. It is off by default; after changing it, run `docker compose up -d app`.
 
 Dates are shown in the time zone set by `DISPLAY_TIMEZONE` in `.env` (an IANA name such as `America/New_York`; default `UTC`). After changing it, run `docker compose up -d app`; a plain restart doesn't re-read `.env`.
 
