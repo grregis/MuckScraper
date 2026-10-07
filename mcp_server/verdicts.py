@@ -150,14 +150,47 @@ def history_flags(entries):
 # Ollama
 # ---------------------------------------------------------------------------
 
+def _model_key(name):
+    name = (name or "").strip()
+    return name[:-len(":latest")] if name.endswith(":latest") else name
+
+
+def parse_expected_contexts(text):
+    """MCP_EXPECTED_OLLAMA_CONTEXT -> {"*": default, "<model>": size, ...}.
+
+    "65536" sets the server default. "65536,gemma4-12b-16k=16384" adds a
+    per-model size, for a model whose own definition fixes num_ctx (a
+    Modelfile PARAMETER), which the server default doesn't apply to.
+    Unparseable parts are ignored.
+    """
+    out = {}
+    for part in (text or "").split(","):
+        part = part.strip()
+        if "=" in part:
+            name, _, size = part.rpartition("=")
+            if size.strip().isdigit() and name.strip():
+                out[_model_key(name)] = int(size)
+        elif part.isdigit():
+            out["*"] = int(part)
+    return out
+
+
 def ollama_verdict(probe, last_run_ollama, suspend_fired_after_last_run, expected_context=None):
     """probe: {"result": "ok"|"refused"|"timeout"|"hung"|"error"|"not_configured",
     "models": [{"name", "size", "size_vram", "context_length"}]}.
 
     expected_context: the server's configured context (OLLAMA_CONTEXT_LENGTH on
-    the Ollama host). MuckScraper never sends num_ctx, so a model loaded at any
+    the Ollama host) as an int, or a dict from parse_expected_contexts() with
+    per-model sizes. MuckScraper never sends num_ctx, so a model loaded at any
     other size was loaded by another client.
     """
+    if isinstance(expected_context, int):
+        expected_context = {"*": expected_context}
+    expected_context = expected_context or {}
+
+    def expected_for(name):
+        return expected_context.get(_model_key(name), expected_context.get("*"))
+
     result = probe.get("result")
     if result == "not_configured":
         return OK, "OLLAMA_HOST is not set; this install does not use Ollama."
@@ -169,12 +202,13 @@ def ollama_verdict(probe, last_run_ollama, suspend_fired_after_last_run, expecte
                 "Ollama answers, but these models are partly on CPU (size_vram < size), so every "
                 "call is slow: " + ", ".join(partial) + ". Usually the GPU is short of memory."
             )
-        foreign = [f"{m['name']} ({m['context_length']})" for m in models
-                   if expected_context and m.get("context_length") and m["context_length"] != expected_context]
+        foreign = [f"{m['name']} ({m['context_length']}, expected {expected_for(m['name'])})" for m in models
+                   if expected_for(m.get("name")) and m.get("context_length")
+                   and m["context_length"] != expected_for(m.get("name"))]
         if foreign:
             return WARNING, (
-                f"Another client is using Ollama: loaded at a context size other than the configured "
-                f"{expected_context}: " + ", ".join(foreign) + ". Ollama serves one request per model at a "
+                "Another client is using Ollama: loaded at a context size other than the configured "
+                "one: " + ", ".join(foreign) + ". Ollama serves one request per model at a "
                 "time, so a long request from that client makes the pipeline's calls queue and time out, "
                 "and a different context size forces model reloads. Keep other clients off Ollama during "
                 "runs (run_status) and don't let them set num_ctx."

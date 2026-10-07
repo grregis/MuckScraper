@@ -72,7 +72,7 @@ numbers. Times are UTC.
 | `MCP_BIND` | `127.0.0.1` | Host address the port is published on. Use `0.0.0.0` (or a LAN address) to reach it from another machine. |
 | `MCP_PORT` | `8765` | Host port. |
 | `MCP_ALLOWED_HOSTS` | (none) | Comma-separated host names. When set, requests with any other `Host` header are refused (useful behind a reverse proxy). |
-| `MCP_EXPECTED_OLLAMA_CONTEXT` | (none) | Your Ollama server's configured context size. `ollama_health` then reports a model loaded at a different size, which means another client is using Ollama. |
+| `MCP_EXPECTED_OLLAMA_CONTEXT` | (none) | Your Ollama server's configured context size. `ollama_health` then reports a model loaded at a different size, which means another client is using Ollama. For a model whose own definition fixes its context (a Modelfile `PARAMETER num_ctx`), add `name=size`: `65536,gemma4-12b-16k=16384`. |
 | `MCP_OLLAMA_PROBE_LOG` | (none) | Path inside the container to a ping/port probe log, if you keep one; mount it with a `docker-compose.override.yml`. Its tail is included in `ollama_health`. |
 
 ### Reaching it from another machine

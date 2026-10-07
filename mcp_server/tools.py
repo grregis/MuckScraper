@@ -247,9 +247,8 @@ def ollama_health():
     if last_webhook and last_finished:
         wh = v.parse_iso(last_webhook.replace(" ", "T"))
         suspend_after = bool(wh and wh >= last_finished - timedelta(minutes=5))
-    expected_ctx = os.environ.get("MCP_EXPECTED_OLLAMA_CONTEXT", "").strip()
-    level, summary = v.ollama_verdict(probe, report.get("ollama"), suspend_after,
-                                      int(expected_ctx) if expected_ctx.isdigit() else None)
+    expected_ctx = v.parse_expected_contexts(os.environ.get("MCP_EXPECTED_OLLAMA_CONTEXT", ""))
+    level, summary = v.ollama_verdict(probe, report.get("ollama"), suspend_after, expected_ctx)
     out = {
         "verdict": level,
         "summary": summary,

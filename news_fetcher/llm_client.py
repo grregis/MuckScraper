@@ -43,6 +43,29 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 # everything, which is exactly the old single-model behavior.
 OLLAMA_FAST_MODEL = os.environ.get("OLLAMA_FAST_MODEL", "") or OLLAMA_MODEL
 
+
+def _parse_think(value):
+    """OLLAMA_THINK: blank -> None (send nothing), true/false -> bool."""
+    value = (value or "").strip().lower()
+    if value in ("", "default"):
+        return None
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    logger.warning(f"[llm_client] Ignoring unrecognised OLLAMA_THINK={value!r}; expected true or false")
+    return None
+
+
+# Thinking models (gemma4, qwen3, deepseek-r1, ...) reason before answering
+# unless told not to, and that hidden reasoning is most of a call's cost: on
+# gemma4 a one-line headline took ~800 tokens with it and ~15 without. Blank
+# sends nothing, so Ollama's own default applies (thinking on for those
+# models). "false" turns it off for every generate call made through this
+# module. Only set it for a model that supports thinking: Ollama rejects the
+# flag for models that don't.
+OLLAMA_THINK = _parse_think(os.environ.get("OLLAMA_THINK", ""))
+
 # How long to keep serving from the fallback host before re-probing whether the
 # primary has come back online (issue #7's "detects that it comes online").
 OLLAMA_PRIMARY_RECHECK_SECONDS = int(
@@ -383,10 +406,14 @@ def _generate_text_ollama(prompt, timeout, model=None):
 
     model = model or OLLAMA_MODEL
 
+    body = {"model": model, "prompt": prompt, "stream": False}
+    if OLLAMA_THINK is not None:
+        body["think"] = OLLAMA_THINK
+
     def _call(host):
         response = requests.post(
             f"{host}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
+            json=body,
             timeout=timeout,
         )
         response.raise_for_status()

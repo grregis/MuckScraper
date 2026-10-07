@@ -7,6 +7,10 @@ All notable changes to MuckScraper are documented here.
 ## [Unreleased]
 
 ### Added
+- **`OLLAMA_THINK`** (optional, blank by default). Set it to `false` to turn
+  off a thinking model's hidden reasoning (gemma4, qwen3, deepseek-r1), which
+  is most of the time those models spend per call. Blank keeps Ollama's
+  default, so existing installs are unchanged.
 - **Read-only MCP server** (`mcp_server/`, docs in `docs/MCP.md`), off by
   default behind the `mcp` Compose profile. Gives an AI assistant health and
   troubleshooting checks: run status and history, last run, filtered scheduler
