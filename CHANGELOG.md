@@ -4,6 +4,20 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [Unreleased]
+
+### Added
+- **Read-only MCP server** (`mcp_server/`, docs in `docs/MCP.md`), off by
+  default behind the `mcp` Compose profile. Gives an AI assistant health and
+  troubleshooting checks: run status and history, last run, filtered scheduler
+  logs, Ollama state (without waking the box), outage signs, edition lineups,
+  quality report, story/article lookup and search, scrape and bias coverage,
+  containers, search index, whether running code is current, and a runbook
+  lookup over the docs. The database connection refuses writes, the checkout
+  is mounted read-only, and HTTP access needs a bearer token (`MCP_TOKEN`).
+- `docker-restart-proxy` lists each container's start time and restart count,
+  and has a bounded, read-only log route (`GET /containers/<name>/logs`).
+
 ## [0.8.0] - 2026-10-05
 
 Status: beta. This release covers three areas. The first is **a reading and

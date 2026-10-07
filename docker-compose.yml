@@ -126,6 +126,45 @@ services:
     volumes:
       - .:/app
 
+  # Optional read-only MCP server for health checks and troubleshooting
+  # (docs/MCP.md). Off unless started with `docker compose --profile mcp up -d`.
+  # The checkout is mounted read-only and the database connection refuses
+  # writes; container logs come from docker-restart-proxy, not the socket.
+  mcp:
+    profiles: ["mcp"]
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    depends_on:
+      - postgres
+      - meilisearch
+      - docker-restart-proxy
+    ports:
+      - "${MCP_BIND:-127.0.0.1}:${MCP_PORT:-8765}:8765"
+    environment:
+      MCP_TOKEN: ${MCP_TOKEN:-}
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+      OLLAMA_PROBE_LOG: ${MCP_OLLAMA_PROBE_LOG:-}
+      MCP_EXPECTED_OLLAMA_CONTEXT: ${MCP_EXPECTED_OLLAMA_CONTEXT:-}
+      SECRET_KEY: ${SECRET_KEY}
+      DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-UTC}
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_FALLBACK_HOST: ${OLLAMA_FALLBACK_HOST:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_FAST_MODEL: ${OLLAMA_FAST_MODEL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
+      DOCKER_RESTART_PROXY_URL: http://docker-restart-proxy:5001
+      PYTHONDONTWRITEBYTECODE: "1"
+      GIT_OPTIONAL_LOCKS: "0"
+    volumes:
+      - .:/app:ro
+    restart: unless-stopped
+
 networks:
   default:
     name: app-network

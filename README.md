@@ -92,7 +92,9 @@ muckscraper/
 │   │   └── public.py               # Public reader routes
 │   ├── static/                     # Shared static assets (css/theme.css holds the colour tokens)
 │   └── templates/                  # Jinja templates
-├── docker_restart_proxy/           # Small service that lets the admin UI restart containers
+├── docker_restart_proxy/           # Small service that lets the admin UI restart containers (and the MCP server read logs)
+├── mcp_server/                     # Optional read-only MCP server for AI assistants (docs/MCP.md)
+├── docs/                           # Longer guides (MCP.md)
 ├── migrations/                     # Alembic migration files
 ├── news_fetcher/
 │   ├── Dockerfile                  # Scheduler image
@@ -205,6 +207,10 @@ entry, never shipped silently in a minor/patch upgrade.
 ### Optional workflow integrations
 
 MuckScraper can be extended with personal workflow hooks, such as n8n webhooks for fetch reports or Ollama power management, and Matrix notifications for status messages. These are not part of the default Docker Compose setup; add them with your own environment variables, compose override, or notification code if you want those workflows.
+
+### MCP server for AI assistants (optional)
+
+An optional, read-only [MCP](https://modelcontextprotocol.io) server lets an AI assistant (Claude, or a local agent on your own Ollama) check on the install: whether a run is in progress, how the last run went, whether Ollama is asleep or broken, what is in an edition, and the documented fix for a symptom. It cannot change anything. Set `MCP_TOKEN` in `.env` and start it with `docker compose --profile mcp up -d --build mcp docker-restart-proxy`. See [docs/MCP.md](docs/MCP.md) for the tools, setup and client examples.
 
 ---
 
