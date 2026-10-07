@@ -295,11 +295,19 @@ def collect_summaries(since, samples):
             report = story.deep_report
             analysis_type = detect_analysis_type(story)
 
+            titles = []
             if not summary:
                 problems.append("no_summary")
             else:
                 if qc.looks_truncated(summary):
                     problems.append("summary_truncated")
+                # Applies to single-source stories too: their summary is the
+                # article summary, and that is where the model fills titles in
+                # from memory most often (thin or blocked source text).
+                bad_titles = qc.unsupported_former_titles(summary, _source_texts(story))
+                if bad_titles:
+                    problems.append("summary_unsupported_title")
+                    titles += bad_titles
                 # A single-source story's Story.summary IS the article summary
                 # (edition_content.py copies it), so Smart Brevity headers and
                 # their length are by design there. The story_summary prompt's
@@ -325,6 +333,10 @@ def collect_summaries(since, samples):
                     problems.append("the_story_slot_renders_empty")
                 if qc.looks_truncated(report):
                     problems.append("report_truncated")
+                bad_titles = qc.unsupported_former_titles(report, _source_texts(story))
+                if bad_titles:
+                    problems.append("report_unsupported_title")
+                    titles += [t for t in bad_titles if t not in titles]
             else:
                 missing = []
 
@@ -341,6 +353,7 @@ def collect_summaries(since, samples):
                     "missing_labels": missing,
                     "headline": story.display_headline,
                     "summary_tail": summary[-80:] if "summary_truncated" in problems else None,
+                    "unsupported_titles": titles or None,
                 })
 
     return {

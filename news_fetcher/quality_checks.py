@@ -406,3 +406,59 @@ def unsupported_entities(text, source_texts):
         if _fold(token) not in haystack:
             found.append(token)
     return found
+
+
+# ---------------------------------------------------------------------------
+# Titles the sources don't give
+# ---------------------------------------------------------------------------
+# The model knows most people from its training years, so when the sources
+# don't state a title it can fill one in from memory: "former President Trump"
+# (the 2021-2024 title) in 69 stories and 185 article summaries by 2026-10-07,
+# none of whose sources said it. Every writing prompt already forbids titles
+# the sources don't state; this checks the output.
+
+_OFFICES = (
+    r"vice[ -]president|president|prime minister|senator|sen\.|governor|gov\.|"
+    r"secretary of state|secretary|attorney general|speaker|mayor|chancellor|"
+    r"representative|rep\.|ambassador|director|chairman|chair|ceo"
+)
+# "former" and the office match any case; the name must be capitalized words,
+# so "former President Trump announced" captures "Trump", not "Trump announced".
+_FORMER_TITLE_RE = re.compile(
+    r"\b(?i:former)\s+(?:(?:U\.?S\.?|US|American)\s+)?((?i:" + _OFFICES + r"))\s+"
+    r"((?:(?:[A-Z]\.|[A-Z][\w'\u2019-]+)\s+){0,2}[A-Z][\w'\u2019-]+)"
+)
+_OFFICE_FORMS = {"gov": "gov|governor", "governor": "gov|governor", "sen": "sen|senator",
+                 "senator": "sen|senator", "rep": "rep|representative",
+                 "representative": "rep|representative"}
+
+
+def unsupported_former_titles(text, source_texts):
+    """'former <office> <Name>' phrases in `text` that no source supports.
+
+    A source supports one when it pairs "former" with the same office and the
+    person's surname within a short span, in either order ("former President
+    Donald Trump", "Trump, the former president"). A candidate list for review,
+    like unsupported_entities(): sources are often truncated, so a hit means
+    "look at this", not a proven error.
+    """
+    if not text:
+        return []
+    haystack = " ".join(_fold(s) for s in (source_texts or []))
+    found = []
+    for match in _FORMER_TITLE_RE.finditer(text):
+        office = _fold(match.group(1)).rstrip(".")
+        surname = re.sub(r"['\u2019]s?$", "", _fold(match.group(2).split()[-1]))
+        if not surname[:1].isalpha():
+            continue
+        forms = _OFFICE_FORMS.get(office, re.escape(office).replace(r"\ ", r"[ -]"))
+        office_re = rf"(?:{forms})\.?"
+        near = (
+            rf"\bformer\s+(?:\S+\s+){{0,2}}{office_re}\b.{{0,40}}?\b{re.escape(surname)}\b"
+            rf"|\b{re.escape(surname)}\b.{{0,40}}?\bformer\s+(?:\S+\s+){{0,2}}{office_re}\b"
+        )
+        if not re.search(near, haystack):
+            phrase = " ".join(match.group(0).split())
+            if phrase not in found:
+                found.append(phrase)
+    return found
