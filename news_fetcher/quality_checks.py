@@ -168,11 +168,36 @@ def headline_looks_truncated(headline):
     return None
 
 
+# Words whose trailing period is an abbreviation, not a sentence end. Without
+# this "U.S." and "Gov." split a four-sentence summary into nine (2026-10-06).
+_ABBREVIATIONS = {
+    "u.s", "u.k", "u.n", "e.u", "d.c", "gov", "sen", "rep", "rev", "dr", "mr",
+    "mrs", "ms", "st", "jr", "sr", "gen", "lt", "col", "sgt", "capt", "adm",
+    "no", "vs", "inc", "corp", "co", "ltd", "a.m", "p.m", "jan", "feb", "aug",
+    "sept", "sep", "oct", "nov", "dec", "mt", "ft", "approx", "dept", "est",
+}
+_SENTENCE_BREAK = re.compile(r"[.!?]['\"\u201d\u2019)]*\s+")
+
+
 def sentence_count(text):
-    """Rough sentence count, for prompts that mandate a range ("3 to 5")."""
-    if not text:
+    """Rough sentence count, for prompts that mandate a range ("3 to 5").
+    A period after a known abbreviation or a single initial ("John F.
+    Kennedy") does not end a sentence."""
+    if not text or not text.strip():
         return 0
-    return len([s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()])
+    text = text.strip()
+    count = 1
+    for match in _SENTENCE_BREAK.finditer(text):
+        if match.end() >= len(text):
+            break
+        # A period inside closing quotes ('said "no."') always ends a sentence.
+        if text[match.start()] == "." and not match.group()[1:].strip():
+            before = text[:match.start()].split()
+            word = before[-1].lstrip("(\"'\u201c").lower() if before else ""
+            if word in _ABBREVIATIONS or (len(word) == 1 and word.isalpha()):
+                continue
+        count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------

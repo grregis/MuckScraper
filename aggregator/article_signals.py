@@ -14,6 +14,10 @@ ROUNDUP_TITLE_PATTERNS = (
     # generator then writes the story up from the listing rather than from the
     # reporting. Cost a rank-7 headline in the 2026-08-09 morning edition.
     re.compile(r"\b(?:sunday|weekend)\s+shows?\s+preview\b", re.IGNORECASE),
+    # Toronto Sun's daily digest ("News of the day: X, and more"). It names
+    # several unrelated stories and was grouped into a one-outlet pair that
+    # reached the 2026-10-06 evening edition (78604).
+    re.compile(r"^\s*news of the day\s*:", re.IGNORECASE),
 )
 
 ROUNDUP_URL_HINTS = (
