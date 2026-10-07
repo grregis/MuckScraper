@@ -7,6 +7,8 @@ news_fetcher/scraper.py, and templates clean it again at render time in case
 anything was stored by another path (an older scrape, a fallback, a manual
 edit). Formatting survives; anything that can run code does not.
 """
+import re
+
 import bleach
 from markupsafe import Markup, escape
 
@@ -54,3 +56,27 @@ def plain_text_br(text):
     if not text:
         return Markup("")
     return Markup("<br>").join(escape(text).split("\n"))
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def strip_title_tags(text):
+    """Remove embedded markup from a title/headline (some outlets, e.g.
+    National Review's culture pieces, put <i>/<em>/<font> tags straight in
+    their RSS <title>). Titles are always rendered as plain text (story
+    cards, "In Brief", <title>/OG tags), never through clean_html, so a
+    literal tag leaks onto the page as text instead of rendering.
+
+    Tags are deleted outright, not replaced with a space -- titles has them
+    sitting flush against a word with no whitespace of their own
+    ("<i>Re</i>fund"), so inserting a space produces "Re fund". Any
+    whitespace the title actually needs survives around the tags in the
+    source text; this only removes the tags.
+    """
+    if not text:
+        return text
+    text = _TAG_RE.sub("", text)
+    text = (text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&nbsp;", " ").replace("&quot;", '"').replace("&#39;", "'"))
+    return re.sub(r"\s+", " ", text).strip()

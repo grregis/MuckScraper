@@ -12,6 +12,7 @@ import json
 import os
 from aggregator import db
 from aggregator.article_signals import bias_bucket_for_score, is_roundup_article, low_value_article_reason
+from aggregator.html_safety import strip_title_tags
 from aggregator.models import Article, Outlet, Story, Topic, IngestionBlock
 from news_fetcher.allsides_lookup import get_allsides_score
 from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
@@ -242,7 +243,13 @@ def store_articles(articles_data, topic_name, provider=None):
     blocked_sources, blocked_title_keywords = get_ingestion_blocks()
 
     for article in articles_data:
-        title        = article.get("title")
+        # Some outlets (National Review's culture pieces, e.g. "Not Ready for
+        # <i>Primetime</i>") embed formatting tags in their RSS <title>. The
+        # title is always shown as plain text (story cards, "In Brief",
+        # <title>/OG tags), never through the sanitized-HTML content path, so
+        # a literal "<i>" leaks straight onto the page instead of rendering.
+        # Strip tags once here rather than at every render site.
+        title        = strip_title_tags(article.get("title"))
         content      = article.get("content") or ""
         raw_url      = article.get("url")
         source_name  = source_name_from_url(raw_url) or normalize_source_name(article.get("source_name", "Unknown"))
