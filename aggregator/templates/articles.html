@@ -63,9 +63,9 @@
             position: sticky;
             top: 0;
             background: var(--topbar-bg);
-            z-index: 5;
             padding: 16px 40px;
-            margin: 0 -40px 20px;
+            margin-bottom: 20px;
+            z-index: 100;
         }
 
         h1 { font-size: 18px; font-weight: 800; color: var(--topbar-text); letter-spacing: -0.5px; }
@@ -364,7 +364,7 @@
 
         @media (max-width: 900px) {
             .main { padding: 0 20px; }
-            .main-header { padding: 16px 20px; margin: 0 -20px 20px; }
+            .main-header { padding: 16px 20px; }
         }
     </style>
 </head>
@@ -374,15 +374,17 @@
 
     {% include 'sidebar_nav.html' %}
 
-    <div class="main">
-        <div class="main-header">
-            <h1>MuckScraper</h1>
+    <div class="page-body">
+    <div class="main-header">
+        <h1>MuckScraper</h1>
 
-            <div class="header-controls">
-                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-                {{ account_menu() }}
-            </div>
+        <div class="header-controls">
+            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
+            {{ account_menu() }}
         </div>
+    </div>
+
+    <div class="main">
 
         {% if active_label %}
             <span class="active-topic-label">{{ active_label }}</span>
@@ -546,6 +548,7 @@
 
         {{ pager(page, total_pages) }}
 
+    </div>
     </div>
 </div>
 

@@ -53,8 +53,8 @@
             top: 0;
             background: var(--topbar-bg);
             padding: 16px 32px;
-            margin: 0 -32px;
-            z-index: 10;
+            margin-bottom: 16px;
+            z-index: 100;
         }
 
         h1 { font-size: 18px; font-weight: 800; color: var(--topbar-text); letter-spacing: -0.5px; }
@@ -210,7 +210,7 @@
 
         @media (max-width: 900px) {
             .main { padding: 0 16px; }
-            .main-header { padding: 16px; margin: 0 -16px; }
+            .main-header { padding: 16px 16px; }
             .col-title { min-width: 200px; }
         }
     </style>
@@ -221,14 +221,16 @@
 
     {% include 'sidebar_nav.html' %}
 
-    <div class="main">
-        <div class="main-header">
-            <h1>Search</h1>
-            <div class="header-controls">
-                <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-                {{ account_menu() }}
-            </div>
+    <div class="page-body">
+    <div class="main-header">
+        <h1>Search</h1>
+        <div class="header-controls">
+            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
+            {{ account_menu() }}
         </div>
+    </div>
+
+    <div class="main">
 
         <nav class="tabs">
             <a href="{{ tab_urls.stories }}" class="tab {{ 'active' if tab == 'stories' }}">Stories</a>
@@ -307,6 +309,7 @@
         {% if total_pages > 1 %}
         {{ pager(page, total_pages) }}
         {% endif %}
+    </div>
     </div>
 </div>
 
