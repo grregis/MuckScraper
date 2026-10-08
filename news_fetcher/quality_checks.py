@@ -32,10 +32,12 @@ import unicodedata
 # (see CLAUDE.md, "Updating LLM Prompts"), so a hardcoded table here would drift
 # silently the first time someone edited a prompt in the admin UI.
 
-# Everything between the "EXACT format" instruction and the trailing rules block
-# is the mandated structure. Both markers are present in all five deep_report.*
-# prompts as seeded in aggregator/seed_defaults.py.
-_FORMAT_START_RE = re.compile(r"using this EXACT format\s*:", re.IGNORECASE)
+# Everything between an "EXACT format" instruction and the trailing rules block
+# is a mandated structure. Prompts say it two ways ("using this EXACT format:",
+# "using EXACTLY this format:"), and some give two alternative formats
+# (deep_report.sports: one for a game that was played, one for other news), so
+# each instruction starts its own label set.
+_FORMAT_START_RE = re.compile(r"(?:this\s+EXACT|EXACTLY\s+this)\s+format\s*:", re.IGNORECASE)
 _FORMAT_END_RE = re.compile(r"^Rules\s*:", re.IGNORECASE | re.MULTILINE)
 
 # A mandated label starts a line and is followed by a bracketed instruction --
@@ -45,23 +47,7 @@ _FORMAT_END_RE = re.compile(r"^Rules\s*:", re.IGNORECASE | re.MULTILINE)
 _LABEL_RE = re.compile(r"^([A-Z][^:\n\[\]]{2,60}?)\s*:\s*\[", re.MULTILINE)
 
 
-def required_labels_for_prompt(prompt_text):
-    """Output labels a prompt mandates, in the order it lists them.
-
-    Returns [] for a prompt that mandates no labelled structure (story_summary
-    explicitly forbids labels), which callers must treat as "no contract to
-    check" rather than "every label is missing".
-    """
-    if not prompt_text:
-        return []
-
-    start = _FORMAT_START_RE.search(prompt_text)
-    body = prompt_text[start.end():] if start else prompt_text
-
-    end = _FORMAT_END_RE.search(body)
-    if end:
-        body = body[:end.start()]
-
+def _labels_in(body):
     labels = []
     for match in _LABEL_RE.finditer(body):
         label = f"{match.group(1).strip()}:"
@@ -70,12 +56,59 @@ def required_labels_for_prompt(prompt_text):
     return labels
 
 
-def missing_report_labels(report_text, prompt_text):
-    """Mandated labels absent from generated text. [] means fully compliant."""
-    required = required_labels_for_prompt(prompt_text)
-    if report_text is None:
+def required_label_sets_for_prompt(prompt_text):
+    """One label list per format the prompt offers, in prompt order.
+
+    A report complies when it carries every label of any one set. Returns []
+    for a prompt that mandates no labelled structure.
+    """
+    if not prompt_text:
         return []
-    return [label for label in required if label not in report_text]
+
+    end = _FORMAT_END_RE.search(prompt_text)
+    structure = prompt_text[:end.start()] if end else prompt_text
+
+    starts = list(_FORMAT_START_RE.finditer(structure))
+    if not starts:
+        labels = _labels_in(structure)
+        return [labels] if labels else []
+
+    sets = []
+    for i, start in enumerate(starts):
+        stop = starts[i + 1].start() if i + 1 < len(starts) else len(structure)
+        labels = _labels_in(structure[start.end():stop])
+        if labels:
+            sets.append(labels)
+    return sets
+
+
+def required_labels_for_prompt(prompt_text):
+    """Every output label a prompt mandates, across all its formats, in order.
+
+    Returns [] for a prompt that mandates no labelled structure (story_summary
+    explicitly forbids labels), which callers must treat as "no contract to
+    check" rather than "every label is missing".
+    """
+    labels = []
+    for label_set in required_label_sets_for_prompt(prompt_text):
+        labels.extend(label for label in label_set if label not in labels)
+    return labels
+
+
+def missing_report_labels(report_text, prompt_text):
+    """Mandated labels absent from generated text. [] means fully compliant.
+
+    With alternative formats, the report is judged against the one it is
+    closest to, so a correct game recap is not penalised for lacking the
+    other-news labels.
+    """
+    sets = required_label_sets_for_prompt(prompt_text)
+    if report_text is None or not sets:
+        return []
+    return min(
+        ([label for label in label_set if label not in report_text] for label_set in sets),
+        key=len,
+    )
 
 
 # Mirrors aggregator/filters.py:get_the_story()'s marker list exactly. Kept as a
