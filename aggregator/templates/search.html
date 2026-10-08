@@ -40,6 +40,10 @@
             position: relative;
         }
 
+        /* Dark top bar, matching every other page (headlines_feed.html,
+           admin_tools.html, story.html, ...) instead of the page's own
+           translucent light header this used to carry -- see CLAUDE.md's
+           note on tokens drifting per-template. */
         .main-header {
             display: flex;
             align-items: center;
@@ -47,22 +51,20 @@
             gap: 12px;
             position: sticky;
             top: 0;
-            background: rgba(248, 249, 250, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            padding: 16px 0;
+            background: var(--topbar-bg);
+            padding: 16px 32px;
+            margin: 0 -32px;
             z-index: 10;
         }
-        [data-theme="dark"] .main-header { background: rgba(15, 15, 23, 0.85); }
 
-        h1 { font-size: 24px; font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; }
+        h1 { font-size: 18px; font-weight: 800; color: var(--topbar-text); letter-spacing: -0.5px; }
 
         .theme-toggle {
-            background: var(--surface);
-            border: 1px solid var(--input-border);
-            color: var(--text);
-            padding: 8px 16px;
-            border-radius: 12px;
+            background: none;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--topbar-text);
+            padding: 6px 14px;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 600;
@@ -208,6 +210,7 @@
 
         @media (max-width: 900px) {
             .main { padding: 0 16px; }
+            .main-header { padding: 16px; margin: 0 -16px; }
             .col-title { min-width: 200px; }
         }
     </style>
