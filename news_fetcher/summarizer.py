@@ -245,9 +245,14 @@ def get_persona(analysis_type):
     return mapping.get(analysis_type, mapping['default'])
 
 
-def article_needs_deep_analysis(article):
-    """Only generate article-level deep analysis for domains where it adds value."""
-    return detect_analysis_type(article) in {"politics", "science", "business"}
+# Below this the article is a feed blurb or a blocked scrape, and a
+# four-section analysis of one sentence is padding. Same floor
+# story_view.has_good_original uses for "we actually read it".
+ARTICLE_DEEP_ANALYSIS_MIN_CHARS = 500
+
+
+def article_has_analysable_content(article):
+    return len(strip_html(article.content or "").strip()) >= ARTICLE_DEEP_ANALYSIS_MIN_CHARS
 
 
 # Shortest legitimate multi-article story summary in the 60 days to
@@ -279,6 +284,9 @@ def _story_summary_rejection(summary):
 # the output no room. 9k of content keeps the whole prompt near 11k.
 STORY_SUMMARY_CONTENT_BUDGET = 9000
 STORY_SUMMARY_EXCERPT_MAX = 1500
+# Deep reports take up to 15 articles. Was a flat 300 chars each until
+# 2026-10-08; the 64k context leaves plenty of room for this.
+DEEP_REPORT_CONTENT_BUDGET = 13500
 
 
 def _story_summary_excerpt_limits(content_lengths, budget=STORY_SUMMARY_CONTENT_BUDGET,
@@ -435,6 +443,15 @@ def generate_deep_report(story):
         )
         return None
 
+    contents = [strip_html(a.content or "").strip() for a in prompt_articles]
+    excerpt_limits = dict(zip(
+        (a.id for a in prompt_articles),
+        _story_summary_excerpt_limits([len(c) for c in contents], budget=DEEP_REPORT_CONTENT_BUDGET),
+    ))
+
+    def excerpt(a):
+        return strip_html(a.content or "")[:excerpt_limits.get(a.id, 300)].strip()
+
     for article in prompt_articles:
         score = article.bias_score
         if score is None and article.outlet:
@@ -455,10 +472,9 @@ def generate_deep_report(story):
         for a in articles:
             outlet_name = a.outlet.name if a.outlet else (a.source or "Unknown source")
             lines.append(f"- {outlet_name}: {a.title}")
-            if a.content:
-                snippet = strip_html(a.content)[:300].strip()
-                if snippet:
-                    lines.append(f"  Excerpt: {snippet}")
+            snippet = excerpt(a)
+            if snippet:
+                lines.append(f"  Excerpt: {snippet}")
         return "\n".join(lines)
 
     def format_all_articles(articles):
@@ -467,10 +483,9 @@ def generate_deep_report(story):
         for a in articles:
             outlet_name = a.outlet.name if a.outlet else (a.source or "Unknown source")
             lines.append(f"- {outlet_name}: {a.title}")
-            if a.content:
-                snippet = strip_html(a.content)[:300].strip()
-                if snippet:
-                    lines.append(f"  Excerpt: {snippet}")
+            snippet = excerpt(a)
+            if snippet:
+                lines.append(f"  Excerpt: {snippet}")
         return "\n".join(lines)
 
     # Build prompt based on analysis type
@@ -600,10 +615,10 @@ def summarize_article(article):
 @observe()
 def generate_article_deep_analysis(article):
     """
-    Generate a deeper article-level analysis for topics that benefit from it.
-    Returns analysis string or None if this topic should only receive a summary.
+    Generate a deeper article-level analysis, with a prompt per analysis type.
+    Returns None when the article has too little real text to analyse.
     """
-    if not article or not article.content or not article_needs_deep_analysis(article):
+    if not article or not article_has_analysable_content(article):
         return None
 
     if not check_ollama_status(llm_client.TIER_QUALITY):
@@ -618,21 +633,9 @@ def generate_article_deep_analysis(article):
     if not clean_content:
         return None
 
-    if analysis_type == "politics":
-        prompt = render_prompt(
-            "article_deep_analysis.politics", article_title=article.title, clean_content=clean_content
-        )
-    elif analysis_type == "science":
-        prompt = render_prompt(
-            "article_deep_analysis.science", article_title=article.title, clean_content=clean_content
-        )
-    elif analysis_type == "business":
-        prompt = render_prompt(
-            "article_deep_analysis.business", article_title=article.title, clean_content=clean_content
-        )
-    else:
-        return None
-
+    prompt = render_prompt(
+        f"article_deep_analysis.{analysis_type}", article_title=article.title, clean_content=clean_content
+    )
     if prompt is None:
         return None
 

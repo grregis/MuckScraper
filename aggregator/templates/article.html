@@ -399,6 +399,18 @@
             {% endif %}
         </div>
 
+        {% if article.deep_analysis %}
+        <div class="summary">
+            <div class="summary-label">Deep Analysis</div>
+            {% for line in article.deep_analysis.split('\n') %}
+                {% set l = line.strip() %}
+                {% if l %}
+                    <p>{{ l }}</p>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% if current_user.is_authenticated %}
         <div class="scrape-panel">
             {% set scrape_status = article.scrape_status or 'pending' %}

@@ -95,7 +95,7 @@ def _fill_story_content(story, metrics):
         generate_deep_report,
         summarize_article,
         generate_article_deep_analysis,
-        article_needs_deep_analysis,
+        article_has_analysable_content,
     )
 
     article_count = len(story.articles)
@@ -187,18 +187,16 @@ def _fill_story_content(story, metrics):
                     logger.info(f"    [Processor] Child article summary: {article.title[:60]}")
         db.session.commit()
 
-        # Optionally generate per-article deep analysis for qualifying articles
-        # (politics/science/business). Off by default because these prompts run
-        # at a higher timeout than summaries and cost real extra GPU time per
-        # article -- see _auto_article_deep_analysis_enabled(). Mirrors the child
-        # summary block above: pre-filter cheaply with article_needs_deep_analysis
-        # so we don't probe the LLM for articles that would never qualify.
+        # Per-article deep analysis for every article in an edition story (this
+        # function only runs for edition stories). Any topic qualifies; the
+        # only filter is enough real article text to analyse. Off by default
+        # for new installs -- see _auto_article_deep_analysis_enabled(). Measured
+        # 2026-10-07 on gemma4-12b: ~3.7 s per article.
         if _auto_article_deep_analysis_enabled():
             for article in story.articles:
                 if (
                     not article.deep_analysis
-                    and article.content
-                    and article_needs_deep_analysis(article)
+                    and article_has_analysable_content(article)
                 ):
                     analysis = generate_article_deep_analysis(article)
                     if analysis:

@@ -28,6 +28,8 @@ KNOWN_VARS = {
     "article_deep_analysis.politics": {"article_title", "clean_content"},
     "article_deep_analysis.science": {"article_title", "clean_content"},
     "article_deep_analysis.business": {"article_title", "clean_content"},
+    "article_deep_analysis.sports": {"article_title", "clean_content"},
+    "article_deep_analysis.default": {"article_title", "clean_content"},
     "topic_classifier": {"text", "categories_list"},
     "outlet_bias.by_name": {"outlet_name"},
     "outlet_bias.by_article": {"article_text"},
