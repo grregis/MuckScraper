@@ -383,6 +383,23 @@
 
         <hr class="divider">
 
+        {#- Plain-language read status. Signed-out visitors see this instead of
+            the telemetry panel (Regis, 2026-10-08: the technical fields and the
+            scraped text stay signed-in only). -#}
+        {% set read_status = {
+            'success':  ('Fully read', 'MuckScraper read the full article.'),
+            'fallback': ('Partly read', "Only the publisher's excerpt was available, so the summary is based on that."),
+            'blocked':  ('Publisher blocked full-text access', 'This publisher does not allow its articles to be read in full.'),
+            'failed':   ("Couldn't read the full article", 'The article was behind a paywall or could not be read when it was fetched.'),
+            'skipped':  ('Full text not available', 'MuckScraper does not read articles from this source in full.'),
+            'pending':  ('Not read yet', 'This article has not been read yet.'),
+        }[article.scrape_status or 'pending'] %}
+        {% set summary_blocked_reason = {
+            'blocked': 'No summary: the publisher blocked full-text access, so there was not enough of the article to summarize.',
+            'failed':  'No summary: the article was behind a paywall or could not be read, so there was not enough of it to summarize.',
+            'skipped': 'No summary: MuckScraper does not read articles from this source in full.',
+        }.get(article.scrape_status) %}
+
         <div class="summary">
             <div class="summary-label">Executive Summary</div>
             {% if article.summary %}
@@ -392,6 +409,8 @@
                         <p>{{ l }}</p>
                     {% endif %}
                 {% endfor %}
+            {% elif summary_blocked_reason and not (article.content and article.content|length > 100) %}
+                <p style="font-style: italic; color: var(--text-muted);">{{ summary_blocked_reason }} Read it at the source below.</p>
             {% elif not ollama_online %}
                 <p style="font-style: italic; color: var(--text-muted);">Summary will be generated when Ollama is back online. This article has been added to the queue.</p>
             {% else %}
@@ -460,7 +479,15 @@
         </div>
 
         {% else %}
-        {#- Signed-out visitors get the summary and a link, never the scraped text. -#}
+        {#- Signed-out visitors get the summary, a plain read status and a link,
+            never the scraped text or the technical fields. -#}
+        <div class="scrape-panel">
+            <div class="scrape-panel-header" style="margin-bottom: 6px;">
+                <span class="scrape-label">How we read this article</span>
+                <span class="scrape-chip scrape-{{ article.scrape_status or 'pending' }}">{{ read_status[0] }}</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: var(--fs-meta); margin: 0;">{{ read_status[1] }}</p>
+        </div>
         <div class="public-source">
             <a href="{{ article.url }}" target="_blank" rel="noopener" class="btn">Read the full article at {{ article.outlet.name if article.outlet else 'the source' }} →</a>
         </div>
