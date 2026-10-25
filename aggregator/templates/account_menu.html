@@ -9,10 +9,10 @@
 {%- if current_user.is_authenticated %}
     <div class="account-menu">
         <button type="button" class="account-button" aria-haspopup="menu" aria-expanded="false"
-                aria-label="Account menu for {{ current_user.username }}" title="{{ current_user.username }}">{{ icon('user') }}</button>
+                aria-label="Account menu for {{ account_display_name }}" title="{{ account_display_name }}">{{ icon('user') }}</button>
         <div class="account-dropdown" role="menu" hidden>
             <div class="account-who">
-                <strong>{{ current_user.username }}</strong>
+                <strong>{{ account_display_name }}</strong>
                 <span>{{ current_user.role_label }}</span>
             </div>
             <a role="menuitem" href="{{ url_for('auth.profile', back=menu_back()) }}">{{ icon('user') }} Profile</a>

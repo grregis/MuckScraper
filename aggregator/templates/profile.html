@@ -9,13 +9,13 @@
 
 <div class="container">
     <h1>Your profile</h1>
-    <p class="subtitle">Your account details. Changing your email or password asks for your current password first.</p>
+    <p class="subtitle">{% if oidc_managed %}You signed in through your identity provider. Email and password changes are managed there.{% else %}Your account details. Changing your email or password asks for your current password first.{% endif %}</p>
 
     {% include '_flashes.html' %}
 
     <div class="card">
         <dl class="facts">
-            <dt>Username</dt><dd>{{ current_user.username }}</dd>
+            <dt>{{ 'Display name' if oidc_managed else 'Username' }}</dt><dd>{{ account_display_name }}</dd>
             <dt>Role</dt><dd>{{ current_user.role_label }}</dd>
             <dt>Email</dt><dd>{{ current_user.email }}</dd>
             {% if current_user.created_at %}<dt>Member since</dt><dd>{{ current_user.created_at | local_datetime('%B %d, %Y') }}</dd>{% endif %}
@@ -23,6 +23,7 @@
         </dl>
     </div>
 
+    {% if not oidc_managed %}
     <div class="card">
         <h2>Change email</h2>
         <form method="POST">
@@ -61,6 +62,7 @@
             <button type="submit" class="btn btn-primary">Change password</button>
         </form>
     </div>
+    {% endif %}
 </div>
 </body>
 </html>
