@@ -104,7 +104,9 @@ it does not bypass provider authentication or consent.
 
 Authlib validates the signed ID token, issuer, audience, expiry and nonce.
 Authorization requests use browser-bound, single-use state and PKCE. Only one
-pending OIDC sign-in is retained per browser session; a new start supersedes it.
+pending OIDC sign-in is retained per browser session; a new start removes its
+old Authlib state before creating another attempt. Invalid or superseded callbacks
+are refused without consuming the current attempt.
 Return URLs are restricted to local paths. Login responses are not cached and
 do not send referrers. Errors expose only an exception class, never provider
 responses, tokens or user attributes.

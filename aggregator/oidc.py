@@ -220,12 +220,19 @@ def start():
     config = current_app.config.get("OIDC")
     if not config:
         abort(404)
+    remote = current_app.extensions["muckscraper_oidc"]
+    # Only one attempt is supported. Discard its old Authlib state too, or
+    # abandoned redirects eventually overflow the signed session cookie.
+    prefix = f"_state_{remote.name}_"
+    for key in list(session):
+        if key.startswith(prefix):
+            remote.framework.clear_state_data(session, key[len(prefix):])
     state = secrets.token_urlsafe(32)
     # A failed or cancelled attempt must leave a usable manual login page.
     session["oidc_auto_login_paused"] = True
     session["oidc_pending"] = {"state": state, "next": safe_next(request.args.get("next"))}
     try:
-        return current_app.extensions["muckscraper_oidc"].authorize_redirect(
+        return remote.authorize_redirect(
             config["REDIRECT_URI"], state=state)
     except Exception as error:
         current_app.logger.warning("OIDC start refused (%s)", type(error).__name__)
@@ -236,10 +243,11 @@ def callback():
     config = current_app.config.get("OIDC")
     if not config:
         abort(404)
-    pending = session.pop("oidc_pending", {})
+    pending = session.get("oidc_pending", {})
     state = request.args.get("state", "")
-    if not state or not secrets.compare_digest(state, pending.get("state", "")):
+    if not state or not state.isascii() or not secrets.compare_digest(state, pending.get("state", "")):
         abort(403)
+    session.pop("oidc_pending", None)
     try:
         token = current_app.extensions["muckscraper_oidc"].authorize_access_token()
         if not token.get("id_token") or not token.get("userinfo"):

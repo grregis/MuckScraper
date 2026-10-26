@@ -472,3 +472,79 @@ def test_configuration_errors_refuse_without_values(update):
     with pytest.raises(ValueError) as error:
         configuration({**ENV, **update})
     assert "SECRET_SENTINEL" not in str(error.value)
+
+
+def test_repeated_abandoned_logins_keep_one_pending_state(app, flow):
+    client, start, finish = flow
+    with client.session_transaction() as data:
+        data['unrelated_preference'] = 'keep'
+        data['_state_other_client_fixture'] = {'data': {'note': 'keep'}, 'exp': time.time() + 3600}
+    for _ in range(20):
+        params = start('/auth/profile')
+        with client.session_transaction() as data:
+            assert sum(key.startswith('_state_muckscraper_') for key in data) == 1
+            assert len(app.session_interface.get_signing_serializer(app).dumps(dict(data))) < 3800
+            assert data['unrelated_preference'] == 'keep'
+            assert '_state_other_client_fixture' in data
+    assert finish(params)[0].location == '/auth/profile'
+
+
+def test_old_callback_cannot_consume_a_new_login_attempt(app, flow):
+    client, start, finish = flow
+    old = start()
+    latest = start('/auth/profile')
+    response, exchange = finish(old)
+    assert response.status_code == 403
+    exchange.assert_not_called()
+    with client.session_transaction() as data:
+        assert data['oidc_pending']['state'] == latest['state'][0]
+    assert finish(latest)[0].location == '/auth/profile'
+
+
+def test_identity_migration_preserves_existing_accounts(app):
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    with app.app_context():
+        user = User(username='existing', email='existing@example.org', role='admin', is_admin=True, is_active=True)
+        user.set_password('existing-password')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+        OIDCIdentity.__table__.drop(db.engine)
+        path = Path(__file__).resolve().parents[1] / 'migrations/versions/a4c6e8b0d2f5_add_oidc_identities.py'
+        spec = importlib.util.spec_from_file_location('identity_migration', path)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        with db.engine.begin() as connection:
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.upgrade()
+        assert User.query.one().id == user_id
+        assert User.query.one().check_password('existing-password')
+        assert User.query.one().role == 'admin'
+        assert OIDCIdentity.query.count() == 0
+
+
+def test_login_cleans_legacy_accumulated_state(app, flow):
+    client, start, finish = flow
+    remote = app.extensions['muckscraper_oidc']
+    with client.session_transaction() as data:
+        for index in range(8):
+            remote.framework.set_state_data(data, 'abandoned-' + str(index), {'nonce': 'old'})
+        data['unrelated_preference'] = 'keep'
+    params = start()
+    with client.session_transaction() as data:
+        assert [key for key in data if key.startswith('_state_muckscraper_')] == ['_state_muckscraper_' + params['state'][0]]
+        assert data['unrelated_preference'] == 'keep'
+    assert finish(params)[0].status_code == 302
+
+
+@pytest.mark.parametrize('invalid_state', ['', 'wrong-state', '\u2603'])
+def test_invalid_callback_state_preserves_the_pending_attempt(app, flow, invalid_state):
+    client, start, finish = flow
+    params = start('/auth/profile')
+    response = client.get('/auth/oidc/callback', query_string={'state': invalid_state, 'code': 'fixture-code'}, base_url='https://reader.example')
+    assert response.status_code == 403
+    assert finish(params)[0].location == '/auth/profile'
