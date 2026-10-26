@@ -548,3 +548,28 @@ def test_invalid_callback_state_preserves_the_pending_attempt(app, flow, invalid
     response = client.get('/auth/oidc/callback', query_string={'state': invalid_state, 'code': 'fixture-code'}, base_url='https://reader.example')
     assert response.status_code == 403
     assert finish(params)[0].location == '/auth/profile'
+
+
+def test_compose_web_app_receives_all_oidc_settings():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source = (root / 'docker-compose.yml').read_text()
+    web_service = re.search(r'(?ms)^  app:\n(.*?)(?=^  [^ #\s]|\Z)', source).group(1)
+    environment = dict(re.findall(r'^      (OIDC_[A-Z_]+): \"([^\"]+)\"$', web_service, re.MULTILINE))
+    names = set(re.findall(r'^(OIDC_[A-Z_]+)=', (root / '.env.sample').read_text(), re.MULTILINE))
+    assert names
+    assert names <= environment.keys()
+    for name in names:
+        assert environment[name].startswith('${' + name + ':-')
+
+
+def test_manual_password_page_keeps_same_origin_referrer_for_csrf(app, flow):
+    client, start, _ = flow
+    response = client.get('/auth/login?manual=1', base_url='https://reader.example')
+    assert response.headers['Referrer-Policy'] == 'same-origin'
+    assert response.headers['Cache-Control'] == 'no-store'
+    start()
+    response = client.get('/auth/oidc/callback?state=invalid', base_url='https://reader.example')
+    assert response.status_code == 403
+    assert response.headers['Referrer-Policy'] == 'no-referrer'

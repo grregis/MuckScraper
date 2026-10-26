@@ -107,8 +107,9 @@ Authorization requests use browser-bound, single-use state and PKCE. Only one
 pending OIDC sign-in is retained per browser session; a new start removes its
 old Authlib state before creating another attempt. Invalid or superseded callbacks
 are refused without consuming the current attempt.
-Return URLs are restricted to local paths. Login responses are not cached and
-do not send referrers. Errors expose only an exception class, never provider
+Return URLs are restricted to local paths. Authentication responses are not
+cached. OIDC responses do not send referrers; the password page allows same-origin
+referrers so HTTPS form submissions retain CSRF protection. Errors expose only an exception class, never provider
 responses, tokens or user attributes.
 
 No access, refresh or ID token is stored in the identity table or logged. The

@@ -183,7 +183,7 @@ def init_app(app, environ):
     def private_auth_responses(response):
         if request.endpoint == "auth.login" or (request.endpoint and request.endpoint.startswith("auth.oidc_")):
             response.headers["Cache-Control"] = "no-store"
-            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Referrer-Policy"] = "same-origin" if request.endpoint == "auth.login" else "no-referrer"
         return response
 
     @app.cli.command("link-oidc-identity")
