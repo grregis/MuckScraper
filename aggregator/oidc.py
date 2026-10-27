@@ -117,13 +117,13 @@ def resolve_user(claims, config):
     else:
         if not config["CREATE_USERS"]:
             raise OIDCRefused()
+        email = claims.get("email")
+        if not isinstance(email, str) or email_error(email):
+            raise OIDCRefused()
         username = "oidc_" + key[:59]
         if User.query.filter_by(username=username).first():
             raise OIDCRefused()
-        user = User(username=username, role=ROLE_READER, is_admin=False, is_active=True)
-    email = claims.get("email")
-    if not isinstance(email, str) or email_error(email, exclude_id=user.id):
-        raise OIDCRefused()
+        user = User(username=username, email=email, role=ROLE_READER, is_admin=False, is_active=True)
     if config["ROLE_MAPPING"]:
         role = max((config["ROLE_MAPPING"].get(g, ROLE_READER) for g in groups),
                    key=ROLES.index, default=ROLE_READER)
@@ -135,7 +135,6 @@ def resolve_user(claims, config):
             if other_active_admins(user.id) == 0:
                 raise OIDCRefused()
         user.set_role(role)
-    user.email = email
     user.last_login_at = datetime.utcnow()
     db.session.add(user)
     if not binding:

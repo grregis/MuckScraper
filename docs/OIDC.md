@@ -48,8 +48,10 @@ Claims available only from a separate UserInfo endpoint are not used.
 
 Identity is the exact issuer and subject pair. Email and username are not
 identity keys, and matching emails never automatically link existing accounts.
-Email and username collisions refuse sign-in rather than overwriting an account.
-Existing email length and uniqueness constraints remain in force.
+Email and username collisions refuse account creation rather than overwriting an
+account. A newly created account receives its verified provider email. For a
+linked account, the email saved in MuckScraper's profile remains unchanged at
+sign-in.
 
 Automatic account creation is off. An administrator can explicitly bind an
 independently verified provider subject to an existing active account:

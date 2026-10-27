@@ -113,6 +113,7 @@ def test_real_pkce_signed_token_identity_and_session(app, flow):
         assert binding.issuer == ENV["OIDC_ISSUER_URL"]
         assert binding.subject == "fixture-subject"
         assert binding.user.role == "reader" and not binding.user.is_admin
+        assert binding.user.email == "reader@example.com"
         assert not binding.user.check_password("anything")
         user_id = binding.user_id
     with client.session_transaction() as session:
@@ -297,6 +298,20 @@ def test_unmapped_existing_roles_remain_local_and_data_owner_is_preserved(app, f
     with app.app_context():
         assert User.query.one().id == local_id
         assert User.query.one().role == "scraper" and not User.query.one().is_admin
+
+
+def test_linked_account_email_is_preserved(app, flow):
+    with app.app_context():
+        local = User(username="existing", email="local@example.com", role="reader", is_active=True)
+        db.session.add(local)
+        db.session.flush()
+        db.session.add(OIDCIdentity(user=local, identity_key=identity_key(ENV["OIDC_ISSUER_URL"], "fixture-subject"),
+                                    issuer=ENV["OIDC_ISSUER_URL"], subject="fixture-subject"))
+        db.session.commit()
+    _, start, finish = flow
+    assert finish(start())[0].status_code == 302
+    with app.app_context():
+        assert User.query.one().email == "local@example.com"
 
 
 def test_link_command_is_explicit_dry_run_idempotent_and_non_replacing(app, flow):
