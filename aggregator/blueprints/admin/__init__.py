@@ -44,3 +44,7 @@ from . import _shared, _tasks, articles, bulk_actions, scrape_blocklist, config_
 # Re-exported because aggregator/app.py does
 # `from aggregator.blueprints.admin import reconcile_orphaned_task_statuses`.
 from ._tasks import reconcile_orphaned_task_statuses  # noqa: E402,F401
+
+from . import settings_nav, llm_settings  # noqa: E402,F401
+
+from . import source_keys  # noqa: E402,F401

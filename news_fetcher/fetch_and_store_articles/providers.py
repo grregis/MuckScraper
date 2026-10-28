@@ -7,10 +7,10 @@ the raw-payload retention that runs alongside them.
 import logging
 from datetime import datetime, timedelta
 import json
-import os
 import requests
 from newsapi import NewsApiClient
 from aggregator import db
+from news_fetcher import saved_settings
 from .ingestion import store_articles
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=None):
     """Fetch articles from NewsAPI and store them."""
-    api_key = os.environ.get("NEWS_API_KEY", "")
+    api_key = saved_settings.get("NEWS_API_KEY")
     if not api_key:
         logger.warning("NEWS_API_KEY not set, skipping NewsAPI fetch.")
         return {
@@ -104,7 +104,7 @@ def fetch_newsapi(topic_name, mode="top", query=None, country="us", category=Non
 
 def fetch_gnews(topic_name, query=None, category=None):
     """Fetch articles from GNews API and store them."""
-    api_key = os.environ.get("GNEWS_API_KEY", "")
+    api_key = saved_settings.get("GNEWS_API_KEY")
     if not api_key:
         logger.warning("GNEWS_API_KEY not set, skipping GNews fetch.")
         return {

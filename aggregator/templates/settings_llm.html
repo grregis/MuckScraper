@@ -1,0 +1,198 @@
+{#- Settings › LLM providers (admin.llm_providers_page,
+    blueprints/admin/llm_settings.py). Routing, keys, models and hosts saved
+    here override the environment (aggregator/config_store.py). Key fields are
+    write-only: the page only ever shows a saved key's last four characters. -#}
+{% extends 'settings_base.html' %}
+{% from '_config_fields.html' import config_field, config_field_styles %}
+{% block title %}LLM providers{% endblock %}
+{% block settings_key %}llm{% endblock %}
+{% block settings_body %}
+<div class="page-head">
+    <h1>LLM providers</h1>
+    <p>The main model writes what readers see (summaries, reports, headlines); the fast model handles the high-volume labelling calls. Each tier can use a different provider.</p>
+</div>
+
+{% include '_flashes.html' %}
+
+<form class="panel" method="POST" action="{{ url_for('admin.save_llm_routing') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="panel-head">
+        <div>
+            <h2>Routing</h2>
+            <p>Which provider serves each tier. Saved choices override LLM_PROVIDER and LLM_FAST_PROVIDER; the app applies them at once and the scheduler within a minute.</p>
+        </div>
+    </div>
+    {%- for key, label, name in [('quality', 'Main model', 'LLM_PROVIDER'), ('fast', 'Fast model', 'LLM_FAST_PROVIDER')] %}
+    {%- set t = tiers[key] %}
+    {%- set st = routing_states[name] %}
+    <div class="row routing-row">
+        <span>
+            <label class="row-label" for="route-{{ key }}">{{ label }}</label>
+            <span class="row-sub">{{ provider_labels.get(t.provider, t.provider) }} · {{ t.model or 'no model set' }}{% if st.source == 'saved' %} · <span class="chip">Saved</span>{% endif %}</span>
+        </span>
+        <span class="routing-controls">
+            <select id="route-{{ key }}" name="{{ name }}">
+                <option value=""{% if st.source != 'saved' %} selected{% endif %}>From environment{% if st.env %} ({{ 'Same as main' if key == 'fast' and st.env == 'main' else provider_labels.get(st.env, st.env) }}){% elif key == 'fast' %} (same as main){% else %} (Ollama){% endif %}</option>
+                {%- if key == 'fast' %}
+                <option value="main"{% if st.saved == 'main' %} selected{% endif %}>Same as main</option>
+                {%- endif %}
+                {%- for p in chat_providers %}
+                <option value="{{ p }}"{% if st.saved == p %} selected{% endif %}>{{ provider_labels.get(p, p) }}</option>
+                {%- endfor %}
+            </select>
+            <span class="muted test-result" id="test-result-{{ key }}" aria-live="polite">{% if not t.configured %}Not configured{% endif %}</span>
+            <button type="button" class="btn btn-quiet" data-test-tier="{{ key }}"{% if not t.configured %} disabled{% endif %}>Test</button>
+        </span>
+    </div>
+    {%- endfor %}
+    <div class="row">
+        <span>
+            <span class="row-label">Embeddings</span>
+            <span class="row-sub">{{ provider_labels.get(embedding_provider, embedding_provider) }} · used for story grouping. Set with EMBEDDING_PROVIDER, since switching means re-embedding every story.</span>
+        </span>
+    </div>
+    <div class="panel-foot">
+        <button type="submit" class="btn">Save routing</button>
+    </div>
+</form>
+
+<section class="panel">
+    <div class="panel-head">
+        <div>
+            <h2>Providers</h2>
+            <p>Keys are encrypted before they are stored, with a key from {{ 'CONFIG_ENCRYPTION_KEY' if key_source == 'CONFIG_ENCRYPTION_KEY' else 'SECRET_KEY (set CONFIG_ENCRYPTION_KEY to use a separate one)' }}, and are never shown again after saving.</p>
+        </div>
+    </div>
+    {%- for p in providers %}
+    <details class="row provider" id="provider-{{ p.key }}"{% if p.roles %} open{% endif %}>
+        <summary>
+            <span class="provider-name">
+                <span class="row-label">{{ p.name }}</span>
+                {%- if p.is_new %}<span class="chip chip-new">NEW</span>{% endif %}
+                {%- for role in p.roles %}<span class="chip">{{ role }}</span>{% endfor %}
+                {%- if p.saved_count %}<span class="chip chip-saved">{{ p.saved_count }} saved</span>{% endif %}
+            </span>
+            <span class="provider-status">
+                {%- if p.key == 'ollama' and p.live %}
+                <span id="ollama-live"><span class="dot off"></span>Checking…</span>
+                {%- elif p.configured %}
+                <span><span class="dot ok"></span>Configured</span>
+                {%- else %}
+                <span class="muted"><span class="dot off"></span>Not configured</span>
+                {%- endif %}
+            </span>
+        </summary>
+        <form class="provider-form config-field-form" method="POST" action="{{ url_for('admin.save_llm_provider', key=p.key) }}" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {%- for f in p.fields %}{{ config_field(f) }}{% endfor %}
+            {%- if p.facts %}
+            <dl class="facts">
+                {%- for name, value in p.facts %}
+                <dt>{{ name }}</dt><dd>{{ value }}</dd>
+                {%- endfor %}
+            </dl>
+            {%- endif %}
+            <div class="provider-actions">
+                <span class="muted">Leave a field blank to use the environment value shown.</span>
+                <button type="submit" class="btn">Save {{ p.name }}</button>
+            </div>
+        </form>
+    </details>
+    {%- endfor %}
+</section>
+
+<section class="panel">
+    <div class="panel-head"><h2>Task routing</h2></div>
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th scope="col">Task</th><th scope="col">Tier</th><th scope="col">Provider</th><th scope="col">Model</th></tr></thead>
+            <tbody>
+            {%- for r in routes %}
+                <tr>
+                    <td>{{ r.task }}</td>
+                    <td><span class="chip">{{ 'Main' if r.tier == 'quality' else 'Fast' }}</span></td>
+                    <td>{{ provider_labels.get(r.provider, r.provider) }}</td>
+                    <td class="muted">{{ r.model or '—' }}</td>
+                </tr>
+            {%- endfor %}
+            </tbody>
+        </table>
+    </div>
+    <form class="row" method="POST" action="{{ url_for('admin.toggle_auto_article_deep_analysis') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="enabled" value="{{ 'false' if auto_article_deep_analysis_enabled else 'true' }}">
+        <span>
+            <span class="row-label">Auto article deep analysis</span>
+            <span class="row-sub">During ingestion, also analyse qualifying politics, science and business articles. Costs extra model time.</span>
+        </span>
+        <label class="switch">
+            <span class="visually-hidden">Auto article deep analysis</span>
+            <input type="checkbox" onchange="this.form.submit()"{% if auto_article_deep_analysis_enabled %} checked{% endif %}>
+            <span aria-hidden="true"></span>
+        </label>
+    </form>
+</section>
+{% endblock %}
+
+{% block styles %}
+<style>
+    details.provider { display: block; padding: 0; }
+    details.provider summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; cursor: pointer; list-style: none; }
+    details.provider summary::-webkit-details-marker { display: none; }
+    details.provider summary:hover { background: var(--btn-muted-bg); }
+    .provider-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .provider-status span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+    .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 20px; margin: 0; padding: 2px 16px 12px; font-size: 13px; }
+    .facts dt { color: var(--text-muted); }
+    .facts dd { margin: 0; overflow-wrap: anywhere; }
+    .facts code { font-size: 12px; }
+    .facts { padding: 4px 0 0; }
+    .routing-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+    .routing-controls select { min-width: 200px; }
+    .test-result { font-size: 13px; }
+    .provider-form { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 14px; }
+    {{ config_field_styles() }}
+    .provider-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll('[data-test-tier]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const tier = button.dataset.testTier;
+            const out = document.getElementById('test-result-' + tier);
+            button.disabled = true;
+            out.textContent = 'Testing…';
+            fetch('{{ url_for("admin.llm_test") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: JSON.stringify({ tier }),
+            })
+                .then(r => r.json())
+                .then(data => { out.textContent = (data.ok ? 'OK. ' : 'Failed. ') + data.message; })
+                .catch(e => { out.textContent = 'Request failed: ' + e; })
+                .finally(() => { button.disabled = false; });
+        });
+    });
+
+    // Which Ollama host answers right now (primary, or the fallback covering for it).
+    (function () {
+        const el = document.getElementById('ollama-live');
+        if (!el) return;
+        fetch('{{ url_for("admin.ollama_status_detail") }}')
+            .then(r => r.json())
+            .then(data => {
+                const entry = (data.providers || []).find(e => e.provider === 'ollama');
+                if (!entry) { el.innerHTML = '<span class="dot ok"></span>Configured'; return; }
+                el.innerHTML = entry.online
+                    ? '<span class="dot ok"></span>' + (entry.role === 'fallback' ? 'Online on fallback' : 'Online')
+                    : '<span class="dot bad"></span>Offline';
+            })
+            .catch(() => { el.textContent = 'Status unavailable'; });
+    })();
+</script>
+{% endblock %}

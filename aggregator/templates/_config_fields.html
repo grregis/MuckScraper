@@ -1,0 +1,44 @@
+{#- One saved-setting field (aggregator/config_store.py field_states()):
+    a label, an input, the variable it overrides and where the value comes
+    from. Key fields are write-only: blank keeps the saved key, and the
+    "Remove saved key" box deletes it. The surrounding <form> needs the
+    class config-field-form and config_field_styles() in its page's styles. -#}
+{% macro config_field(f) -%}
+    <div class="field">
+        <label for="{{ f.name }}">{{ f.label }}</label>
+        {%- if f.kind == 'secret' %}
+        <input type="password" id="{{ f.name }}" name="{{ f.name }}" autocomplete="new-password" spellcheck="false"
+               placeholder="{% if f.source == 'saved' %}Saved key ending {{ f.hint }}. Type to replace{% elif f.source == 'env' %}From environment ({{ f.env_hint }}). Type to override{% else %}Paste a key{% endif %}">
+        {%- else %}
+        <input type="{{ {'url': 'url', 'int': 'number'}.get(f.kind, 'text') }}" id="{{ f.name }}" name="{{ f.name }}" value="{{ f.saved }}" spellcheck="false"{% if f.kind == 'int' %} min="1" inputmode="numeric"{% endif %}
+               placeholder="{{ f.env or f.default or ('Same as main model' if 'FAST' in f.name else 'Not set') }}">
+        {%- endif %}
+        <span class="field-meta">
+            <code>{{ f.name }}</code>
+            {%- if f.source == 'saved' %}
+            <span class="chip chip-saved">Saved</span>
+            {%- if f.unreadable %}<span class="field-warn">Can't be decrypted with the current key; enter it again.</span>{% endif %}
+            {%- if f.kind == 'secret' %}
+            <label class="clear"><input type="checkbox" name="clear_{{ f.name }}" value="1"> Remove saved key{% if f.env_hint %} (back to environment){% endif %}</label>
+            {%- endif %}
+            {%- elif f.source == 'env' %}<span class="chip">Environment</span>
+            {%- endif %}
+        </span>
+    </div>
+{%- endmacro %}
+
+{% macro config_field_styles() -%}
+    .config-field-form .field { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 4px 14px; align-items: center; }
+    .config-field-form .field > label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .config-field-form .field input { width: 100%; }
+    .field-meta { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--text-muted); }
+    .field-meta code { font-size: 12px; }
+    .config-field-form .field-meta .clear { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+    .config-field-form .field-meta .clear input { width: auto; margin: 0; }
+    .field-warn { color: var(--risk-danger-text); font-weight: 600; }
+    .chip-saved { background: var(--accent); border-color: var(--accent); color: var(--settings-on-accent); }
+    @media (max-width: 600px) {
+        .config-field-form .field { grid-template-columns: 1fr; }
+        .field-meta { grid-column: 1; }
+    }
+{%- endmacro %}

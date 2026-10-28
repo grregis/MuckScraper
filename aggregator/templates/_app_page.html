@@ -1,0 +1,19 @@
+{# Shared frame extracted from dev; content, controls and route behavior stay with each page. #}
+{% from '_feed_topbar.html' import feed_topbar with context %}
+{% from 'breadcrumb.html' import back_link %}
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+{% block head %}{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app_page.css') }}">
+{% block styles %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% block topbar %}{% endblock %}
+{% if shared_sidebar|default(true) %}<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">{% endif %}{% block body %}{% endblock %}{% if shared_sidebar|default(true) %}</div>
+</div>{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

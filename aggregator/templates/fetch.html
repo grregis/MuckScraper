@@ -1,8 +1,8 @@
+{% extends '_app_page.html' %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -134,13 +134,9 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
-
-<div class="topbar">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
     <div class="topbar-left">
         <span class="topbar-title">MuckScraper</span>
     </div>
@@ -148,7 +144,11 @@
         {{ theme_toggle() }}
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}
+{% endblock %}
+{% block body %}
+
+
 
 <div class="container">
     <h1>Fetch Articles</h1>
@@ -241,8 +241,8 @@
     </div>
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     {% include 'sidebar_script.html' %}
@@ -257,5 +257,4 @@
     const savedTheme = localStorage.getItem('muckscraper-theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
 </script>
-</body>
-</html>
+{% endblock %}

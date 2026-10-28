@@ -20,7 +20,7 @@ def test_row_form_owns_its_controls(name, form_id, expected):
               label="Example", enabled=True, hour=9, run_full_pipeline=True)
     env = Environment(loader=FileSystemLoader(ROOT / "aggregator/templates"))
     env.globals.update(url_for=lambda endpoint, **kw: "/" + endpoint,
-                       csrf_token=lambda: "fixture-csrf", can=lambda role: True,
+                       settings_sections=lambda active=None: [], csrf_token=lambda: "fixture-csrf", can=lambda role: True,
                        menu_back=lambda: "/headlines",
                        current_user=Row(is_authenticated=True, username="Example", role_label="Admin"))
     html = env.get_template(name + ".html").render(

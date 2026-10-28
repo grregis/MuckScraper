@@ -479,3 +479,19 @@ class EditionStory(db.Model):
     image_bytes             = db.Column(db.Integer, nullable=True)
 
     story = db.relationship('Story', back_populates='edition_stories', lazy='joined', overlaps="edition_stories,story_ref")
+
+
+class ConfigSetting(db.Model):
+    """A setting saved from the admin UI that overrides an environment
+    variable (aggregator/llm_config.py). Secrets are stored only as
+    `secret_value`, Fernet-encrypted (aggregator/secret_box.py), with their
+    last four characters in `hint` so the page can tell keys apart without
+    decrypting them."""
+    __tablename__ = "config_settings"
+
+    key          = db.Column(db.String(64), primary_key=True)
+    value        = db.Column(db.Text, nullable=True)
+    secret_value = db.Column(db.Text, nullable=True)
+    hint         = db.Column(db.String(8), nullable=True)
+    updated_at   = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_by   = db.Column(db.String(64), nullable=True)

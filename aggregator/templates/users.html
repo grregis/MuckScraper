@@ -1,11 +1,16 @@
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
-    <title>Users — MuckScraper</title>
+{% extends 'settings_base.html' %}
+{% block title %}Users — MuckScraper{% endblock %}
+{% block settings_key %}users{% endblock %}
+{% set shared_sidebar = false %}
+
+
+{% block head %}{{ super() }}
+    
 {% include '_account_page_head.html' %}
-</head>
-<body>
-{% include '_account_topbar.html' %}
+{% endblock %}
+{% block topbar %}{% include '_account_topbar.html' %}{% endblock %}
+{% block settings_body %}
+
 
 <div class="container wide">
     <h1>Users</h1>
@@ -89,5 +94,4 @@
         </div>
     </div>
 </div>
-</body>
-</html>
+{% endblock %}

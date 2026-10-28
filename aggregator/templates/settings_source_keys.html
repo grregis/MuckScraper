@@ -1,0 +1,50 @@
+{#- Settings › Source API keys (admin.source_keys_page,
+    blueprints/admin/source_keys.py): keys for the news APIs ingestion can
+    use, saved encrypted like the LLM provider keys. -#}
+{% extends 'settings_base.html' %}
+{% from '_config_fields.html' import config_field, config_field_styles %}
+{% block title %}Source API keys{% endblock %}
+{% block settings_key %}source_keys{% endblock %}
+{% block settings_body %}
+<div class="page-head">
+    <h1>Source API keys</h1>
+    <p>Optional keys for news APIs. The default RSS feeds work without any of them. Keys are encrypted with a key from {{ 'CONFIG_ENCRYPTION_KEY' if key_source == 'CONFIG_ENCRYPTION_KEY' else 'SECRET_KEY (set CONFIG_ENCRYPTION_KEY to use a separate one)' }} and never shown again after saving.</p>
+</div>
+
+{% include '_flashes.html' %}
+
+<section class="panel">
+    <div class="panel-head"><h2>News sources</h2></div>
+    {%- for s in sources %}
+    <form class="source config-field-form" id="source-{{ s.key }}" method="POST" action="{{ url_for('admin.save_source_keys', key=s.key) }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="source-head">
+            <span class="row-label">{{ s.name }}</span>
+            {%- if s.configured %}
+            <span class="source-status"><span class="dot ok"></span>Key set</span>
+            {%- else %}
+            <span class="source-status muted"><span class="dot off"></span>No key</span>
+            {%- endif %}
+        </div>
+        <p class="source-about">{{ s.about }} <a href="{{ s.signup }}" target="_blank" rel="noopener noreferrer">Get a key</a></p>
+        {%- for f in s.fields %}{{ config_field(f) }}{% endfor %}
+        <div class="source-actions">
+            <button type="submit" class="btn">Save {{ s.name }}</button>
+        </div>
+    </form>
+    {%- endfor %}
+</section>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .source { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
+    .source + .source { border-top: 1px solid var(--border); }
+    .source-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+    .source-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+    .source-about { margin: -4px 0 0; font-size: 13px; color: var(--text-muted); max-width: 720px; }
+    .source-about a { color: var(--accent-text); }
+    .source-actions { display: flex; justify-content: flex-end; }
+    {{ config_field_styles() }}
+</style>
+{% endblock %}

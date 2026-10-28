@@ -88,6 +88,9 @@ def create_app():
     app.register_blueprint(admin,  url_prefix='/admin')
     app.register_blueprint(auth,   url_prefix='/auth')
 
+    from aggregator import config_store
+    config_store.install()
+
     return app
 
 
