@@ -57,6 +57,7 @@
             cursor: pointer;
             margin-top: 12px;
         }
+        .btn { text-decoration: none; }
         .btn:hover { opacity: 0.9; }
         
         .flash {
@@ -96,6 +97,11 @@
       {% endif %}
     {% endwith %}
 
+    {% if oidc_enabled %}
+    {% from 'icons.html' import icon %}
+    <a class="btn" href="{{ url_for('auth.oidc_login', next=request.args.get('next', '')) }}">{{ icon('log-in') }} Sign in with {{ oidc_provider_name }}</a>
+    {% endif %}
+    {% if allow_password_login %}
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
@@ -113,6 +119,7 @@
         </div>
         <button type="submit" class="btn">Sign in</button>
     </form>
+    {% endif %}
     {% if public_read %}
     <p class="back-link"><a href="{{ feed_back_url() }}">← Back to Feed</a></p>
     {% endif %}

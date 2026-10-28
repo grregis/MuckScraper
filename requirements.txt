@@ -28,3 +28,7 @@ feedparser
 tzdata
 Pillow
 pytest
+
+# Optional OpenID Connect verification.
+Authlib==1.9.1
+joserfc==1.7.7
