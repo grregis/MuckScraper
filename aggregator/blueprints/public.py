@@ -3,6 +3,7 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import current_user
+from aggregator import feed_prefs
 from aggregator.permissions import public_or_login, public_read_enabled
 from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
@@ -26,7 +27,15 @@ public = Blueprint("public", __name__)
 @public.route("/")
 def index():
     # Land on Headlines (Regis, 2026-10-04: the more natural starting page).
-    if current_user.is_authenticated or public_read_enabled():
+    if current_user.is_authenticated:
+        # The start page the reader chose on their profile (feed_prefs.py).
+        start = feed_prefs.load(current_user)["start_page"]
+        if start == "all":
+            return redirect(url_for("admin.list_articles"))
+        if start == "grouped":
+            return redirect(url_for("admin.multi_article_stories"))
+        return redirect(url_for("public.headlines_feed"))
+    if public_read_enabled():
         return redirect(url_for("public.headlines_feed"))
     return redirect(url_for("auth.login", next=url_for("public.headlines_feed")))
 

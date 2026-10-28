@@ -1,11 +1,14 @@
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+{% extends '_app_page.html' %}
+{% set shared_sidebar = false %}
+
+
+{% block head %}
     <title>Profile — MuckScraper</title>
 {% include '_account_page_head.html' %}
-</head>
-<body>
-{% include '_account_topbar.html' %}
+{% endblock %}
+{% block topbar %}{% include '_account_topbar.html' %}{% endblock %}
+{% block body %}
+
 
 <div class="container">
     <h1>Your profile</h1>
@@ -21,6 +24,44 @@
             {% if current_user.created_at %}<dt>Member since</dt><dd>{{ current_user.created_at | local_datetime('%B %d, %Y') }}</dd>{% endif %}
             {% if current_user.last_login_at %}<dt>Last sign-in</dt><dd>{{ current_user.last_login_at | local_datetime }}</dd>{% endif %}
         </dl>
+    </div>
+
+    <div class="card">
+        <h2>Feed defaults</h2>
+        <p class="hint">What the site and the story lists open with. The Filters button in the feed can still change them for a visit, and its “Save as my default” updates these.</p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="feed_defaults">
+            <div class="field">
+                <label for="fd-start">Start page</label>
+                <select id="fd-start" name="start_page">
+                    {%- for value, label in start_pages.items() %}
+                    <option value="{{ value }}"{% if feed_defaults.start_page == value %} selected{% endif %}>{{ label }}</option>
+                    {%- endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="fd-range">Time range</label>
+                <select id="fd-range" name="range">
+                    {%- for value, label in ranges.items() %}
+                    <option value="{{ value }}"{% if feed_defaults.range == value %} selected{% endif %}>{{ label }}</option>
+                    {%- endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="fd-scrape">Scrape status</label>
+                <select id="fd-scrape" name="scrape_status">
+                    {%- for value in scrape_statuses %}
+                    <option value="{{ value }}"{% if feed_defaults.scrape_status == value %} selected{% endif %}>{{ 'All' if value == 'all' else value|capitalize }}</option>
+                    {%- endfor %}
+                </select>
+            </div>
+            <label class="check-field">
+                <input type="checkbox" name="hide_single" value="true"{% if feed_defaults.hide_single %} checked{% endif %}>
+                Hide single-article stories on All Stories
+            </label>
+            <button type="submit" class="btn btn-primary">Save defaults</button>
+        </form>
     </div>
 
     <div class="card">
@@ -62,5 +103,4 @@
         </form>
     </div>
 </div>
-</body>
-</html>
+{% endblock %}

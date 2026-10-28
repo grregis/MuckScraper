@@ -1,0 +1,438 @@
+/*
+ * The feed's top bar (templates/_feed_topbar.html): section name beside the
+ * logo, search centred with live results, an icon-only Filters button and its
+ * popover. Linked after theme.css by headlines_feed.html and articles.html.
+ * The bar is dark in both themes; the dropdown and popover follow the theme.
+ */
+
+.visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.feed-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--topbar-bg);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    padding: 10px 24px 10px 14px;
+    min-height: var(--ft-height);
+}
+:root { --ft-height: 60px; }
+
+/* The bar runs the full width above the sidebar (Philip, 2026-10-22), so the
+   sidebar sticks just below it. */
+.feed-layout .sidebar { top: var(--ft-height); height: calc(100vh - var(--ft-height)); }
+.feed-layout { min-height: calc(100vh - var(--ft-height)); }
+
+.ft-menu {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--topbar-text);
+    font-size: 20px;
+    cursor: pointer;
+}
+.ft-menu:hover { background: var(--sidebar-active-bg); color: var(--topbar-text); }
+.ft-menu:focus-visible { outline: 2px solid var(--sidebar-accent-text); outline-offset: 2px; }
+
+/* Left and right take equal shares of the spare width, so the search sits in
+   the middle. On wide screens the left side gets --ft-offset more, which
+   moves the search right by half of it: centred on the story column beside
+   the sidebar rather than on the window (Philip, 2026-10-22). The offset is
+   the sidebar's width (none when collapsed) plus the difference between the
+   bar's right and left padding (24px - 14px). */
+:root { --ft-offset: 0px; }
+.ft-left, .ft-right { flex: 1 1 180px; display: flex; align-items: center; min-width: 0; }
+.ft-left { flex-basis: calc(180px + var(--ft-offset)); transition: flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.ft-left { gap: 10px; }
+.ft-right { justify-content: flex-end; gap: 10px; }
+@media (min-width: 901px) {
+    :root:has(.feed-layout .sidebar), :root[data-sidebar="expanded"] { --ft-offset: calc(240px + 10px); }
+    /* data-sidebar: the saved state, set in <head> (theme_toggle.js) until
+       sidebar_script.html gives the menu its .collapsed class. */
+    :root:has(.feed-layout .sidebar.collapsed), :root[data-sidebar="collapsed"],
+    :root[data-sidebar="collapsed"]:has(.feed-layout .sidebar) { --ft-offset: 10px; }
+    /* One row; when space runs short only the search narrows, so the two
+       sides keep their difference and the search stays centred. */
+    .feed-topbar { flex-wrap: nowrap; }
+    .ft-left, .ft-right { flex-shrink: 0; }
+    .ft-center { min-width: 200px; }
+}
+
+.ft-logo {
+    color: var(--on-accent);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ft-sep { color: var(--topbar-text); font-size: 18px; }
+.ft-section {
+    color: var(--sidebar-accent-text);
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ft-center {
+    flex: 2 1 420px;
+    max-width: 680px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+/* ── Search ── */
+.ft-search { flex: 1 1 auto; position: relative; min-width: 0; }
+.ft-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--topbar-text); font-size: 17px; display: flex; pointer-events: none; }
+.ft-search input[type="search"] {
+    width: 100%;
+    height: 40px;
+    padding: 0 40px 0 40px;
+    border-radius: 10px;
+    border: 1px solid var(--header-input-border);
+    background: var(--header-input-bg);
+    color: var(--on-accent);
+    font: inherit;
+    font-size: 15px;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.ft-search input[type="search"]::placeholder { color: var(--topbar-text); }
+.ft-search input[type="search"]:focus { outline: none; border-color: var(--accent-light); box-shadow: var(--shadow); }
+.ft-search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+.ft-kbd {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font: 600 12px/1 system-ui, sans-serif; color: var(--topbar-text);
+    border: 1px solid var(--header-input-border); border-radius: 5px; padding: 3px 6px;
+    pointer-events: none;
+}
+.ft-search input:focus ~ .ft-kbd { display: none; }
+
+/* ── Live results ── */
+.ft-suggest {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: max(100%, min(620px, calc(100vw - 32px)));
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    z-index: 310;
+}
+.ft-suggest[hidden] { display: none; }
+.ft-group-label {
+    padding: 10px 14px 4px;
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.ft-group-label + .ft-hit { margin-top: 0; }
+.ft-hits + .ft-group-label { border-top: 1px solid var(--border); }
+
+.ft-hit {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    color: var(--text);
+    text-decoration: none;
+}
+.ft-hit:hover, .ft-hit.is-active { background: var(--btn-muted-bg); }
+.ft-thumb {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 40px;
+    border-radius: 6px;
+    background: var(--btn-muted-bg);
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+    font-size: 16px;
+}
+.ft-thumb-logo { box-sizing: border-box; object-fit: contain; padding: 4px 12px; background: var(--on-accent); border: 1px solid var(--border); border-radius: 3px; }
+.ft-hit-body { flex: 1 1 auto; min-width: 0; }
+.ft-hit-top { display: flex; align-items: baseline; gap: 10px; }
+.ft-hit-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ft-hit-date, .ft-hit-meta { font-size: var(--fs-label); color: var(--text-muted); }
+.ft-hit-date { flex: 0 0 auto; white-space: nowrap; }
+.ft-hit-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.ft-hit-meta .ft-right-group { margin-left: auto; }
+.ft-lean {
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.ft-lean.bias-unrated { background: var(--bias-unrated-bg); color: var(--on-accent); }
+.ft-empty { padding: 16px 14px; font-size: 14px; color: var(--text-muted); }
+.ft-suggest-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    font-size: var(--fs-label);
+    color: var(--text-muted);
+}
+.ft-suggest-foot a { color: var(--accent-text); font-weight: 700; text-decoration: none; }
+.ft-suggest-foot a:hover { text-decoration: underline; }
+
+/* Left / Center / Right: counts, then the bar at the far right. Shared with
+   the compact story cards (story_card.css uses the same classes). */
+.lcr { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: var(--fs-label); font-weight: 700; white-space: nowrap; }
+.lcr-l { color: var(--bias-left-text); }
+.lcr-c { color: var(--bias-center-text); }
+.lcr-r { color: var(--bias-right-text); }
+.lcr-bar { display: flex; width: 64px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--border); }
+.lcr-bar span { display: block; height: 100%; }
+.lcr-bar .seg-l { background: var(--bias-1-bg); }
+.lcr-bar .seg-c { background: var(--bias-3-bg); }
+.lcr-bar .seg-r { background: var(--bias-5-bg); }
+
+/* ── Phone search button (hidden on wide screens) ── */
+.ft-search-toggle {
+    display: none;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--header-input-border);
+    background: var(--header-input-bg);
+    color: var(--on-accent);
+    font-size: 18px;
+    cursor: pointer;
+}
+.ft-search-toggle:hover, .ft-search-toggle[aria-expanded="true"] { background: var(--accent); border-color: var(--accent-light); }
+.ft-search-toggle:focus-visible { outline: 2px solid var(--sidebar-accent-text); outline-offset: 2px; }
+
+/* ── Filters ── */
+.ft-filters { position: relative; flex: 0 0 auto; }
+.ft-filter-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--header-input-border);
+    background: var(--header-input-bg);
+    color: var(--on-accent);
+    font-size: 18px;
+    cursor: pointer;
+}
+.ft-filter-btn:hover, .ft-filter-btn[aria-expanded="true"] { background: var(--accent); border-color: var(--accent-light); }
+.ft-filter-btn:focus-visible { outline: 2px solid var(--sidebar-accent-text); outline-offset: 2px; }
+
+.ft-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 310;
+}
+.ft-popover[hidden] { display: none; }
+.fp-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.fp-segment {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: var(--btn-muted-bg);
+    border-radius: 10px;
+}
+.fp-segment a {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--btn-muted-text);
+    text-decoration: none;
+}
+.fp-segment a:hover { color: var(--accent-text); }
+.fp-segment a.active { background: var(--surface); color: var(--accent-text); box-shadow: var(--shadow); }
+.fp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fp-chips a {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--input-border);
+    background: var(--surface);
+    color: var(--btn-muted-text);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    text-transform: capitalize;
+}
+.fp-chips a:hover { border-color: var(--accent); color: var(--accent-text); }
+.fp-chips a.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.fp-note { font-size: var(--fs-label); color: var(--text-muted); line-height: 1.45; }
+.fp-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+}
+.fp-switch .switch-track { position: relative; width: 40px; height: 22px; border-radius: 11px; background: var(--input-border); flex-shrink: 0; transition: background 0.15s; }
+.fp-switch .switch-thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--on-accent); transition: transform 0.15s; }
+.fp-switch[aria-checked="true"] .switch-track { background: var(--accent); }
+.fp-switch[aria-checked="true"] .switch-thumb { transform: translateX(18px); }
+.fp-switch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
+.fp-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.fp-foot a { font-size: 13px; font-weight: 600; color: var(--accent-text); text-decoration: none; }
+.fp-foot a:hover { text-decoration: underline; }
+.fp-foot form { display: flex; }
+.fp-save {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--surface);
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.fp-save:hover { background: var(--accent); color: var(--on-accent); }
+
+/* Flash messages (templates/_flashes.html), e.g. after "Save as my default".
+   Same look as account_pages.css. */
+.flash { padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 600; margin-bottom: 12px; border: 1px solid; }
+.flash-success { color: var(--notice-success-text); background: var(--notice-success-bg); border-color: var(--notice-success-border); }
+.flash-error { color: var(--notice-error-text); background: var(--notice-error-bg); border-color: var(--notice-error-border); }
+
+/* Active filters shown above the list, each removable. */
+.active-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 16px; }
+.active-filters p { font-size: 14px; color: var(--text-muted); }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 6px 0 10px;
+    border-radius: 999px;
+    background: var(--btn-muted-bg);
+    color: var(--accent-text);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+.filter-chip .icon { font-size: 12px; }
+.filter-chip:hover { background: var(--input-border); }
+
+/* Wide screens: the section name never truncates; the search gives way. */
+@media (min-width: 901px) {
+    .ft-left { min-width: max-content; }
+}
+
+@media (max-width: 900px) {
+    .feed-topbar { padding: 10px 16px 10px 8px; column-gap: 12px; }
+    .ft-logo { font-size: 16px; }
+    .ft-section { font-size: 14px; }
+    .ft-right { gap: 8px; }
+    .feed-topbar .theme-toggle { padding: 6px 10px; }
+    /* Phones: logo, search button and account on one row; the search button
+       slides the search and Filters out full width below. */
+    .ft-center { order: 3; flex-basis: 100%; max-width: none; }
+    .ft-left, .ft-right { flex-basis: auto; }
+    /* The section name shortens before the buttons drop to a second row. */
+    .ft-left { flex: 1 1 0; min-width: 0; }
+    .ft-right { flex: 0 0 auto; }
+    .ft-search-toggle { display: inline-flex; }
+    /* 16px so iOS doesn't zoom in when the search takes focus (theme.css
+       does the same for every field on touch screens). */
+    .ft-search input[type="search"] { font-size: 16px; }
+    .feed-topbar:not(.search-open) .ft-center { display: none; }
+    .feed-topbar.search-open .ft-center { animation: ft-slide-down 0.18s ease-out; }
+}
+@keyframes ft-slide-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .feed-topbar.search-open .ft-center { animation: none; }
+}
+
+/* Narrow phones: the Light/Dark button shows its icon only, so the logo,
+   section name and account fit on one row. */
+@media (max-width: 480px) {
+    .feed-topbar .theme-toggle { padding: 6px 8px; }
+    .feed-topbar .theme-toggle .theme-when-light,
+    .feed-topbar .theme-toggle .theme-when-dark { font-size: 0; gap: 0; }
+    .feed-topbar .theme-toggle .icon { font-size: 15px; }
+}
+
+.feed-topbar .ft-logo { color: var(--topbar-text); }

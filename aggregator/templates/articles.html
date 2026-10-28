@@ -1,11 +1,18 @@
-{% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
-{% from 'account_menu.html' import account_menu with context %}
+{% extends '_app_page.html' %}
+{% from 'story_card_macros.html' import story_card, bias_tag with context %}
+{% from '_feed_topbar.html' import feed_topbar with context %}
 {% from 'pagination.html' import pager %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
-{% from 'icons.html' import icon, theme_toggle_label %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+{% from 'icons.html' import icon %}
+
+{%- set section_title = active_label or ('Grouped Stories' if is_multi_view else 'All Stories') -%}
+{#- Every filter link keeps the others; scrape_param (not active_scrape_status)
+    so an explicit "All" survives a saved scrape default. -#}
+{%- set base = {'topic': active_label, 'scrape_status': scrape_param, 'show_single': show_single|string|lower, 'q': active_search_query, 'range': active_range} -%}
+{%- set range_short = {'24h': '24h', '7d': '7 days', '30d': '30 days', 'all': 'All'} -%}
+{%- set filter_count = (1 if active_range != 'all' else 0) + (1 if active_scrape_status else 0) + (1 if not is_multi_view and not show_single else 0) -%}
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -18,14 +25,10 @@
     <title>MuckScraper: All the muck that's fit to scrape</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/story_card.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/feed_header.css') }}">
+    <script src="{{ url_for('static', filename='js/feed_header.js') }}" defer></script>
     <style>
-        :root {
-            --menu-bg:       #ffffff;
-        }
 
-        [data-theme="dark"] {
-            --menu-bg:       #1e1e2e;
-        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -45,180 +48,11 @@
             /* A flex item won't shrink below its widest child without this;
                on a phone All Stories was 564px wide. */
             min-width: 0;
-            padding: 0 40px;
+            padding: 20px 40px 0;
             max-width: var(--width-list);
             margin: 0 auto;
             position: relative;
         }
-
-        /* Dark top bar, matching every other page (headlines_feed.html,
-           admin_tools.html, story.html, ...) instead of the page's own
-           translucent light header this used to carry -- see CLAUDE.md's
-           note on tokens drifting per-template. */
-        .main-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            position: sticky;
-            top: 0;
-            background: var(--topbar-bg);
-            padding: 16px 40px;
-            margin-bottom: 20px;
-            z-index: 100;
-        }
-
-        h1 { font-size: 18px; font-weight: 800; color: var(--topbar-text); letter-spacing: -0.5px; }
-
-        .header-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .theme-toggle {
-            background: none;
-            border: 1px solid rgba(255,255,255,0.2);
-            color: var(--topbar-text);
-            padding: 6px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        /* Action Menu */
-        .icon-btn {
-            background: var(--surface);
-            border: 1px solid var(--input-border);
-            color: var(--text);
-            padding: 0;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 36px;
-            width: 36px;
-            transition: all 0.2s;
-            box-shadow: var(--shadow);
-        }
-        .icon-btn:hover { border-color: var(--accent); color: var(--accent-text); transform: translateY(-1px); }
-
-        .action-dropdown {
-            position: absolute;
-            top: 70px;
-            right: 0;
-            background: var(--menu-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-            width: 220px;
-            display: none;
-            flex-direction: column;
-            padding: 8px;
-            z-index: 100;
-            animation: slideDown 0.2s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .action-dropdown.show { display: flex; }
-
-        .menu-item {
-            background: none;
-            border: none;
-            color: var(--text);
-            padding: 10px 14px;
-            text-align: left;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            width: 100%;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
-        .menu-item:hover { background: var(--btn-muted-bg); color: var(--accent-text); }
-
-        .menu-divider {
-            height: 1px;
-            background: var(--border);
-            margin: 6px 4px;
-        }
-
-        .active-topic-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--accent-text);
-            margin-bottom: 24px;
-            display: inline-block;
-            padding: 4px 12px;
-            background: rgba(164, 60, 181, 0.1);
-            border-radius: 20px;
-        }
-
-        .search-bar {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .search-bar input {
-            padding: 12px 16px;
-            flex: 1;
-            max-width: 400px;
-            font-size: 15px;
-            border: 1px solid var(--input-border);
-            border-radius: 12px;
-            background: var(--surface);
-            color: var(--text);
-            transition: all 0.2s;
-            box-shadow: var(--shadow);
-        }
-
-        .search-bar input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(164, 60, 181, 0.15);
-        }
-
-        .search-bar button {
-            padding: 12px 24px;
-            font-size: 15px;
-            font-weight: 600;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 4px 12px rgba(164, 60, 181, 0.3);
-        }
-
-        .search-bar button:hover { background: var(--accent-dark); transform: translateY(-1px); }
-
-        .hint { font-size: 12px; color: var(--text-faint); margin-bottom: 32px; margin-left: 4px; }
-
-        .search-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .clear-search {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--accent-text);
-            text-decoration: none;
-        }
-
         /* ── Story cards ── */
         .summary-section-label {
             color: var(--accent-text);
@@ -233,311 +67,112 @@
             list-style: disc;
         }
 
-        .btn-orange       { background: #fab387; color: #1e1e2e; }
-        .btn-orange:hover { background: #f9a070; }
-
-        .story ul.article-list { list-style: none; padding: 0; }
-
-        .story ul.article-list li {
-            padding: 12px 0;
-            font-size: 14px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .story ul.article-list li:last-child { border-bottom: none; }
-
-        .article-title {
-            color: var(--text);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 15px;
-            line-height: 1.4;
-            flex-basis: 100%;
-            margin-bottom: 4px;
-        }
-        .article-title:hover { color: var(--accent-text); text-decoration: underline; }
-
-        .full-text-link       { font-size: 12px; font-weight: 600; color: var(--accent-text); text-decoration: none; }
-        .full-text-link:hover { text-decoration: underline; }
-
-        .outlet-name { color: var(--text-muted); font-size: 13px; font-weight: 500; }
-        .scrape-meta {
-            flex-basis: 100%;
-            margin-top: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            font-size: var(--fs-label);
-            color: var(--text-muted);
-        }
-        .scrape-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 3px 8px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: rgba(0,0,0,0.03);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .scrape-chip.scrape-success { color: #1d6f42; border-color: rgba(29,111,66,0.25); background: rgba(29,111,66,0.08); }
-        .scrape-chip.scrape-fallback { color: #8a5a00; border-color: rgba(138,90,0,0.25); background: rgba(138,90,0,0.09); }
-        .scrape-chip.scrape-blocked,
-        .scrape-chip.scrape-failed { color: #a33636; border-color: rgba(163,54,54,0.25); background: rgba(163,54,54,0.08); }
-        .scrape-chip.scrape-skipped { color: #666; border-color: rgba(102,102,102,0.25); background: rgba(102,102,102,0.08); }
-        .scrape-detail {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: var(--fs-label);
-            color: var(--text-faint);
-        }
-
-        .bias-tag {
-            display: inline-block;
-            font-size: var(--fs-label);
-            font-weight: 800;
-            padding: 2px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .bias-none { background-color: #ddd;    color: #666;  }
-
-        .article-actions { margin-left: auto; display: flex; gap: 8px; }
+        .bias-none { background-color: var(--btn-muted-bg); color: var(--text-muted);  }
 
         .empty { text-align: center; padding: 80px 0; color: var(--text-faint); font-style: italic; }
 
-
-        .scrape-filter-row {
-            margin-bottom: 22px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        /* Hide single-article stories: a link styled as a switch (it reloads the list).
-           On (filled) means hidden, i.e. show_single=false. */
-        .single-toggle-row { margin: 0 0 24px 4px; }
-        .switch { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-muted); font-size: 13px; font-weight: 600; }
-        .switch:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
-        /* Off: an empty outline with a grey knob. On: filled, knob on the right. */
-        .switch-track { position: relative; width: 34px; height: 20px; border-radius: 10px; background: transparent; box-shadow: inset 0 0 0 2px var(--text-faint); transition: background 0.15s, box-shadow 0.15s; flex-shrink: 0; }
-        .switch-thumb { position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-faint); transition: transform 0.15s, background 0.15s; }
-        .switch[aria-checked="true"] .switch-track { background: var(--accent-text); box-shadow: none; }
-        .switch[aria-checked="true"] .switch-thumb { background: var(--surface); transform: translateX(14px); }
-        .switch:hover .switch-label { color: var(--text); }
-
-        .scrape-filter-label {
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-faint);
-        }
-
-        .scrape-filter-link {
-            display: inline-flex;
-            align-items: center;
-            padding: 6px 10px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 700;
-        }
-
-        .scrape-filter-link.active {
-            color: var(--text);
-            border-color: var(--accent);
-            box-shadow: 0 0 0 1px rgba(164, 60, 181, 0.15) inset;
-        }
-
         @media (max-width: 900px) {
-            .main { padding: 0 20px; }
-            .main-header { padding: 16px 20px; }
+            .main { padding: 16px 16px 0; }
         }
     </style>
-</head>
-<body>
-
-<div class="layout">
-
-    {% include 'sidebar_nav.html' %}
-
-    <div class="page-body">
-    <div class="main-header">
-        <h1>MuckScraper</h1>
-
-        <div class="header-controls">
-            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-            {{ account_menu() }}
+{% endblock %}
+{% block topbar %}{% call feed_topbar(section_title, url_for(list_endpoint), active_search_query,
+                        {'topic': active_label, 'scrape_status': scrape_param, 'show_single': show_single|string|lower, 'range': active_range},
+                        filter_count) %}
+        <div>
+            <span class="fp-label">Time range</span>
+            <div class="fp-segment">
+                {%- for value, label in time_ranges %}
+                <a href="{{ url_for(list_endpoint, **dict(base, range=value)) }}" class="{{ 'active' if active_range == value }}"{% if active_range == value %} aria-current="true"{% endif %}>{{ range_short.get(value, label) }}</a>
+                {%- endfor %}
+            </div>
+            {% if active_range != 'all' %}
+            <p class="fp-note" style="margin-top: 8px">Stories with any article in this window, shown with all their articles, including older ones.</p>
+            {% endif %}
         </div>
-    </div>
+        {% if current_user.is_authenticated %}
+        <div>
+            <span class="fp-label">Scrape status</span>
+            <div class="fp-chips">
+                <a href="{{ url_for(list_endpoint, **dict(base, scrape_status='all')) }}" class="{{ 'active' if not active_scrape_status }}">All</a>
+                {%- for status in scrape_status_filters %}
+                <a href="{{ url_for(list_endpoint, **dict(base, scrape_status=status)) }}" class="{{ 'active' if active_scrape_status == status }}">{{ status }}</a>
+                {%- endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% if not is_multi_view %}
+        <a class="fp-switch" role="switch" aria-checked="{{ 'false' if show_single else 'true' }}"
+           href="{{ url_for(list_endpoint, **dict(base, show_single='false' if show_single else 'true', page=1)) }}">
+            <span>Hide single-article stories</span>
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </a>
+        {% endif %}
+        <div class="fp-foot">
+            <a href="{{ url_for(list_endpoint, topic=active_label, q=active_search_query) }}">Reset to my defaults</a>
+            {% if current_user.is_authenticated %}
+            <form method="POST" action="{{ url_for('auth.save_feed_defaults') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="range" value="{{ active_range }}">
+                <input type="hidden" name="scrape_status" value="{{ active_scrape_status or 'all' }}">
+                {% if not is_multi_view %}<input type="hidden" name="hide_single" value="{{ 'false' if show_single else 'true' }}">{% endif %}
+                <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                <button type="submit" class="fp-save">Save as my default</button>
+            </form>
+            {% endif %}
+        </div>
+    {% endcall %}{% endblock %}
+{% block body %}
 
     <div class="main">
-
-        {% if active_label %}
-            <span class="active-topic-label">{{ active_label }}</span>
-        {% endif %}
-
-        <form method="GET" action="{{ url_for(list_endpoint) }}" class="search-bar">
-            <input type="hidden" name="topic" value="{{ active_label or '' }}">
-            <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-            <input type="hidden" name="show_single" value="{{ show_single|string|lower }}">
-            <input type="hidden" name="range" value="{{ active_range }}">
-            <input type="text" name="q" value="{{ active_search_query or '' }}" placeholder="Search stories, articles, outlets, summaries...">
-            <div class="search-actions">
-                <button type="submit">Search</button>
+        {% include '_flashes.html' %}
+        <div class="active-filters">
+            <p>{{ total_stories }} stor{{ 'y' if total_stories == 1 else 'ies' }}{% if active_search_query %} matching “{{ active_search_query }}”{% endif %}</p>
+            <div class="filter-chips">
                 {% if active_search_query %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, range=active_range) }}" class="clear-search">Clear</a>
+                <a class="filter-chip" href="{{ url_for(list_endpoint, **dict(base, q=none)) }}" aria-label="Clear search {{ active_search_query }}">“{{ active_search_query }}” {{ icon('x') }}</a>
+                {% endif %}
+                {% if active_range != 'all' %}
+                <a class="filter-chip" href="{{ url_for(list_endpoint, **dict(base, range='all')) }}" aria-label="Remove filter: last {{ range_short[active_range] }}">Last {{ dict(time_ranges)[active_range]|lower }} {{ icon('x') }}</a>
+                {% endif %}
+                {% if active_scrape_status %}
+                <a class="filter-chip" href="{{ url_for(list_endpoint, **dict(base, scrape_status='all')) }}" aria-label="Remove filter: scrape {{ active_scrape_status }}">Scrape: {{ active_scrape_status }} {{ icon('x') }}</a>
+                {% endif %}
+                {% if not is_multi_view and not show_single %}
+                <a class="filter-chip" href="{{ url_for(list_endpoint, **dict(base, show_single='true', page=1)) }}" aria-label="Remove filter: multi-article stories only">Multi-article only {{ icon('x') }}</a>
                 {% endif %}
             </div>
-        </form>
-        <p class="hint">Search stories, articles, outlets and summaries{% if can('scraper') %}, or open Fetch Articles from the sidebar to pull in new coverage{% endif %}.</p>
-
-        <div class="scrape-filter-row">
-            <span class="scrape-filter-label">Time Range</span>
-            {% for value, label in time_ranges %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, q=active_search_query or '', range=value) }}"
-                   class="scrape-filter-link {% if active_range == value %}active{% endif %}">{{ label }}</a>
-            {% endfor %}
         </div>
-        {% if active_range != 'all' %}
-        <p class="hint">Stories with any article in this window, shown with all their articles, including older ones.</p>
-        {% endif %}
-
-        {% if current_user.is_authenticated %}
-        <div class="scrape-filter-row">
-            <span class="scrape-filter-label">Scrape Filter</span>
-            <a href="{{ url_for(list_endpoint, topic=active_label, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
-               class="scrape-filter-link {% if not active_scrape_status %}active{% endif %}">All</a>
-            {% for status in scrape_status_filters %}
-                <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=status, show_single=show_single|string|lower, q=active_search_query or '', range=active_range) }}"
-                   class="scrape-filter-link {% if active_scrape_status == status %}active{% endif %}">{{ status }}</a>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if not is_multi_view %}
-        <div class="single-toggle-row">
-            <a href="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single='false' if show_single else 'true', page=1, q=active_search_query or '', range=active_range) }}"
-               class="switch" role="switch" aria-checked="{{ 'false' if show_single else 'true' }}">
-                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-                <span class="switch-label">Hide single-article stories</span>
-            </a>
-        </div>
-        {% endif %}
-
         {% if stories %}
             {% for story in stories %}
-            {% call story_card(story) %}
-                        {% if story.articles|length > 1 %}
-                            {# Multi-article Story Uniform Layout #}
-                            {{ bias_balance(story) }}
-
-                            <div class="card-actions">
-                                <a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" class="btn btn-dark">View full coverage & analysis →</a>
-                                {% if story.enrichment_direction and story.bias_gap >= 2 and can('scraper') %}
-                                <form method="POST" action="{{ url_for('admin.enrich_story_balance', story_id=story.id) }}">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="label" value="{{ active_label or '' }}">
-                                    <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-                                    <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
-                                    <button type="submit" class="btn btn-muted">Fetch more {{ story.enrichment_direction }}-leaning coverage</button>
-                                </form>
-                                {% endif %}
-                            </div>
-                        {% else %}
-                            {# Single Article Story Layout (Original) #}
-                            <ul class="article-list">
-                                {% for article in story.display_articles %}
-                                <li>
-                                    <a class="article-title" href="{{ url_for('public.view_article', article_id=article.id, back=current_back()) }}">
-                                        {{ article.title }}
-                                    </a>
-
-                                    <span class="outlet-name">{{ article.outlet.name }}</span>
-
-                                    <a class="full-text-link" href="{{ url_for('public.view_article', article_id=article.id, back=current_back()) }}">{{ 'Full Summary & Text →' if current_user.is_authenticated else 'Summary →' }}</a>
-
-                                    <div style="flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px;">
-                                        {{ bias_tag(article.outlet.bias_score if article.outlet else none) }}
-
-                                        {% if article.outlet.bias_source == "allsides" %}
-                                            <span class="source-badge as-badge" title="Rated by AllSides">AS</span>
-                                        {% elif article.outlet.bias_source == "ai" %}
-                                            <span class="source-badge ai-badge" title="Rated by AI">AI</span>
-                                        {% endif %}
-
-                                        {% if article.bias_score and article.bias_score != article.outlet.bias_score %}
-                                            <span style="color:var(--text-faint); font-size: var(--fs-label);">•</span>
-                                            {{ bias_tag(article.bias_score, prefix='Article: ', unrated=false) }}
-                                        {% endif %}
-
-                                        {% if can('scraper') %}
-                                        <span class="article-actions">
-                                            <button type="button" class="btn btn-muted"
-                                                title="AI Summary"
-                                                onclick="startAiTask('article_summary', {{ article.id }}, this)">
-                                                {{ '↻' if article.summary else '✦' }} Summary
-                                            </button>
-                                            <form method="POST" action="{{ url_for('admin.rate_article', article_id=article.id) }}">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                <input type="hidden" name="label" value="{{ active_label or '' }}">
-                                                <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
-                                                <input type="hidden" name="next" value="{{ url_for(list_endpoint, topic=active_label, scrape_status=active_scrape_status, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) }}">
-                                                <button type="submit" class="btn btn-orange"
-                                                    title="Rate Bias">
-                                                    ✦ Bias
-                                                </button>
-                                            </form>
-                                        </span>
-                                        {% endif %}
-
-                                        {% if current_user.is_authenticated %}
-                                        <div class="scrape-meta">
-                                            {% set scrape_status = article.scrape_status or 'pending' %}
-                                            <span class="scrape-chip scrape-{{ scrape_status }}">
-                                                {% if scrape_status == 'success' %}
-                                                    Scrape OK
-                                                {% elif scrape_status == 'fallback' %}
-                                                    Fallback Used
-                                                {% elif scrape_status == 'blocked' %}
-                                                    Blocked
-                                                {% elif scrape_status == 'skipped' %}
-                                                    Skipped
-                                                {% elif scrape_status == 'failed' %}
-                                                    Failed
-                                                {% else %}
-                                                    Pending
-                                                {% endif %}
-                                            </span>
-                                            {% if article.scrape_method %}
-                                                <span class="scrape-detail">method={{ article.scrape_method }}</span>
-                                            {% endif %}
-                                            {% if article.scrape_http_status %}
-                                                <span class="scrape-detail">http={{ article.scrape_http_status }}</span>
-                                            {% endif %}
-                                            {% if article.scrape_failure_reason %}
-                                                <span class="scrape-detail" title="{{ article.scrape_failure_reason }}">{{ article.scrape_failure_reason[:90] }}{% if article.scrape_failure_reason|length > 90 %}...{% endif %}</span>
-                                            {% endif %}
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
+            {% call story_card(story, compact=true) %}
+                {#- The card's ⋯ menu actions (story_card_macros.html). #}
+                {%- set next_url = url_for(list_endpoint, topic=active_label, scrape_status=scrape_param, show_single=show_single|string|lower, page=page, q=active_search_query or '', range=active_range) %}
+                {%- if story.articles|length > 1 %}
+                    <a class="card-menu-item" role="menuitem" href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">Open full coverage</a>
+                    {% if story.enrichment_direction and story.bias_gap >= 2 and can('scraper') %}
+                    <form method="POST" action="{{ url_for('admin.enrich_story_balance', story_id=story.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="label" value="{{ active_label or '' }}">
+                        <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
+                        <input type="hidden" name="next" value="{{ next_url }}">
+                        <button type="submit" class="card-menu-item" role="menuitem">Fetch more {{ story.enrichment_direction }}-leaning coverage</button>
+                    </form>
+                    {% endif %}
+                {%- else %}
+                    {%- set article = story.display_articles|first %}
+                    <a class="card-menu-item" role="menuitem" href="{{ url_for('public.view_article', article_id=article.id, back=current_back()) }}">{{ 'Read full summary and text' if current_user.is_authenticated else 'Read summary' }}</a>
+                    {% if can('scraper') %}
+                    <button type="button" class="card-menu-item" role="menuitem" onclick="startAiTask('article_summary', {{ article.id }}, this)">{{ 'Regenerate AI summary' if article.summary else 'AI summary' }}</button>
+                    <form method="POST" action="{{ url_for('admin.rate_article', article_id=article.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="label" value="{{ active_label or '' }}">
+                        <input type="hidden" name="scrape_status" value="{{ active_scrape_status or '' }}">
+                        <input type="hidden" name="next" value="{{ next_url }}">
+                        <button type="submit" class="card-menu-item" role="menuitem">Rate bias</button>
+                    </form>
+                    {% endif %}
+                {%- endif %}
             {% endcall %}
             {% endfor %}
         {% else %}
@@ -549,8 +184,8 @@
         {{ pager(page, total_pages) }}
 
     </div>
-    </div>
-</div>
+    {% endblock %}
+{% block scripts %}
 
 <div id="ai-task-status" style="display:none; position:fixed; right:20px; bottom:20px; max-width:320px; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,0.08); z-index:1200;"></div>
 
@@ -589,7 +224,7 @@
         box.style.display = 'block';
         box.style.borderColor = isError ? 'rgba(154, 114, 91, 0.22)' : 'var(--border)';
         box.style.background = isError ? 'rgba(154, 114, 91, 0.08)' : 'var(--surface)';
-        box.style.color = isError ? '#9a725b' : 'var(--text-muted)';
+        box.style.color = isError ? 'var(--notice-error-text)' : 'var(--text-muted)';
         box.textContent = status.message || 'AI task update received.';
     }
 
@@ -695,5 +330,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

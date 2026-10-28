@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from aggregator import db
+from aggregator import db, feed_prefs
 from aggregator.accounts import email_error, password_error
 from aggregator.models import User
 
@@ -30,7 +30,8 @@ def login():
             db.session.commit()
             next_page = request.args.get("next")
             if not next_page or urlparse(next_page).netloc != "":
-                next_page = url_for("public.headlines_feed")
+                # The index sends the reader to their chosen start page.
+                next_page = url_for("public.index")
             return redirect(next_page)
         else:
             flash("Invalid username or password")
@@ -54,6 +55,12 @@ def profile():
     """
     if request.method == "POST":
         action = request.form.get("action")
+        if action == "feed_defaults":
+            # Preferences, not credentials: no password needed.
+            # An unticked checkbox sends nothing, so read presence.
+            feed_prefs.save(current_user, {**request.form.to_dict(), "hide_single": "hide_single" in request.form})
+            flash("Feed defaults saved.", "success")
+            return redirect(url_for("auth.profile"))
         if not current_user.check_password(request.form.get("current_password", "")):
             flash("Your current password was not correct.", "error")
         elif action == "email":
@@ -76,4 +83,32 @@ def profile():
                 flash("Password changed.", "success")
         return redirect(url_for("auth.profile"))
 
-    return render_template("profile.html")
+    return render_template(
+        "profile.html",
+        feed_defaults=feed_prefs.load(current_user),
+        start_pages=feed_prefs.START_PAGES,
+        ranges=feed_prefs.RANGES,
+        scrape_statuses=feed_prefs.SCRAPE_STATUSES,
+    )
+
+
+def _local_next(value, fallback):
+    """`value` if it is a path on this site, else `fallback`."""
+    if not value or not value.startswith("/") or value.startswith("//") or urlparse(value).netloc:
+        return fallback
+    return value
+
+
+@auth.route("/feed-defaults", methods=["POST"])
+@login_required
+def save_feed_defaults():
+    """"Save as my default" in the feed's Filters popover: store the filters
+    the list is showing now and go back to it. Fields the form leaves out keep
+    their saved values."""
+    prefs = feed_prefs.load(current_user)
+    for field in ("start_page", "range", "scrape_status", "hide_single"):
+        if field in request.form:
+            prefs[field] = request.form[field]
+    feed_prefs.save(current_user, prefs)
+    flash("Saved as your feed defaults.", "success")
+    return redirect(_local_next(request.form.get("next"), url_for("admin.list_articles")))

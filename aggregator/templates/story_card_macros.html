@@ -2,7 +2,7 @@
    Stories in articles.html, Headlines in headlines_feed.html) and the bias
    chips used across pages. Styles: static/css/story_card.css and theme.css.
    Import WITH CONTEXT (the card uses url_for, current_back, can):
-     {% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
+     {% from 'story_card_macros.html' import story_card, bias_balance, bias_line, bias_tag with context %}
    muckscraper.news uses macros.html, not this file. #}
 {% from 'icons.html' import icon %}
 
@@ -37,9 +37,63 @@
 </div>
 {%- endmacro %}
 
+{# Left / Center / Right counts with a proportional bar at the far right,
+   for the compact cards (styles: feed_header.css .lcr). Uses the counts
+   story_bias_totals() set (article rating, else outlet), like Search. #}
+{% macro bias_line(story) -%}
+{%- set l = story.left_bias_count|default(0) -%}
+{%- set c = story.center_bias_count|default(0) -%}
+{%- set r = story.right_bias_count|default(0) -%}
+{%- set total = l + c + r -%}
+<span class="lcr" aria-label="Left {{ l }}, center {{ c }}, right {{ r }}">
+    <span class="lcr-l">L {{ l }}</span><span class="lcr-c">C {{ c }}</span><span class="lcr-r">R {{ r }}</span>
+    <span class="lcr-bar" aria-hidden="true">
+        {%- if total -%}
+        <span class="seg-l" style="width: {{ (l * 100 / total)|round(1) }}%"></span><span class="seg-c" style="width: {{ (c * 100 / total)|round(1) }}%"></span><span class="seg-r" style="width: {{ (r * 100 / total)|round(1) }}%"></span>
+        {%- endif -%}
+    </span>
+</span>
+{%- endmacro %}
+
 {# The card shell: image, headline, one metadata row. The page fills the
-   rest through `{% call story_card(story) %} ... {% endcall %}`. #}
-{% macro story_card(story) -%}
+   rest through `{% call story_card(story) %} ... {% endcall %}`.
+   compact=true (All / Grouped Stories): a thumbnail, the headline with
+   article and outlet counts, and on the right the date over the
+   Left/Center/Right line. #}
+{% macro story_card(story, compact=false) -%}
+{%- if compact %}
+<div class="story compact" id="story-{{ story.id }}">
+    <div class="story-layout">
+        {% set featured_article = story.articles|selectattr('image_url')|first %}
+        <a class="story-image" href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}" tabindex="-1" aria-hidden="true">
+            {% if featured_article and featured_article.image_url %}
+                <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
+            {% else %}
+                <span class="story-image-placeholder">{{ story.articles[0].source if story.articles else 'MuckScraper' }}</span>
+            {% endif %}
+        </a>
+        <div class="story-content">
+            <div class="story-row">
+                <div class="story-main">
+                    <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
+                    {% set article_count = story.articles|length %}
+                    <div class="card-meta">
+                        <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}{% if story.source_count is defined %} · {{ story.source_count }} outlet{{ 's' if story.source_count != 1 else '' }}{% endif %}</span>
+                        {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
+                        {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
+                        {% if story.edition_has_updates %}<span class="card-flag flag-new">New updates</span>{% endif %}
+                    </div>
+                </div>
+                <div class="story-side">
+                    {% if story.last_updated %}<span class="story-date">{{ story.last_updated|short_datetime }}</span>{% endif %}
+                    {{ bias_line(story) }}
+                </div>
+            </div>
+            {{ caller() }}
+        </div>
+    </div>
+</div>
+{%- else %}
 <div class="story" id="story-{{ story.id }}">
     <div class="story-layout">
         {% set featured_article = story.articles|selectattr('image_url')|first %}
@@ -47,7 +101,7 @@
             {% if featured_article and featured_article.image_url %}
                 <img src="{{ featured_article.image_url }}" alt="" loading="lazy">
             {% else %}
-                <div class="story-image-placeholder">{{ icon('newspaper') }}</div>
+                <div class="story-image-placeholder">{{ story.articles[0].source if story.articles else 'MuckScraper' }}</div>
             {% endif %}
         </div>
 
@@ -69,4 +123,5 @@
         </div>
     </div>
 </div>
+{%- endif %}
 {%- endmacro %}

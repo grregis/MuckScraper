@@ -17,7 +17,7 @@
     border: 1px solid var(--border);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.story:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+.story:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 
 .story-layout { display: flex; }
 
@@ -35,7 +35,7 @@
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
     color: var(--text-faint); font-size: 40px;
-    background: linear-gradient(135deg, rgba(164, 60, 181, 0.1) 0%, rgba(164, 60, 181, 0.02) 100%);
+    background: var(--btn-muted-bg);
 }
 
 .story-content { flex: 1; min-width: 0; padding: 22px 24px; display: flex; flex-direction: column; }
@@ -55,7 +55,7 @@
     margin-left: 10px;
     padding: 2px 8px; border-radius: 6px;
     font-size: var(--fs-label); font-weight: 700;
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--on-accent);
 }
 .card-flag.flag-new { background: var(--bias-1-bg); color: var(--bias-1-fg); }
 
@@ -63,7 +63,7 @@
 .bias-balance {
     display: flex;
     margin-bottom: 16px;
-    background: rgba(0,0,0,0.02);
+    background: var(--btn-muted-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
 }
@@ -108,7 +108,39 @@
 .card-actions form { display: flex; }
 .card-actions .btn { width: 100%; text-align: center; padding: 11px 12px; font-size: var(--fs-meta); font-weight: 700; }
 
+/* Compact cards (story_card(story, compact=true), All / Grouped Stories):
+   a thumbnail, the headline and counts, and on the right the date over the
+   Left/Center/Right line (Philip, 2026-10-22). The .lcr pieces are in
+   feed_header.css. */
+.story.compact { border-radius: 12px; margin-bottom: 10px; scroll-margin-top: 80px; }
+.story.compact:hover { transform: none; box-shadow: var(--shadow); }
+.story.compact .story-layout { gap: 16px; padding: 12px; align-items: flex-start; }
+.story.compact .story-image {
+    width: 120px; min-width: 120px; height: 80px; min-height: 0;
+    border-radius: 8px; display: block;
+}
+.story.compact:hover .story-image img { transform: none; }
+.story.compact .story-image-placeholder { font-size: 24px; }
+.story.compact .story-content { padding: 0; }
+.story.compact h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.1px; margin-bottom: 6px; }
+.story.compact .card-meta { margin-bottom: 0; }
+.story-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 20px; }
+.story-main { flex: 1 1 320px; min-width: 0; }
+.story-side { flex: 0 0 auto; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding-top: 2px; }
+.story-date { font-size: var(--fs-label); color: var(--text-muted); white-space: nowrap; }
+.story.compact .lcr-bar { width: 120px; height: 8px; border-radius: 4px; }
+/* Whatever the page adds below (article rows, actions) starts under the row. */
+.story.compact .story-row + * { margin-top: 10px; }
+.story.compact .card-actions > * { flex: 0 1 auto; }
+.story.compact .card-actions .btn { width: auto; padding: 7px 12px; font-size: var(--fs-label); }
+
 @media (max-width: 900px) {
     .story-layout { flex-direction: column; }
     .story-image { width: 100%; height: 200px; min-width: unset; }
+    .story.compact .story-layout { flex-direction: row; }
+    .story.compact .story-image { width: 88px; min-width: 88px; height: 64px; }
+    .story.compact .story-side { margin-left: 0; align-items: flex-start; flex-direction: row-reverse; justify-content: space-between; width: 100%; }
 }
+
+.story-image-placeholder { padding: 12px; text-align: center; overflow-wrap: anywhere; color: var(--text-muted); background: var(--btn-muted-bg); font-size: 16px; }
+.story.compact .story-image-placeholder { font-size: 14px; }

@@ -1,0 +1,53 @@
+{% from 'icons.html' import icon %}
+{% from 'account_menu.html' import account_menu with context %}
+{# Header-only extraction. Live search and Filters are added by later PRs. #}
+{% macro feed_topbar(section_title=none, search_action=none, q="", hidden={}, filter_count=0, suggest_scope=none, placeholder="Search stories, articles, outlets") %}
+{% if section_title is none %}<header class="topbar feed-topbar">{{ caller() }}</header>{% else %}
+<header class="topbar feed-topbar{% if q %} search-open{% endif %}">
+    <div class="ft-left">
+        {#- Shows and hides the sidebar (sidebar_script.html); the page sets
+            sidebar_toggle_in_topbar so sidebar_nav.html leaves out its own tab. #}
+
+        <a class="ft-logo topbar-title" href="{{ url_for('public.index') }}">MuckScraper</a>
+        {%- if section_title %}
+        <span class="ft-sep" aria-hidden="true">/</span>
+        <span class="ft-section">{{ section_title }}</span>
+        {%- endif %}
+    </div>
+
+    <div class="ft-center" id="ft-search-area">
+        <form class="ft-search" role="search" method="GET" action="{{ search_action }}"
+              data-range="{{ hidden.get('range') or '' }}"{% if suggest_scope %} data-scope="{{ suggest_scope }}"{% endif %}>
+            {%- for name, value in hidden.items() if value is not none %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">
+            {%- endfor %}
+            <label class="visually-hidden" for="feed-search">{{ placeholder }}</label>
+            <span class="ft-search-icon">{{ icon('search') }}</span>
+            <input id="feed-search" type="search" name="q" value="{{ q or '' }}"
+                   placeholder="{{ placeholder }}" autocomplete="off" spellcheck="false"
+                   >
+            <kbd class="ft-kbd" aria-hidden="true">/</kbd>
+        </form>
+
+        {%- if caller is defined %}
+        <div class="ft-filters">
+            <button type="button" class="ft-filter-btn" id="feed-filter-btn" aria-haspopup="dialog"
+                    aria-expanded="false" aria-controls="feed-filters"
+                    aria-label="Filters" title="Filters">
+                {{ icon('sliders') }}
+            </button>
+            <div class="ft-popover" id="feed-filters" role="dialog" aria-label="Feed filters" hidden>
+                {{ caller() }}
+            </div>
+        </div>
+        {%- endif %}
+    </div>
+
+    <div class="ft-right">
+        <button type="button" class="ft-search-toggle" id="ft-search-toggle" aria-controls="ft-search-area"
+                aria-expanded="{{ 'true' if q else 'false' }}" aria-label="Search" title="Search">{{ icon('search') }}</button>
+        {{ account_menu() }}
+    </div>
+</header>
+{% endif %}
+{% endmacro %}
