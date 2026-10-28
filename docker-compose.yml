@@ -10,16 +10,6 @@ services:
       - ./postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.8
-    environment:
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
-      # Meilisearch sends anonymous usage data to its makers by default.
-      MEILI_NO_ANALYTICS: "true"
-    volumes:
-      - ./meili_data:/meili_data
-    restart: unless-stopped
-
   # Holds the Docker socket so the admin app never has to -- exposes only
   # container-list/restart over an internal-only HTTP API. See
   # docker_restart_proxy/app.py for exactly what's reachable.
@@ -36,7 +26,6 @@ services:
       dockerfile: news_fetcher/Dockerfile
     depends_on:
       - postgres
-      - meilisearch
     command: sh -c "sleep 15 && python -m news_fetcher.scheduler"
     environment:
       FLASK_APP: aggregator.app
@@ -72,8 +61,6 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
-      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
     restart: unless-stopped
     volumes:
       - .:/app
@@ -84,7 +71,6 @@ services:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-5000}:5000"
     depends_on:
       - postgres
-      - meilisearch
       - docker-restart-proxy
     environment:
       FLASK_APP: aggregator.app
@@ -123,8 +109,6 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
-      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
       DOCKER_RESTART_PROXY_URL: http://docker-restart-proxy:5001
     restart: unless-stopped
     volumes:
@@ -141,7 +125,6 @@ services:
       dockerfile: mcp_server/Dockerfile
     depends_on:
       - postgres
-      - meilisearch
       - docker-restart-proxy
     ports:
       - "${MCP_BIND:-127.0.0.1}:${MCP_PORT:-8765}:8765"
@@ -162,8 +145,6 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
-      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-muckscraper-dev-key}
       DOCKER_RESTART_PROXY_URL: http://docker-restart-proxy:5001
       PYTHONDONTWRITEBYTECODE: "1"
       GIT_OPTIONAL_LOCKS: "0"

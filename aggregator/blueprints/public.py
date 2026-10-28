@@ -3,8 +3,8 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import current_user
+from aggregator import feed_prefs
 from aggregator.permissions import public_or_login, public_read_enabled
-from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.opinion import opinion_for_story, published_edition_opinion_cards, split_by_leaning
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
@@ -26,7 +26,15 @@ public = Blueprint("public", __name__)
 @public.route("/")
 def index():
     # Land on Headlines (Regis, 2026-10-04: the more natural starting page).
-    if current_user.is_authenticated or public_read_enabled():
+    if current_user.is_authenticated:
+        # The start page the reader chose on their profile (feed_prefs.py).
+        start = feed_prefs.load(current_user)["start_page"]
+        if start == "all":
+            return redirect(url_for("admin.list_articles"))
+        if start == "grouped":
+            return redirect(url_for("admin.multi_article_stories"))
+        return redirect(url_for("public.headlines_feed"))
+    if public_read_enabled():
         return redirect(url_for("public.headlines_feed"))
     return redirect(url_for("auth.login", next=url_for("public.headlines_feed")))
 
@@ -199,9 +207,3 @@ def ollama_status():
     # The full detail is available to admins at admin.ollama_status_detail.
     from news_fetcher.llm_client import llm_status_detail_public
     return jsonify(llm_status_detail_public())
-
-
-@public.route("/meili-status")
-@public_or_login
-def meili_status():
-    return jsonify({"online": meili_healthcheck()})

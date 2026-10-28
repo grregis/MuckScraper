@@ -211,3 +211,9 @@
     body .topbar .topbar-title { font-size: 16px; }
     body .topbar .theme-toggle, body .topbar .account-signin { padding-left: 10px; padding-right: 10px; }
 }
+
+/* Shared header controls; the header stays dark in both themes. */
+:root { --on-accent: #ffffff; --header-input-bg: #2a2a3e; --header-input-border: #4a4a68; }
+
+:root { --notice-success-text: #1d6f42; --notice-success-bg: #eef7f1; --notice-success-border: #97baa6; --notice-error-text: #a33636; --notice-error-bg: #fcf0f0; --notice-error-border: #d8a6a6; }
+[data-theme="dark"] { --notice-success-text: #7fd6a2; --notice-success-bg: #152b23; --notice-success-border: #386a50; --notice-error-text: #f2a0a0; --notice-error-bg: #321e24; --notice-error-border: #80474d; }

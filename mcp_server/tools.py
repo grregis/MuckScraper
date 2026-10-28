@@ -432,18 +432,17 @@ def search(query, kind="stories", days=7, limit=20):
     limit = max(1, min(int(limit), 50))
     days = int(days) if days else None
     since = _now() - timedelta(days=days) if days else None
-    used = "meilisearch"
+    used = "postgres full-text"
     ids = None
     try:
         from aggregator import search as s
-        if s.meili_enabled():
-            fn = s.search_story_ids if kind == "stories" else s.search_article_ids
-            ids = fn(query, limit=limit, since=since)
+        fn = s.search_story_ids if kind == "stories" else s.search_article_ids
+        ids = fn(query, limit=limit, since=since)
     except Exception:
         ids = None
     if kind == "stories":
         if ids is None:
-            used = "sql substring (Meilisearch unavailable)"
+            used = "sql substring (full-text search unavailable)"
             ids = [r[0] for r in _q("""select id from stories where (headline ilike :p or title ilike :p)
                                         and (cast(:s as timestamp) is null or created_at >= :s)
                                         order by created_at desc limit :n""",
@@ -456,7 +455,7 @@ def search(query, kind="stories", days=7, limit=20):
                           for r in rows), key=lambda x: order.get(x["story_id"], 0))
     else:
         if ids is None:
-            used = "sql substring (Meilisearch unavailable)"
+            used = "sql substring (full-text search unavailable)"
             ids = [r[0] for r in _q("""select id from articles where title ilike :p
                                         and (cast(:s as timestamp) is null or date >= :s)
                                         order by date desc limit :n""", p=f"%{query}%", s=since, n=limit).fetchall()]
@@ -543,34 +542,20 @@ def containers():
 
 def search_health():
     from aggregator import search as s
-    if not s.meili_enabled():
-        return {"verdict": v.OK, "summary": "Meilisearch is not configured (MEILI_URL unset)."}
-    healthy = s.healthcheck()
-    out = {"meilisearch_up": healthy}
-    counts = {}
-    if healthy:
-        for idx in (s.STORY_INDEX, s.ARTICLE_INDEX):
-            try:
-                counts[idx] = s._request("GET", f"/indexes/{idx}/stats").get("numberOfDocuments")
-            except Exception:
-                counts[idx] = None
-    db_counts = {"stories": _q("select count(*) from stories").scalar(),
-                 "articles": _q("select count(*) from articles").scalar()}
-    step = ((_setting("last_run_metrics") or {}).get("steps") or {}).get("search_index")
-    out.update({"documents": counts, "database_rows": db_counts, "last_run_search_update": step})
-    level, notes = v.OK, []
-    if not healthy:
-        level = v.PROBLEM
-        notes.append("Meilisearch is not answering; search falls back to slow SQL matching.")
-    for idx, n in counts.items():
-        rows = db_counts.get(idx)
-        if n is not None and rows and abs(n - rows) / rows > 0.02:
-            level = v.WARNING if level == v.OK else level
-            notes.append(f"Index '{idx}' has {n} documents vs {rows} rows; a full rebuild may be needed.")
-    if isinstance(step, dict) and step.get("status") == "error":
-        level = v.WARNING if level == v.OK else level
-        notes.append("The last run's search update failed: " + str(step.get("reason"))[:200])
-    out["verdict"], out["summary"] = level, " ".join(notes) or "Search index is up and in step with the database."
+    ready = s.search_ready()
+    out = {
+        "engine": "postgres full-text (generated search_vector columns, GIN and pg_trgm indexes)",
+        "indexes_present": ready,
+        "database_rows": {"stories": _q("select count(*) from stories").scalar(),
+                          "articles": _q("select count(*) from articles").scalar()},
+    }
+    if not ready:
+        out["verdict"] = v.PROBLEM
+        out["summary"] = ("Search columns or indexes are missing, so search falls back to slow SQL "
+                          "matching. Run the database migrations (./install.sh or flask db upgrade).")
+    else:
+        out["verdict"] = v.OK
+        out["summary"] = "Search indexes are in place; they update with every write, so they cannot drift."
     return out
 
 

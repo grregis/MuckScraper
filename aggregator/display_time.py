@@ -47,6 +47,15 @@ def local_datetime(value: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return local.strftime(fmt) if local else ""
 
 
+# One short date format for the feed's story cards and search suggestions,
+# e.g. "Oct 19, 9:39 PM" (Philip, 2026-10-22: every date the same format).
+SHORT_DATETIME_FORMAT = "%b %-d, %-I:%M %p"
+
+
+def short_datetime(value: datetime | None) -> str:
+    """Template filter: a stored datetime as "Oct 19, 9:39 PM" in the display zone."""
+    return local_datetime(value, SHORT_DATETIME_FORMAT)
+
 
 def local_day_start_utc(day: date) -> datetime:
     """Midnight at the start of `day` in the display zone, as naive UTC, for

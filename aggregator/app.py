@@ -39,6 +39,7 @@ with app.app_context():
 def init_db():
     with app.app_context():
         db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         db.session.commit()
         db.create_all()
 

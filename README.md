@@ -73,7 +73,7 @@ Stories and articles in dense, sortable tables, filtered by time window, with Le
 
 - **Backend:** Python, Flask, SQLAlchemy
 - **Database:** PostgreSQL with pgvector
-- **Search:** Meilisearch
+- **Search:** Postgres full-text search (`tsvector` + `pg_trgm`)
 - **News Data:** NewsAPI and GNews, with RSS support
 - **LLM Runtime:** Ollama by default; Gemini, Groq, or any OpenAI-compatible endpoint optional
 - **Embeddings:** `nomic-embed-text`
@@ -96,7 +96,7 @@ muckscraper/
 │   ├── html_safety.py              # Sanitising filters for scraped and LLM text
 │   ├── seed_defaults.py            # Default topics, feeds, prompts and schedule for a fresh install
 │   ├── article_signals.py          # Ingest heuristics: roundup/betting patterns, bias bucketing, independent-source checks
-│   ├── search.py                   # Meilisearch integration
+│   ├── search.py                   # Full-text search (Postgres)
 │   ├── story_view.py               # Story view helpers
 │   ├── blueprints/
 │   │   ├── admin/                  # Admin and maintenance routes (package: articles, bulk_actions, config_crud, tools, ...)
@@ -154,7 +154,7 @@ Recommended deployment:
 
 ## Requirements
 
-- Docker with the Compose v2 plugin (`docker compose`). PostgreSQL with pgvector and Meilisearch run as part of the stack.
+- Docker with the Compose v2 plugin (`docker compose`). PostgreSQL with pgvector runs as part of the stack.
 - An LLM provider: Ollama by default, or Gemini, Groq, or any OpenAI-compatible endpoint
 - An embedding provider: Ollama (`nomic-embed-text`) or Gemini
 - Optional: NewsAPI and GNews API keys. Each source is skipped if its key is blank; the default RSS feeds work without either.
@@ -163,7 +163,7 @@ Recommended deployment:
 
 What the live deployment runs on, as a guide:
 
-- **The Docker stack:** 2 CPU cores and 8 GB of RAM is plenty (the containers use about 1.5 GB between them). Allow about 10 GB of disk for the images, plus the database: about 1 GB for 120,000 articles over six months, and the search index on top.
+- **The Docker stack:** 2 CPU cores and 8 GB of RAM is plenty (the containers use about 1.5 GB between them). Allow about 10 GB of disk for the images, plus the database: about 1 GB for 120,000 articles over six months, including its search indexes.
 - **The LLM:** a GPU makes the difference. A full run makes about 1,200 LLM calls, one after another, so every second per call adds up. The live site uses a 10 GB GPU with `gemma4:12b-it-qat` (`OLLAMA_THINK=false`) and `nomic-embed-text`, both held on the GPU together; a full run of 250-300 new articles takes 25-35 minutes. On a smaller card, `gemma4:e4b-it-qat` (about 3 GB of VRAM) works. Ollama can run on a different machine from the stack (set `OLLAMA_HOST`).
 - **Ollama's context size:** set `OLLAMA_CONTEXT_LENGTH` to at least `16384` on the Ollama server (in its service environment, not in this `.env`). Older Ollama versions default to 4,096 tokens, which cuts off long story-summary prompts. MuckScraper never asks for a context size per call, so the server's setting is what every call gets.
 - **No GPU?** Send the summaries, or everything, to a cloud provider instead; see LLM behavior below.
@@ -178,8 +178,8 @@ cd muckscraper
 ./install.sh
 ```
 
-The first run creates `.env` from `.env.sample`, fills in `SECRET_KEY` and
-`MEILI_MASTER_KEY` for you, and stops so you can fill in the rest. At
+The first run creates `.env` from `.env.sample`, fills in `SECRET_KEY`
+for you, and stops so you can fill in the rest. At
 minimum set `OLLAMA_HOST`, `OLLAMA_MODEL`, `EMBEDDING_MODEL`
 (`nomic-embed-text`) and `ADMIN_PASSWORD`; pull both models on your Ollama
 box first (`ollama pull ...`). Change the Postgres password too. News API
@@ -211,9 +211,9 @@ time. Change them at `/admin/pipeline-schedule` (then restart the scheduler).
 
 ```bash
 cp .env.sample .env && chmod 600 .env
-# Edit .env: Ollama host and models, admin password, and SECRET_KEY and
-# MEILI_MASTER_KEY, each from: python3 -c "import secrets; print(secrets.token_hex(32))"
-docker compose up -d --build postgres meilisearch app
+# Edit .env: Ollama host and models, admin password, and SECRET_KEY from:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+docker compose up -d --build postgres app
 docker compose exec app python bootstrap_admin.py
 docker compose up -d scheduler
 ```
@@ -282,7 +282,7 @@ An optional, read-only [MCP](https://modelcontextprotocol.io) server lets an AI 
 - Duplicate article detection by URL and normalized title/outlet checks
 - Copied articles (wire copies, one outlet running another's piece) marked and not counted as extra sources
 - Junk filtered before storage: betting picks, fantasy advice, roundups, editorial cartoons, plus your own source and title blocks
-- Full-text search across articles and stories via Meilisearch, updated automatically after every run
+- Full-text search across articles and stories in Postgres, always current (no index to rebuild), with prefix and typo matching for as-you-type search
 
 ### Scraping and reliability
 - Full article scraping during ingestion
@@ -323,7 +323,6 @@ An optional, read-only [MCP](https://modelcontextprotocol.io) server lets an AI 
 - Ollama helpers: wake the Ollama box, and catch up after an outage (missing embeddings, regrouping of single-article stories, headlines) plus topic reclassification
 - Outlet merge tooling
 - Topic, RSS feed, scheduled fetch and ingestion blocklist management
-- Search index rebuild
 - Editable LLM prompts, each resettable back to its original default
 - Pipeline run schedule management (add/edit/delete when fetch-only vs. full-pipeline runs happen)
 - Container restart from the admin UI, blocked automatically while a fetch or other background task is running
@@ -423,6 +422,5 @@ Important knobs include:
 
 ## Special Thanks
 
-- **[Meilisearch](https://www.meilisearch.com/)** — powers full-text search across articles and stories. Fast, easy to self-host, and a genuinely great fit for this kind of project.
 - **[Langfuse](https://langfuse.com/)** — LLM observability and tracing, invaluable for debugging prompts and iterating on model behavior during development.
 - **[AllSides](https://www.allsides.com/)** — outlet bias ratings that inform MuckScraper's bias labeling. Their commitment to balanced news exposure is very much in the spirit of this project.

@@ -56,7 +56,7 @@ MAX_LOG_MINUTES = 7 * 24 * 60
 # Preferred restart-all order: app is last because restarting it kills the
 # in-flight request that triggered this call, so everything else should get
 # a confirmed result first.
-RESTART_ALL_ORDER = ["postgres", "meilisearch", "scheduler", "app"]
+RESTART_ALL_ORDER = ["postgres", "scheduler", "app"]
 
 
 def _project_containers():

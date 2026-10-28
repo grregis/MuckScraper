@@ -1,10 +1,11 @@
+{% extends '_app_page.html' %}
 {% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
-{% from 'account_menu.html' import account_menu with context %}
-{% from 'icons.html' import icon, theme_toggle_label %}
+{% from '_feed_topbar.html' import feed_topbar with context %}
+{% from 'icons.html' import icon %}
 {% from 'pagination.html' import pager %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -24,29 +25,6 @@
             color: var(--text);
             -webkit-font-smoothing: antialiased;
         }
-        .topbar {
-            background: var(--topbar-bg);
-            padding: 16px 40px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .topbar a { color: #89b4fa; text-decoration: none; font-size: 14px; font-weight: 600; }
-        .topbar-title { color: var(--topbar-text); font-size: 18px; font-weight: 800; }
-        .header-controls { display: flex; align-items: center; gap: 12px; }
-        .theme-toggle {
-            background: none;
-            border: 1px solid rgba(255,255,255,0.2);
-            color: var(--topbar-text);
-            padding: 6px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-        }
         .main { max-width: var(--width-list); margin: 0 auto; padding: 0 40px; }
         .main-header { padding: 24px 0 8px; }
         h1 { font-size: var(--fs-page-title); font-weight: 800; color: var(--accent-text); letter-spacing: -0.5px; margin-bottom: 4px; }
@@ -63,21 +41,12 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
+{% endblock %}
+{% block topbar %}{{ feed_topbar('Headlines', url_for('admin.list_articles')) }}{% endblock %}
+{% block body %}
 
-<div class="topbar">
-    <div>
-        <span class="topbar-title">MuckScraper</span>
-    </div>
-    <div class="header-controls">
-        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
-        {{ account_menu() }}
-    </div>
-</div>
+{#- Search from Headlines lands on All Stories, in the reader's default window. #}
+
 
 <div class="main">
     <div class="main-header">
@@ -125,8 +94,8 @@
     {% endif %}
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     function applyTheme(theme) {
@@ -146,5 +115,4 @@
     {% include 'sidebar_script.html' %}
 </script>
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

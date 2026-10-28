@@ -1,9 +1,9 @@
+{% extends '_app_page.html' %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'pagination.html' import pager %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -220,21 +220,18 @@
             .col-title { min-width: 200px; }
         }
     </style>
-</head>
-<body>
-
-<div class="layout">
-
-    {% include 'sidebar_nav.html' %}
-
-    <div class="page-body">
-    <div class="main-header">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
         <h1>Search</h1>
         <div class="header-controls">
             <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
             {{ account_menu() }}
         </div>
-    </div>
+    {% endcall %}
+{% endblock %}
+{% block body %}
+
 
     <div class="main">
 
@@ -259,7 +256,7 @@
         </form>
 
         {% if degraded %}
-        <div class="notice">Meilisearch is unavailable, so this text match is a simple substring search.</div>
+        <div class="notice">Full-text search hit an error, so this text match is a simple substring search.</div>
         {% endif %}
 
         <div class="summary-line">
@@ -317,8 +314,8 @@
         {{ pager(page, total_pages) }}
         {% endif %}
     </div>
-    </div>
-</div>
+    {% endblock %}
+{% block scripts %}
 
 <script>
     (function () {
@@ -343,5 +340,4 @@
 
     {% include 'sidebar_script.html' %}
 </script>
-</body>
-</html>
+{% endblock %}
