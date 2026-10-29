@@ -1,0 +1,28 @@
+{# Shared frame extracted from dev; content, controls and route behavior stay with each page. #}
+{% from '_feed_topbar.html' import feed_topbar with context %}
+{% from 'breadcrumb.html' import back_link %}
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+{% block head %}{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app_page.css') }}">
+</head>
+<body>
+{% block topbar %}{% endblock %}
+{% if shared_sidebar|default(true) %}<div class="layout">
+{% include 'sidebar_nav.html' %}
+<div class="page-body">{% endif %}{% block body %}{% endblock %}{% if shared_sidebar|default(true) %}</div>
+</div>{% endif %}
+<script>
+    // Keep --topbar-h equal to the header's real height, which changes when it wraps.
+    (function () {
+        const bar = document.querySelector('.feed-topbar');
+        if (!bar || !window.ResizeObserver) return;
+        const sync = () => document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
+        new ResizeObserver(sync).observe(bar);
+        sync();
+    })();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
