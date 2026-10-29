@@ -132,7 +132,7 @@ async def get_article(article_id: int) -> dict:
 @mcp.tool()
 async def search(query: str, kind: str = "stories", days: int = 7, limit: int = 20) -> dict:
     """Search stories or articles (kind='articles') from the last N days
-    (days=0 for all time). Uses Meilisearch, or a SQL match if it is down."""
+    (days=0 for all time). Uses Postgres full-text search, or a SQL match if it fails."""
     return await _call(tools.search, query, kind, days, limit)
 
 
@@ -161,8 +161,8 @@ async def containers() -> dict:
 
 @mcp.tool()
 async def search_health() -> dict:
-    """Whether Meilisearch is up, its document counts against the database,
-    and the result of the last run's search index update."""
+    """Whether the Postgres full-text search columns and indexes exist
+    (migrations applied), with the story and article row counts."""
     return await _call(tools.search_health)
 
 

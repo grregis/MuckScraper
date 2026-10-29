@@ -7,10 +7,9 @@ from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, role_required
 from sqlalchemy import or_
 from aggregator import db
 from aggregator.models import AppSetting, Article, Story
-from aggregator.search import reindex_all
 from news_fetcher.llm_client import TIER_QUALITY
 
-from . import admin, SEARCH_REINDEX_STATUS_KEY, _TASK_STATUS_KEY_PREFIXES, ORPHANED_TASK_STALE_AFTER, BULK_TASK_ACTIONS
+from . import admin, _TASK_STATUS_KEY_PREFIXES, ORPHANED_TASK_STALE_AFTER, BULK_TASK_ACTIONS
 from ._shared import _load_json_setting, _save_json_setting
 
 logger = logging.getLogger(__name__)
@@ -69,10 +68,7 @@ def reconcile_orphaned_task_statuses():
     """
     cutoff = datetime.utcnow() - ORPHANED_TASK_STALE_AFTER
     rows = AppSetting.query.filter(
-        or_(
-            *[AppSetting.key.like(prefix + "%") for prefix in _TASK_STATUS_KEY_PREFIXES],
-            AppSetting.key == SEARCH_REINDEX_STATUS_KEY,
-        )
+        or_(*[AppSetting.key.like(prefix + "%") for prefix in _TASK_STATUS_KEY_PREFIXES])
     ).all()
     reconciled = 0
     for row in rows:
@@ -106,20 +102,6 @@ def reconcile_orphaned_task_statuses():
         db.session.commit()
         logger.info("[Startup] Reconciled %d stale 'running' task status(es).", reconciled)
     return reconciled
-
-
-def _search_reindex_status_payload():
-    payload = _load_json_setting(SEARCH_REINDEX_STATUS_KEY)
-    if payload:
-        return payload
-    return {
-        "status": "idle",
-        "started_at": None,
-        "finished_at": None,
-        "message": "Search index has not been rebuilt in this app session yet.",
-        "story_documents": None,
-        "article_documents": None,
-    }
 
 
 def _ai_task_status_key(task_type, resource_id):
@@ -223,43 +205,6 @@ def _run_ai_task(app, task_type, resource_id):
                     "started_at": started_at,
                     "finished_at": datetime.utcnow().isoformat(),
                     "message": str(e),
-                },
-            )
-
-
-def _run_search_reindex(app):
-    with app.app_context():
-        try:
-            started_at = _search_reindex_status_payload().get("started_at")
-            counts = reindex_all()
-            _save_json_setting(
-                SEARCH_REINDEX_STATUS_KEY,
-                {
-                    "status": "success",
-                    "started_at": started_at,
-                    "finished_at": datetime.utcnow().isoformat(),
-                    "message": "Meilisearch reindex completed successfully.",
-                    "story_documents": counts["story_documents"],
-                    "article_documents": counts["article_documents"],
-                },
-            )
-            logger.info(
-                "[Search] Async reindex complete stories=%s articles=%s",
-                counts["story_documents"],
-                counts["article_documents"],
-            )
-        except Exception as e:
-            logger.exception(f"Async search reindex error: {e}")
-            started_at = _search_reindex_status_payload().get("started_at")
-            _save_json_setting(
-                SEARCH_REINDEX_STATUS_KEY,
-                {
-                    "status": "error",
-                    "started_at": started_at,
-                    "finished_at": datetime.utcnow().isoformat(),
-                    "message": str(e),
-                    "story_documents": None,
-                    "article_documents": None,
                 },
             )
 
@@ -408,9 +353,3 @@ def ai_task_status(task_type, resource_id):
             "message": "Invalid AI task type.",
         }), 400
     return jsonify(_ai_task_status_payload(task_type, resource_id))
-
-
-@admin.route("/reindex-search-status")
-@role_required(ROLE_ADMIN)
-def reindex_search_status():
-    return jsonify(_search_reindex_status_payload())

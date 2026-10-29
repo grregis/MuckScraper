@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import current_user
 from aggregator.permissions import public_or_login, public_read_enabled
-from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
 from aggregator.opinion import opinion_for_story, published_edition_opinion_cards, split_by_leaning
 from aggregator.story_view import apply_aggregator_filter, annotate_edition_story_flags
@@ -199,9 +198,3 @@ def ollama_status():
     # The full detail is available to admins at admin.ollama_status_detail.
     from news_fetcher.llm_client import llm_status_detail_public
     return jsonify(llm_status_detail_public())
-
-
-@public.route("/meili-status")
-@public_or_login
-def meili_status():
-    return jsonify({"online": meili_healthcheck()})

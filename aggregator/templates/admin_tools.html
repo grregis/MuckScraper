@@ -550,21 +550,6 @@
                 </form>
                 {{ bulk_task_status_box("scrape_all_missing") }}
             </div>
-            <div class="tool-card">
-                <div class="tool-card-title">Reindex Search</div>
-                <p>Rebuilds the Meilisearch story and article indexes from the database so admin search stays fast and can search both stories and articles.</p>
-                <div class="meta-row">
-                    <span class="badge">Maintenance</span>
-                </div>
-                <button type="button" class="btn" id="reindex-search-btn" onclick="startSearchReindex()">Reindex Search</button>
-                <div class="status-box" id="reindex-search-status-box">
-                    <div class="status-line">
-                        <span class="status-pill idle" id="reindex-search-state">Idle</span>
-                    </div>
-                    <div class="status-copy" id="reindex-search-message">Search index has not been rebuilt in this app session yet.</div>
-                    <div class="status-meta" id="reindex-search-meta"></div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -706,83 +691,6 @@
         return date.toLocaleString();
     }
 
-    function applySearchReindexStatus(status) {
-        const button = document.getElementById('reindex-search-btn');
-        const state = document.getElementById('reindex-search-state');
-        const message = document.getElementById('reindex-search-message');
-        const meta = document.getElementById('reindex-search-meta');
-
-        const currentStatus = status.status || 'idle';
-        state.className = `status-pill ${currentStatus}`;
-        state.textContent = currentStatus === 'running'
-            ? 'Working'
-            : currentStatus === 'success'
-                ? 'Successful'
-                : currentStatus === 'error'
-                    ? 'Failed'
-                    : 'Idle';
-
-        message.textContent = status.message || 'No search reindex status available.';
-
-        const details = [];
-        if (status.started_at) details.push(`Started: ${formatStatusTimestamp(status.started_at)}`);
-        if (status.finished_at) details.push(`Finished: ${formatStatusTimestamp(status.finished_at)}`);
-        if (status.story_documents !== null && status.story_documents !== undefined) {
-            details.push(`Stories: ${status.story_documents}`);
-        }
-        if (status.article_documents !== null && status.article_documents !== undefined) {
-            details.push(`Articles: ${status.article_documents}`);
-        }
-        meta.textContent = details.join(' · ');
-
-        if (currentStatus === 'running') {
-            button.disabled = true;
-            button.textContent = 'Reindex Running...';
-        } else {
-            button.disabled = false;
-            button.textContent = 'Reindex Search';
-        }
-    }
-
-    function pollSearchReindexStatus() {
-        fetch('{{ url_for("admin.reindex_search_status") }}')
-            .then(r => r.json())
-            .then(applySearchReindexStatus)
-            .catch(() => {
-                applySearchReindexStatus({
-                    status: 'error',
-                    message: 'Could not load reindex status.',
-                });
-            });
-    }
-
-    function startSearchReindex() {
-        const button = document.getElementById('reindex-search-btn');
-        button.disabled = true;
-        button.textContent = 'Starting...';
-
-        fetch('{{ url_for("admin.reindex_search") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
-            }
-        })
-            .then(async (response) => {
-                const data = await response.json();
-                applySearchReindexStatus(data.status || {});
-                if (!response.ok && response.status !== 409) {
-                    throw new Error(data.message || 'Failed to start search reindex.');
-                }
-            })
-            .catch((error) => {
-                applySearchReindexStatus({
-                    status: 'error',
-                    message: error.message || 'Failed to start search reindex.',
-                });
-            });
-    }
-
     const BULK_TASK_ACTIONS = [
         'ollama_catchup', 'scrape_all_missing', 'reclassify_articles',
         'force_resummarize', 'audit_scrapes',
@@ -849,8 +757,6 @@
     applyTheme(savedTheme);
     pollOllamaActiveHost();
     setInterval(pollOllamaActiveHost, 30000);
-    pollSearchReindexStatus();
-    setInterval(pollSearchReindexStatus, 5000);
     pollBulkTaskStatuses();
     setInterval(pollBulkTaskStatuses, 5000);
 </script>

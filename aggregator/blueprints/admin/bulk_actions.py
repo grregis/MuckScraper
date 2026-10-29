@@ -1,13 +1,11 @@
 import logging
-import threading
-from datetime import datetime
-from flask import request, redirect, url_for, jsonify, current_app
+from flask import request, redirect, url_for, jsonify
 from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, role_required
 from aggregator import db
 
-from . import admin, SEARCH_REINDEX_STATUS_KEY
+from . import admin
 from ._shared import redirect_to_articles
-from ._tasks import _start_bulk_task, _try_claim_task_status, _run_search_reindex, _search_reindex_status_payload
+from ._tasks import _start_bulk_task
 
 logger = logging.getLogger(__name__)
 
@@ -46,37 +44,6 @@ def wake_ollama():
     except Exception as e:
         logger.error(f"WoL error: {e}")
     return redirect_to_articles(label, scrape_status)
-
-
-@admin.route("/reindex-search", methods=["POST"])
-@role_required(ROLE_ADMIN)
-def reindex_search():
-    started_at = datetime.utcnow().isoformat()
-    claimed = _try_claim_task_status(
-        SEARCH_REINDEX_STATUS_KEY,
-        {
-            "status": "running",
-            "started_at": started_at,
-            "finished_at": None,
-            "message": "Reindexing stories and articles into Meilisearch.",
-            "story_documents": None,
-            "article_documents": None,
-        },
-    )
-    if not claimed:
-        return jsonify({
-            "started": False,
-            "status": _search_reindex_status_payload(),
-        }), 409
-
-    app = current_app._get_current_object()
-    thread = threading.Thread(target=_run_search_reindex, args=(app,), daemon=True)
-    thread.start()
-
-    return jsonify({
-        "started": True,
-        "status": _search_reindex_status_payload(),
-    }), 202
 
 
 @admin.route("/ollama-status")
