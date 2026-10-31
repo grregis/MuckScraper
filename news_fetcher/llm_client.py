@@ -447,7 +447,11 @@ def _generate_text_ollama(prompt, timeout, model=None):
     return _ollama_request("generate", _call)
 
 
-def _generate_text_gemini(prompt, timeout, model=None):
+GEMINI_MAX_RETRIES = 3
+GEMINI_RETRY_BASE_WAIT_SECONDS = 15
+
+
+def _generate_text_gemini(prompt, timeout, model=None, _attempt=0):
     if not GEMINI_API_KEY:
         return None
     try:
@@ -459,6 +463,15 @@ def _generate_text_gemini(prompt, timeout, model=None):
         text = (response.text or "").strip()
         return text or None
     except Exception as e:
+        err_str = str(e)
+        if ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str) and _attempt < GEMINI_MAX_RETRIES:
+            wait_seconds = GEMINI_RETRY_BASE_WAIT_SECONDS * (_attempt + 1)
+            logger.info(
+                f"  [llm_client] Gemini rate-limited (429/RESOURCE_EXHAUSTED), retrying in {wait_seconds}s "
+                f"({_attempt + 1}/{GEMINI_MAX_RETRIES})"
+            )
+            time.sleep(wait_seconds)
+            return _generate_text_gemini(prompt, timeout, model=model, _attempt=_attempt + 1)
         logger.info(f"  [llm_client] Gemini generate error: {e}")
         return None
 

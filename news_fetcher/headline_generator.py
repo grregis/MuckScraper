@@ -4,6 +4,7 @@
 import logging
 import os
 import re
+import time
 from datetime import datetime, timedelta
 
 from langfuse import Langfuse
@@ -258,6 +259,7 @@ def generate_headlines_for_stale_stories(lookback_days=STALE_HEADLINE_LOOKBACK_D
             generated += 1
         else:
             failed += 1
+        time.sleep(2)
 
     db.session.commit()
     logger.info(f"[Headlines] Generated {generated}, failed {failed}.")
