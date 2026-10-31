@@ -23,6 +23,12 @@ def _active_feed_urls(bucket):
     return [f.url for f in RssFeed.query.filter_by(bucket=bucket, enabled=True).all()]
 
 
+def _active_feeds(bucket):
+    """Enabled RssFeed objects for a bucket."""
+    from aggregator.models import RssFeed
+    return RssFeed.query.filter_by(bucket=bucket, enabled=True).all()
+
+
 def _feed_fallback_url(feed_url):
     """The fallback_url set on any RssFeed row for this URL, or None."""
     from aggregator.models import RssFeed
@@ -229,14 +235,14 @@ def fetch_and_store_rss():
 
     fast_provider = llm_client.provider_for_tier(llm_client.TIER_FAST)
     max_entries = RSS_MAX_ENTRIES_PER_FEED_GROQ if fast_provider == "groq" else 30
-    feed_urls = _active_feed_urls("general")
+    feeds = _active_feeds("general")
 
     logger.info("=== RSS fetch starting ===")
     total = 0
     metrics = {
         "provider": "rss",
         "status": "ok",
-        "feeds_attempted": len(feed_urls),
+        "feeds_attempted": len(feeds),
         "feeds_with_articles": 0,
         "input_articles": 0,
         "stored": 0,
@@ -249,10 +255,11 @@ def fetch_and_store_rss():
         "per_feed": [],
     }
 
-    for feed_url in feed_urls:
-        source_name, articles = _fetch_with_fallback(feed_url, max_entries=max_entries)
+    for feed in feeds:
+        source_name, articles = _fetch_with_fallback(feed.url, max_entries=max_entries)
         if articles:
-            feed_metrics = store_articles(articles, "Global News", provider="rss")
+            topic_tag = feed.label or "Global News"
+            feed_metrics = store_articles(articles, topic_tag, provider="rss")
             metrics["feeds_with_articles"] += 1
             metrics["input_articles"] += feed_metrics.get("input_articles", 0)
             metrics["stored"] += feed_metrics.get("stored", 0)
@@ -263,7 +270,7 @@ def fetch_and_store_rss():
             merge_count_maps(metrics["bias_buckets"], feed_metrics.get("bias_buckets"))
             merge_count_maps(metrics["bias_sources"], feed_metrics.get("bias_sources"))
             metrics["per_feed"].append({
-                "feed_url": feed_url,
+                "feed_url": feed.url,
                 "source_name": source_name,
                 "input_articles": feed_metrics.get("input_articles", 0),
                 "stored": feed_metrics.get("stored", 0),
@@ -271,7 +278,7 @@ def fetch_and_store_rss():
             total += len(articles)
         else:
             metrics["per_feed"].append({
-                "feed_url": feed_url,
+                "feed_url": feed.url,
                 "source_name": source_name,
                 "input_articles": 0,
                 "stored": 0,
