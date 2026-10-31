@@ -15,7 +15,7 @@
 
     <div class="card">
         <dl class="facts">
-            <dt>{{ 'Display name' if oidc_managed else 'Username' }}</dt><dd>{{ account_display_name }}</dd>
+            <dt>{{ 'Display name' if oidc_managed and session.get('oidc_created_user') else 'Username' }}</dt><dd>{{ account_display_name }}</dd>
             <dt>Role</dt><dd>{{ current_user.role_label }}</dd>
             <dt>Email</dt><dd>{{ current_user.email }}</dd>
             {% if current_user.created_at %}<dt>Member since</dt><dd>{{ current_user.created_at | local_datetime('%B %d, %Y') }}</dd>{% endif %}
