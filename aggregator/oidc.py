@@ -8,7 +8,7 @@ import json
 import secrets
 import time
 from datetime import datetime
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import click
 from flask import abort, current_app, redirect, request, session, url_for
@@ -49,6 +49,8 @@ def configuration(environ):
         config[name] = value
     for name in ("ISSUER_URL", "REDIRECT_URI"):
         _https_url(config[name], "OIDC_" + name)
+    logout_uri = environ.get("OIDC_POST_LOGOUT_REDIRECT_URI", "").strip()
+    config["POST_LOGOUT_REDIRECT_URI"] = _https_url(logout_uri, "OIDC_POST_LOGOUT_REDIRECT_URI") if logout_uri else None
     config["SCOPES"] = environ.get("OIDC_SCOPES", "openid profile email groups")
     if "openid" not in config["SCOPES"].split():
         raise ValueError("OIDC_SCOPES must include openid")
@@ -97,6 +99,21 @@ def display_name(claims):
             if not any(ord(char) < 32 or ord(char) == 127 for char in value):
                 return value.strip()
     return "Account"
+
+
+def logout_request(config, endpoint):
+    """Build an optional RP-initiated logout request from provider metadata."""
+    redirect_uri = config.get("POST_LOGOUT_REDIRECT_URI")
+    if not isinstance(endpoint, str) or not redirect_uri:
+        return None
+    parsed = urlsplit(endpoint)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment):
+        return None
+    state = secrets.token_urlsafe(32)
+    reserved = {"client_id", "post_logout_redirect_uri", "state"}
+    query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k not in reserved]
+    query.extend((("client_id", config["CLIENT_ID"]), ("post_logout_redirect_uri", redirect_uri), ("state", state)))
+    return urlunsplit(parsed._replace(query=urlencode(query))), state
 
 
 def resolve_user(claims, config):
@@ -256,10 +273,17 @@ def callback():
         db.session.rollback()
         current_app.logger.warning("OIDC sign-in refused (%s)", type(error).__name__)
         abort(403)
+    endpoint = None
+    if config.get("POST_LOGOUT_REDIRECT_URI"):
+        try:
+            endpoint = current_app.extensions["muckscraper_oidc"].load_server_metadata().get("end_session_endpoint")
+        except Exception as error:
+            current_app.logger.warning("OIDC logout discovery unavailable (%s)", type(error).__name__)
     session.clear()
     logout_user()  # Also clears a stale local remember-me cookie.
     login_user(user, remember=False)
     session.update(auth_method="oidc", oidc_identity=key,
                    oidc_display_name=display_name(token["userinfo"]),
+                   oidc_end_session_endpoint=endpoint,
                    oidc_expires_at=time.time() + config["SESSION_LIFETIME_SECONDS"])
     return redirect(safe_next(pending.get("next")))

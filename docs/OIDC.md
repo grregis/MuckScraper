@@ -23,6 +23,8 @@ OIDC_ISSUER_URL=https://identity.example.com/realms/readers
 OIDC_CLIENT_ID=muckscraper
 OIDC_CLIENT_SECRET=inject-a-client-secret
 OIDC_REDIRECT_URI=https://reader.example.com/auth/oidc/callback
+# Optional, requires registration with the provider:
+OIDC_POST_LOGOUT_REDIRECT_URI=https://reader.example.com/auth/oidc/logout/callback
 OIDC_PROVIDER_NAME=Organization sign-in
 OIDC_SCOPES=openid profile email groups
 OIDC_ALLOWED_GROUPS=["news-readers"]
@@ -123,8 +125,12 @@ changes take effect at sign-in, not immediately in existing sessions.
 During an OIDC session, the profile explains that identity details are managed
 at the provider and refuses local email/password changes. Sign-out requires a
 CSRF-protected POST. It clears the local session and any remember-me cookie,
-but does not end the provider's own session. RP-initiated or back-channel logout
-is not implemented.
+unless optional RP-initiated logout is configured. Set
+`OIDC_POST_LOGOUT_REDIRECT_URI` and register that exact callback with the
+provider to request sign-out at its discovered HTTPS end-session endpoint.
+If the endpoint is unavailable, local sign-out still works. Providers can ask
+for confirmation or require an ID token hint, which this implementation does
+not retain. Back-channel logout is not implemented.
 
 ## Verification
 
