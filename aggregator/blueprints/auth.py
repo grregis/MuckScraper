@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
@@ -59,12 +60,32 @@ def oidc_callback():
 
 @auth.route("/logout", methods=["GET", "POST"])
 def logout():
-    if session.get("auth_method") == "oidc" and request.method != "POST":
+    oidc_session = session.get("auth_method") == "oidc"
+    if oidc_session and request.method != "POST":
         abort(405)
+    provider_logout = None
+    if oidc_session:
+        from aggregator.oidc import logout_request
+        provider_logout = logout_request(current_app.config.get("OIDC") or {}, session.get("oidc_end_session_endpoint"))
     session.clear()
     logout_user()
     session["oidc_auto_login_paused"] = True
+    if provider_logout:
+        endpoint, state = provider_logout
+        session["oidc_logout_state"] = state
+        return redirect(endpoint)
     return redirect(url_for("public.index"))
+
+
+@auth.route("/oidc/logout/callback", methods=["GET"])
+def oidc_logout_callback():
+    if not current_app.config.get("OIDC"):
+        abort(404)
+    expected = session.pop("oidc_logout_state", "")
+    state = request.args.get("state", "")
+    if not expected or not state or not state.isascii() or len(state) > 128 or not secrets.compare_digest(state, expected):
+        abort(403)
+    return redirect(url_for("auth.login", manual="1"))
 
 
 @auth.route("/profile", methods=["GET", "POST"])

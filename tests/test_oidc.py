@@ -167,6 +167,41 @@ def test_failed_auto_login_does_not_loop(app, flow):
     assert finish(start())[0].status_code == 302
 
 
+@pytest.mark.parametrize("endpoint", [None, "http://issuer.example/logout", "https://user:pass@issuer.example/logout", "https://issuer.example/logout#fragment"])
+def test_provider_logout_rejects_unsafe_endpoints(endpoint):
+    from aggregator.oidc import logout_request
+    assert logout_request({"CLIENT_ID": "test", "POST_LOGOUT_REDIRECT_URI": "https://reader.example/callback"}, endpoint) is None
+
+
+def test_optional_provider_logout_preserves_auto_login_pause(app, flow, monkeypatch):
+    client, start, finish = flow
+    app.config["OIDC"]["AUTO_LOGIN"] = True
+    app.config["OIDC"]["POST_LOGOUT_REDIRECT_URI"] = "https://reader.example/auth/oidc/logout/callback"
+    remote = app.extensions["muckscraper_oidc"]
+    metadata = dict(remote.load_server_metadata(), end_session_endpoint="https://issuer.example/logout")
+    monkeypatch.setattr(remote, "load_server_metadata", Mock(return_value=metadata))
+    assert finish(start())[0].status_code == 302
+    profile = client.get("/auth/profile", base_url="https://reader.example")
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', profile.get_data(as_text=True)).group(1)
+    response = client.post("/auth/logout", data={"csrf_token": csrf},
+                           headers={"Referer": "https://reader.example/auth/profile"}, base_url="https://reader.example")
+    assert response.location.startswith("https://issuer.example/logout?")
+    state = parse_qs(urlsplit(response.location).query)["state"][0]
+    with client.session_transaction() as session:
+        assert "_user_id" not in session and session["oidc_auto_login_paused"] is True
+    assert client.get("/auth/oidc/logout/callback?state=bad", base_url="https://reader.example").status_code == 403
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 403
+    finish(start())
+    profile = client.get("/auth/profile", base_url="https://reader.example")
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', profile.get_data(as_text=True)).group(1)
+    response = client.post("/auth/logout", data={"csrf_token": csrf},
+                           headers={"Referer": "https://reader.example/auth/profile"}, base_url="https://reader.example")
+    state = parse_qs(urlsplit(response.location).query)["state"][0]
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 302
+    assert client.get("/auth/login", base_url="https://reader.example").status_code == 200
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 403
+
+
 def test_auto_login_logout_stays_signed_out(app, flow):
     client, start, finish = flow
     app.config["OIDC"]["AUTO_LOGIN"] = True
