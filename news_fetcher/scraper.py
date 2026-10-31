@@ -22,7 +22,7 @@ HEADERS_DEFAULT = {
 # The allowlist lives in aggregator/html_safety.py so the templates filter
 # with exactly the same rules at render time.
 from aggregator.html_safety import ALLOWED_ATTRIBUTES, ALLOWED_TAGS, sanitize_html  # noqa: E402,F401
-from news_fetcher.bylines import author_from_html  # noqa: E402
+from news_fetcher.bylines import author_from_html, _jsonld_items  # noqa: E402
 
 # No crawler user agent and no headless browser for paywalled sites (Regis,
 # 2026-10-21). Posing as Googlebot is how 12ft.io got past paywalls before
@@ -556,14 +556,18 @@ def extract_structured_metadata(html, url):
             payload = json.loads(raw)
         except Exception:
             continue
-        stack = payload if isinstance(payload, list) else [payload]
-        for item in stack:
+        for item in _jsonld_items(payload):
             if not isinstance(item, dict):
                 continue
-            body = item.get("articleBody") or item.get("description")
-            headline = item.get("headline")
-            if body:
-                candidates.append((headline, body))
+            entity = item.get("mainEntity")
+            entity_items = [item]
+            if isinstance(entity, dict):
+                entity_items.append(entity)
+            for target_item in entity_items:
+                body = target_item.get("articleBody") or target_item.get("description")
+                headline = target_item.get("headline") or item.get("headline")
+                if body:
+                    candidates.append((headline, body))
 
     meta_fields = [
         ("meta", {"property": "og:description"}),
@@ -583,13 +587,27 @@ def extract_structured_metadata(html, url):
     best_html = None
     best_len = 0
     for headline, body in candidates:
-        clean_body = _clean_text(body)
-        if len(clean_body) < 140:
+        if isinstance(body, list):
+            raw_body = "\n\n".join(str(p) for p in body if p)
+        else:
+            raw_body = str(body or "")
+
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', raw_body) if p.strip()]
+        if not paragraphs:
+            paragraphs = [raw_body.strip()] if raw_body.strip() else []
+
+        total_len = sum(len(p) for p in paragraphs)
+        if total_len < 140:
             continue
+
         parts = []
         if headline:
             parts.append(f"<h2>{bleach.clean(headline, strip=True)}</h2>")
-        parts.append(f"<p>{bleach.clean(clean_body, strip=True)}</p>")
+        for p in paragraphs:
+            cleaned_p = bleach.clean(p, strip=True)
+            if cleaned_p:
+                parts.append(f"<p>{cleaned_p}</p>")
+
         candidate_html = sanitize_html("<div>" + "".join(parts) + "</div>")
         if len(candidate_html) > best_len:
             best_html = candidate_html
