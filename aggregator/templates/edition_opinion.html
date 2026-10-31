@@ -1,9 +1,9 @@
+{% extends '_app_page.html' %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'oped_columns.html' import oped_columns with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -68,13 +68,9 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
-
-<div class="topbar">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
     <div>
         <span class="topbar-title">MuckScraper</span>
     </div>
@@ -82,7 +78,11 @@
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}
+{% endblock %}
+{% block body %}
+
+
 
 <div class="main">
     <div class="main-header">
@@ -111,8 +111,8 @@
     {% endfor %}
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     function applyTheme(theme) {
@@ -132,5 +132,4 @@
     {% include 'sidebar_script.html' %}
 </script>
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

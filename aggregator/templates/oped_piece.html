@@ -1,3 +1,4 @@
+{% extends '_app_page.html' %}
 {% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
@@ -5,9 +6,8 @@
 {#- One Op/Ed piece (admin.oped_piece, blueprints/admin/oped.py), laid out like
     article.html: what it argues, the news story it is linked to, its text and
     the publisher link. Signed-out visitors get no text, as on article pages. -#}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -187,14 +187,9 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
-
-<div class="topbar">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(back_href, back_label) }}
@@ -203,7 +198,11 @@
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}
+{% endblock %}
+{% block body %}
+
+
 
 {% set outlet_name = piece.outlet.name if piece.outlet else (piece.source or 'the publisher') %}
 <div class="container">
@@ -291,8 +290,8 @@
     </div>
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     {% include 'sidebar_script.html' %}
@@ -312,5 +311,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

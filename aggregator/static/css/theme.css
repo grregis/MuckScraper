@@ -211,3 +211,21 @@
     body .topbar .topbar-title { font-size: 16px; }
     body .topbar .theme-toggle, body .topbar .account-signin { padding-left: 10px; padding-right: 10px; }
 }
+
+/* Risk colours, shared by the jobs list and its buttons. */
+:root {
+    --risk-safe-bg: #eaf6ee; --risk-safe-text: #1d6b3a;
+    --risk-broad-bg: #fff3e0; --risk-broad-text: #8a4b00; --risk-broad-border: #e8c79a;
+    --risk-danger-bg: #fdecec; --risk-danger-text: #a61b1b; --risk-danger-border: #e3b3b3;
+}
+[data-theme="dark"] {
+    --risk-safe-bg: rgba(47, 158, 91, 0.18); --risk-safe-text: #8fdcab;
+    --risk-broad-bg: rgba(210, 154, 30, 0.16); --risk-broad-text: #f0c470; --risk-broad-border: rgba(210, 154, 30, 0.45);
+    --risk-danger-bg: rgba(201, 74, 74, 0.16); --risk-danger-text: #f2a0a0; --risk-danger-border: rgba(201, 74, 74, 0.45);
+}
+
+
+:root { --settings-on-accent: #ffffff; }
+
+:root { --settings-accent-soft: #ededf5; --settings-status-ok: #2f9e5b; --settings-status-warn: #d29a1e; --settings-status-bad: #c94a4a; }
+[data-theme="dark"] { --settings-accent-soft: #303047; }
