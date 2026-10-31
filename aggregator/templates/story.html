@@ -1,10 +1,12 @@
+{% extends '_app_page.html' %}
+{% from 'story_analysis.html' import story_analysis %}
 {% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
 {% from 'oped_columns.html' import oped_columns, oped_roundup with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/story_analysis.css') }}">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -201,15 +203,9 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
-
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(feed_back_url('story-%d' % story.id), 'Back to Feed') }}
@@ -221,7 +217,12 @@
                    font-size:13px; font-weight:600;">{{ theme_toggle_label() }}</button>
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}
+{% endblock %}
+{% block body %}
+
+{% from 'breadcrumb.html' import back_link %}
+
 
 <div class="container">
 <div class="story-card">
@@ -295,20 +296,7 @@
                 {% endif %}
             </div>
             {% if story.deep_report %}
-                <div class="analysis-content">
-                    {% for line in story.deep_report.split('\n') %}
-                        {% set l = line.strip() %}
-                        {% if l %}
-                            {% if ':' in l and l.split(':')[0].strip()|length < 35 %}
-                                {% set label = l.split(':', 1)[0].strip() %}
-                                {% set rest = l.split(':', 1)[1].strip() %}
-                                <p><strong>{{ label }}:</strong> {{ rest }}</p>
-                            {% else %}
-                                <p>{{ l }}</p>
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-                </div>
+                {{ story_analysis(analysis, story) }}
             {% elif not ollama_online %}
                 <div class="status-msg">
                     Analysis will be generated when Ollama is back online. This story has been queued for processing.
@@ -356,7 +344,7 @@
 
 	                    <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
                         <a href="{{ url_for('public.view_article', article_id=article.id, back=incoming_back()) }}" class="btn-view">{{ 'Read Summary & Text →' if current_user.is_authenticated else 'Read Summary →' }}</a>
-                        
+
                         {% if not article.summary and ollama_online and can('scraper') %}
                             <button type="button" class="btn-view" style="cursor: pointer;" onclick="startAiTask('article_summary', {{ article.id }}, this)">Summarize</button>
                         {% endif %}
@@ -369,8 +357,8 @@
     </div>
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     {% include 'sidebar_script.html' %}
@@ -490,5 +478,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

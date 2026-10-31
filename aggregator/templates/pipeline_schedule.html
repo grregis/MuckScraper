@@ -1,8 +1,10 @@
+{% extends '_app_page.html' %}
+{% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% from 'breadcrumb.html' import back_link %}
+{% block head %}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
@@ -102,10 +104,8 @@
         .empty { padding: 24px; text-align: center; color: var(--text-faint); font-style: italic; }
     </style>
     <script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script>
-</head>
-<body>
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
+{% endblock %}
+{% block topbar %}{% call feed_topbar() %}
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(url_for('admin.tools_page'), 'Back to Admin Tools') }}
@@ -114,7 +114,10 @@
         {{ theme_toggle() }}
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}{% endblock %}
+{% block body %}
+
+
 
 <div class="container">
     <h1>Pipeline Schedule</h1>
@@ -184,5 +187,4 @@
         </form>
     </div>
 </div>
-</body>
-</html>
+{% endblock %}

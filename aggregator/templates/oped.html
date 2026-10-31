@@ -1,3 +1,4 @@
+{% extends '_app_page.html' %}
 {% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'pagination.html' import pager %}
@@ -5,9 +6,8 @@
 {% from 'oped_columns.html' import oped_columns, oped_roundup with context %}
 {#- Op/Ed list (admin.oped_list, blueprints/admin/oped.py). Laid out like
     All Stories (articles.html); cards reuse story_card.css. -#}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -156,21 +156,18 @@
             .main-header { padding: 16px 20px; }
         }
     </style>
-</head>
-<body>
-
-<div class="layout">
-
-    {% include 'sidebar_nav.html' %}
-
-    <div class="page-body">
-    <div class="main-header">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
         <h1>MuckScraper</h1>
         <div class="header-controls">
             <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
             {{ account_menu() }}
         </div>
-    </div>
+    {% endcall %}
+{% endblock %}
+{% block body %}
+
 
     <div class="main">
         <h2 class="page-title">Op/Ed</h2>
@@ -265,8 +262,8 @@
         {{ pager(page, total_pages) }}
         {% endif %}
     </div>
-    </div>
-</div>
+    {% endblock %}
+{% block scripts %}
 
 <script>
     function applyTheme(theme) {
@@ -286,5 +283,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,8 +1,10 @@
+{% extends '_app_page.html' %}
+{% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% from 'breadcrumb.html' import back_link %}
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -337,8 +339,18 @@
             .tool-card { border-right: none; }
         }
     </style>
-</head>
-<body>
+{% endblock %}
+{% block topbar %}{% call feed_topbar() %}
+    <div class="topbar-left crumb-bar">
+        <span class="topbar-title">MuckScraper</span>
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
+    </div>
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
+{% endcall %}{% endblock %}
+{% block body %}
 {% macro bulk_task_status_box(action) %}
 <div class="status-box" id="bulk-status-box-{{ action }}">
     <div class="status-line">
@@ -348,17 +360,8 @@
     <div class="status-meta" id="bulk-meta-{{ action }}"></div>
 </div>
 {% endmacro %}
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
-    <div class="topbar-left crumb-bar">
-        <span class="topbar-title">MuckScraper</span>
-        {{ back_link(feed_back_url(), 'Back to Feed') }}
-    </div>
-    <div class="topbar-right">
-        {{ theme_toggle() }}
-        {{ account_menu() }}
-    </div>
-</div>
+
+
 
 <div class="container">
     <h1>Admin Tools</h1>
@@ -854,5 +857,4 @@
     pollBulkTaskStatuses();
     setInterval(pollBulkTaskStatuses, 5000);
 </script>
-</body>
-</html>
+{% endblock %}

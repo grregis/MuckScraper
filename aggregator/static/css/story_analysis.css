@@ -1,0 +1,104 @@
+/* The story page's multi-source analysis (templates/story_analysis.html):
+   Cards (default) and Sections, picked under Appearance on the profile page
+   (Philip, 2026-10-23). Bias colours come from theme.css. */
+
+.sa p { line-height: 1.6; margin: 0 0 0.7em; }
+.sa p:last-child { margin-bottom: 0; }
+.sa .icon { display: block; }
+.sa-count {
+    font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-faint); white-space: nowrap;
+}
+.sa-left   { --sa-side: var(--bias-1-bg); --sa-side-text: var(--bias-left-text);   --sa-tint: var(--sa-l-tint); }
+.sa-center { --sa-side: var(--bias-3-bg); --sa-side-text: var(--bias-center-text); --sa-tint: var(--sa-c-tint); }
+.sa-right  { --sa-side: var(--bias-5-bg); --sa-side-text: var(--bias-right-text);  --sa-tint: var(--sa-r-tint); }
+
+/* ---- Cards ---- */
+.sa-cards h3 {
+    font-size: var(--fs-label); font-weight: 800; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--accent-text); margin: 0 0 6px;
+}
+.sa-cards .sa-lead {
+    display: flex; gap: 14px; padding: 18px 20px;
+    background: var(--summary-bg); border: 1px solid var(--border); border-radius: 14px;
+}
+.sa-cards .sa-lead .sa-ico { color: var(--accent-text); font-size: 20px; margin-top: 1px; }
+.sa-cards .sa-lead p { font-size: 16px; line-height: 1.65; }
+
+.sa-spec-head { display: flex; align-items: center; gap: 12px; margin: 24px 0 10px; }
+.sa-spec-head h3 { color: var(--text-muted); margin: 0; white-space: nowrap; }
+.sa-bar { flex: 1; display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; }
+.sa-bar .seg-l { background: var(--bias-1-bg); }
+.sa-bar .seg-c { background: var(--bias-3-bg); }
+.sa-bar .seg-r { background: var(--bias-5-bg); }
+
+/* Three columns while every bucket is short enough; .is-stacked (set by
+   story_analysis.layout() when one runs long) puts them full width. */
+.sa-buckets { display: grid; grid-template-columns: repeat(var(--sa-cols, 3), minmax(0, 1fr)); gap: 12px; }
+.sa-buckets.is-stacked { grid-template-columns: minmax(0, 1fr); }
+.sa-bucket {
+    padding: 14px 16px; border: 1px solid var(--border); border-top: 4px solid var(--sa-side);
+    border-radius: 12px; background: var(--sa-tint);
+}
+.sa-buckets.is-stacked .sa-bucket { border-top-width: 1px; border-left: 4px solid var(--sa-side); }
+.sa-bucket-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.sa-bucket-head h4 {
+    font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--sa-side-text); margin: 0;
+}
+.sa-bucket p { font-size: 14px; }
+.sa-buckets.is-stacked .sa-bucket p { font-size: 15px; }
+.sa-empty {
+    display: flex; align-items: center; gap: 8px; margin: 8px 0 0 !important;
+    font-size: 13px; color: var(--text-faint);
+}
+.sa-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sa-side); flex: 0 0 auto; opacity: 0.7; }
+
+.sa-callouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.sa-callouts.is-stacked { grid-template-columns: minmax(0, 1fr); }
+.sa-callout.is-wide { grid-column: 1 / -1; }
+.sa-callout { display: flex; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; }
+.sa-callout .sa-ico { font-size: 18px; margin-top: 1px; color: var(--accent-text); }
+.sa-callout p { font-size: 14px; }
+.sa-callout.sa-icon-scale { background: var(--sa-contest-tint); }
+.sa-callout.sa-icon-scale .sa-ico, .sa-callout.sa-icon-scale h3 { color: var(--sa-contest); }
+.sa-callout.sa-icon-eye-off .sa-ico, .sa-callout.sa-icon-eye-off h3 { color: var(--text-muted); }
+
+.sa-cards .sa-next {
+    display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 16px;
+    border-radius: 12px; background: var(--accent); color: var(--analysis-on-accent);
+}
+.sa-cards .sa-next .sa-ico { font-size: 18px; }
+.sa-cards .sa-next h3 { color: var(--analysis-on-accent); opacity: 0.85; margin: 0; white-space: nowrap; }
+.sa-cards .sa-next p { font-size: 14.5px; line-height: 1.5; }
+
+/* ---- Sections ---- */
+.sa-sec { padding: 18px 0; border-top: 1px solid var(--border); }
+.sa-sec:first-child { border-top: none; padding-top: 4px; }
+.sa-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sa-tile {
+    width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto;
+    font-size: 16px; font-weight: 800; background: var(--sa-acc-tint); color: var(--accent-text);
+}
+.sa-sec-head h3 { font-size: 16px; font-weight: 750; letter-spacing: -0.2px; margin: 0; }
+.sa-sec-head .sa-count { margin-left: auto; }
+.sa-body { padding-left: 40px; }
+.sa-sections .sa-lead .sa-body p { font-size: 16.5px; }
+
+.sa-group { border-top: 1px solid var(--border); padding: 18px 0 2px; }
+.sa-group:first-child { border-top: none; }
+.sa-group .sa-sec { border-top: none; padding: 0 0 16px; }
+.sa-group + .sa-sec { border-top: 1px solid var(--border); }
+.sa-group .sa-tile { background: var(--sa-tint); color: var(--sa-side-text); }
+.sa-group h3 { color: var(--sa-side-text); }
+.sa-group .sa-body { margin-left: 14px; padding-left: 23px; border-left: 3px solid var(--sa-side); }
+.sa-group .is-empty .sa-body { color: var(--text-faint); font-size: 14px; border-left-style: dashed; }
+
+
+@media (max-width: 760px) {
+    .sa-buckets, .sa-callouts { grid-template-columns: minmax(0, 1fr); }
+    .sa-buckets .sa-bucket { border-top-width: 1px; border-left: 4px solid var(--sa-side); }
+    .sa-cards .sa-next { flex-wrap: wrap; }
+    .sa-body { padding-left: 0; }
+    .sa-group .sa-body { margin-left: 0; padding-left: 14px; }
+}

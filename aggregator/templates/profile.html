@@ -1,11 +1,14 @@
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+{% extends '_app_page.html' %}
+{% set shared_sidebar = false %}
+
+
+{% block head %}
     <title>Profile — MuckScraper</title>
 {% include '_account_page_head.html' %}
-</head>
-<body>
-{% include '_account_topbar.html' %}
+{% endblock %}
+{% block topbar %}{% include '_account_topbar.html' %}{% endblock %}
+{% block body %}
+
 
 <div class="container">
     <h1>Your profile</h1>
@@ -64,5 +67,4 @@
     </div>
     {% endif %}
 </div>
-</body>
-</html>
+{% endblock %}

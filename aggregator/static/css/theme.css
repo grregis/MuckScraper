@@ -211,3 +211,23 @@
     body .topbar .topbar-title { font-size: 16px; }
     body .topbar .theme-toggle, body .topbar .account-signin { padding-left: 10px; padding-right: 10px; }
 }
+
+/* Story analysis cards. */
+:root {
+    --sa-l-tint: rgba(26, 107, 181, 0.07);
+    --sa-c-tint: rgba(108, 108, 108, 0.07);
+    --sa-r-tint: rgba(181, 26, 26, 0.06);
+    --sa-acc-tint: rgba(76, 76, 143, 0.08);
+    --sa-contest: #b45309;
+    --sa-contest-tint: rgba(217, 119, 6, 0.07);
+}
+[data-theme="dark"] {
+    --sa-l-tint: rgba(91, 155, 224, 0.10);
+    --sa-c-tint: rgba(160, 174, 192, 0.08);
+    --sa-r-tint: rgba(239, 107, 107, 0.09);
+    --sa-acc-tint: rgba(168, 171, 240, 0.10);
+    --sa-contest: #f0b35a;
+    --sa-contest-tint: rgba(240, 179, 90, 0.07);
+}
+
+:root { --analysis-on-accent: #ffffff; }

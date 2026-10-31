@@ -1,0 +1,104 @@
+{#- The story page's multi-source analysis in one of two layouts (Philip,
+    2026-10-23), picked under Appearance on the profile page:
+
+    cards     (default) The story as a lead callout; the left/center/right
+              coverage as three cards under a bar sized by source count;
+              the other sections as callouts; What's next as a banner.
+    sections  Each section under its own title with an icon; the coverage
+              buckets in their bias colours.
+
+    `a` is story_analysis.layout(story.deep_report). The story needs the
+    counts story_bias_totals() sets. Styles: static/css/story_analysis.css. -#}
+{% from 'icons.html' import icon %}
+
+{%- macro _paras(section) -%}
+{%- for p in section.paragraphs %}<p>{{ p }}</p>{% endfor -%}
+{%- endmacro -%}
+
+{%- macro _count(story, kind) -%}
+{%- set n = {'left': story.left_bias_count, 'center': story.center_bias_count, 'right': story.right_bias_count}[kind]|default(0) -%}
+{{ n }} source{{ '' if n == 1 else 's' }}
+{%- endmacro -%}
+
+{%- macro analysis_cards(a, story) -%}
+<div class="sa sa-cards">
+    {%- if a.lead %}
+    <div class="sa-lead">
+        <span class="sa-ico">{{ icon(a.lead.icon) }}</span>
+        <div><h3>{{ a.lead.label or 'The story' }}</h3>{{ _paras(a.lead) }}</div>
+    </div>
+    {%- endif %}
+
+    {%- if a.buckets or a.empty %}
+    {%- set l, c, r = story.left_bias_count|default(0), story.center_bias_count|default(0), story.right_bias_count|default(0) %}
+    <div class="sa-spec-head">
+        <h3>How it's being covered</h3>
+        {%- if l + c + r %}
+        <span class="sa-bar" role="img" aria-label="Left {{ l }}, center {{ c }}, right {{ r }}">
+            {%- for n, side in [(l, 'l'), (c, 'c'), (r, 'r')] if n %}<span class="seg-{{ side }}" style="flex: {{ n }}"></span>{% endfor -%}
+        </span>
+        {%- endif %}
+    </div>
+    {%- if a.buckets %}
+    <div class="sa-buckets{% if a.stacked %} is-stacked{% endif %}" style="--sa-cols: {{ a.buckets|length }}">
+        {%- for s in a.buckets %}
+        <section class="sa-bucket sa-{{ s.kind }}">
+            <div class="sa-bucket-head"><h4>{{ s.kind|capitalize }}</h4><span class="sa-count">{{ _count(story, s.kind) }}</span></div>
+            {{ _paras(s) }}
+        </section>
+        {%- endfor %}
+    </div>
+    {%- endif %}
+    {%- for s in a.empty %}
+    <p class="sa-empty sa-{{ s.kind }}"><span class="sa-dot"></span>{{ s.paragraphs[0] }}</p>
+    {%- endfor %}
+    {%- endif %}
+
+    {%- if a.others %}
+    <div class="sa-callouts{% if a.pair_stacked %} is-stacked{% endif %}">
+        {%- for s in a.others %}
+        <section class="sa-callout sa-icon-{{ s.icon }}{% if loop.last and loop.length is odd %} is-wide{% endif %}">
+            <span class="sa-ico">{{ icon(s.icon) }}</span>
+            <div>{% if s.label %}<h3>{{ s.label }}</h3>{% endif %}{{ _paras(s) }}</div>
+        </section>
+        {%- endfor %}
+    </div>
+    {%- endif %}
+
+    {%- if a.next %}
+    <div class="sa-next">
+        <span class="sa-ico">{{ icon(a.next.icon) }}</span>
+        <h3>{{ a.next.label }}</h3>
+        <div>{{ _paras(a.next) }}</div>
+    </div>
+    {%- endif %}
+</div>
+{%- endmacro -%}
+
+{%- macro analysis_sections(a, story) -%}
+<div class="sa sa-sections">
+    {%- set ns = namespace(in_group=false) %}
+    {%- for s in a.sections %}
+    {%- set bucket = s.kind in ('left', 'center', 'right') %}
+    {%- if bucket and not ns.in_group %}<div class="sa-group">{% set ns.in_group = true %}{% endif %}
+    {%- if not bucket and ns.in_group %}</div>{% set ns.in_group = false %}{% endif %}
+    <section class="sa-sec sa-{{ s.kind }}{% if s.empty %} is-empty{% endif %}">
+        <div class="sa-sec-head">
+            {%- if bucket %}
+            <span class="sa-tile">{{ s.kind[0]|upper }}</span>
+            {%- else %}
+            <span class="sa-tile">{{ icon(s.icon) }}</span>
+            {%- endif %}
+            <h3>{{ s.label or ('The story' if s.kind == 'lead' else 'Analysis') }}</h3>
+            {%- if bucket and not s.empty %}<span class="sa-count">{{ _count(story, s.kind) }}</span>{% endif %}
+        </div>
+        <div class="sa-body">{{ _paras(s) }}</div>
+    </section>
+    {%- endfor %}
+    {%- if ns.in_group %}</div>{% endif %}
+</div>
+{%- endmacro -%}
+
+{%- macro story_analysis(a, story, layout='cards') -%}
+{%- if layout == 'sections' %}{{ analysis_sections(a, story) }}{% else %}{{ analysis_cards(a, story) }}{% endif -%}
+{%- endmacro -%}
