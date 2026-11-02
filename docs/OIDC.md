@@ -125,17 +125,33 @@ changes take effect at sign-in, not immediately in existing sessions.
 During an OIDC session, the profile explains that identity details are managed
 at the provider and refuses local email/password changes. Sign-out requires a
 CSRF-protected POST. It clears the local session and any remember-me cookie,
-unless optional RP-initiated logout is configured. Set
+before requesting optional RP-initiated logout. Set
 `OIDC_POST_LOGOUT_REDIRECT_URI` and register that exact callback with the
 provider to request sign-out at its discovered HTTPS end-session endpoint.
-If the endpoint is unavailable, local sign-out still works. Providers can ask
-for confirmation or require an ID token hint, which this implementation does
-not retain. Back-channel logout is not implemented.
+When configured, a validated ID token is retained encrypted in the
+`oidc_logout_tokens` table until the application session expires. The cookie
+holds only a random reference. Apply the additive database migration before
+using this option. Encryption uses a purpose-specific key derived from
+`SECRET_KEY`; rotating that key also invalidates retained tokens.
+
+Logout consumes the record once and redirects to the provider with
+`id_token_hint`. Authentication responses are not cached and send no referrer.
+The hint appears in the provider logout URL, so provider/proxy access logs
+should redact query strings. No access or refresh tokens are retained. ID tokens over
+64 KiB are not retained; login and local logout still work.
+
+Expired records are removed on the next enabled provider sign-in or logout.
+The current record is removed on logout, superseding sign-in, or observed
+session expiry. Without a usable record or endpoint, only local logout runs.
+Older sessions created before this update need a new sign-in before provider
+logout is available. Providers can still ask for confirmation. The provider
+logout/invalidation flow determines whether global SSO also ends. Back-channel
+logout is not implemented.
 
 ## Verification
 
 ```sh
-PYTHONPATH=. pytest -q tests/test_oidc.py
+PYTHONPATH=. pytest -q tests/test_oidc.py tests/test_oidc_logout_tokens.py
 ```
 
 Authentication tests exercise the real Authlib verifier with signed fixture

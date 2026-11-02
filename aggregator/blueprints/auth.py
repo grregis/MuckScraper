@@ -66,7 +66,13 @@ def logout():
     provider_logout = None
     if oidc_session:
         from aggregator.oidc import logout_request
-        provider_logout = logout_request(current_app.config.get("OIDC") or {}, session.get("oidc_end_session_endpoint"))
+        from aggregator.oidc_logout import consume, discard
+        config = current_app.config.get("OIDC") or {}
+        handle = session.get("oidc_logout_handle")
+        token = consume(handle, session.get("oidc_identity"), config)
+        if handle:
+            discard(handle)
+        provider_logout = logout_request(config, session.get("oidc_end_session_endpoint"), token)
     session.clear()
     logout_user()
     session["oidc_auto_login_paused"] = True

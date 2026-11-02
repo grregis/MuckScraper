@@ -101,18 +101,18 @@ def display_name(claims):
     return "Account"
 
 
-def logout_request(config, endpoint):
+def logout_request(config, endpoint, id_token=None):
     """Build an optional RP-initiated logout request from provider metadata."""
     redirect_uri = config.get("POST_LOGOUT_REDIRECT_URI")
-    if not isinstance(endpoint, str) or not redirect_uri:
+    if not isinstance(endpoint, str) or not redirect_uri or not id_token:
         return None
     parsed = urlsplit(endpoint)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment):
         return None
     state = secrets.token_urlsafe(32)
-    reserved = {"client_id", "post_logout_redirect_uri", "state"}
+    reserved = {"client_id", "post_logout_redirect_uri", "state", "id_token_hint"}
     query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k not in reserved]
-    query.extend((("client_id", config["CLIENT_ID"]), ("post_logout_redirect_uri", redirect_uri), ("state", state)))
+    query.extend((("client_id", config["CLIENT_ID"]), ("post_logout_redirect_uri", redirect_uri), ("state", state), ("id_token_hint", id_token)))
     return urlunsplit(parsed._replace(query=urlencode(query))), state
 
 
@@ -192,12 +192,15 @@ def init_app(app, environ):
             if (not config or session.get("oidc_expires_at", 0) <= time.time()
                     or not current_user.is_authenticated or not OIDCIdentity.query.filter_by(
                         identity_key=key, user_id=current_user.id, issuer=config["ISSUER_URL"]).first()):
+                from aggregator.oidc_logout import discard
+                if session.get("oidc_logout_handle"):
+                    discard(session["oidc_logout_handle"])
                 session.clear()
                 logout_user()
 
     @app.after_request
     def private_auth_responses(response):
-        if request.endpoint == "auth.login" or (request.endpoint and request.endpoint.startswith("auth.oidc_")):
+        if request.endpoint in {"auth.login", "auth.logout"} or (request.endpoint and request.endpoint.startswith("auth.oidc_")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Referrer-Policy"] = "same-origin" if request.endpoint == "auth.login" else "no-referrer"
         return response
@@ -279,6 +282,11 @@ def callback():
             endpoint = current_app.extensions["muckscraper_oidc"].load_server_metadata().get("end_session_endpoint")
         except Exception as error:
             current_app.logger.warning("OIDC logout discovery unavailable (%s)", type(error).__name__)
+    from aggregator.oidc_logout import discard, retain
+    if session.get("oidc_logout_handle"):
+        discard(session["oidc_logout_handle"])
+    expires_at = time.time() + config["SESSION_LIFETIME_SECONDS"]
+    handle = retain(token["id_token"], key, config, expires_at) if endpoint else None
     session.clear()
     logout_user()  # Also clears a stale local remember-me cookie.
     login_user(user, remember=False)
@@ -286,6 +294,7 @@ def callback():
     session.update(auth_method="oidc", oidc_identity=key,
                    oidc_display_name=display_name(token["userinfo"]) if provider_created else user.username,
                    oidc_created_user=provider_created,
-                   oidc_end_session_endpoint=endpoint,
-                   oidc_expires_at=time.time() + config["SESSION_LIFETIME_SECONDS"])
+                   oidc_end_session_endpoint=endpoint if handle else None,
+                   oidc_logout_handle=handle,
+                   oidc_expires_at=expires_at)
     return redirect(safe_next(pending.get("next")))

@@ -301,6 +301,17 @@ class OIDCIdentity(db.Model):
     user = db.relationship(User, backref=db.backref("oidc_identities", cascade="all, delete-orphan"))
 
 
+class OIDCLogoutToken(db.Model):
+    """One encrypted ID token per optional provider-logout session."""
+    __tablename__ = "oidc_logout_tokens"
+
+    handle_hash = db.Column(db.String(64), primary_key=True)
+    identity_key = db.Column(db.String(64), db.ForeignKey("oidc_identities.identity_key", ondelete="CASCADE"), nullable=False)
+    client_id = db.Column(db.Text, nullable=False)
+    encrypted_token = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
 
 class ScrapeBlocklist(db.Model):
     """
