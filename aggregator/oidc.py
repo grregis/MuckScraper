@@ -259,7 +259,9 @@ def callback():
     session.clear()
     logout_user()  # Also clears a stale local remember-me cookie.
     login_user(user, remember=False)
+    provider_created = user.username == "oidc_" + key[:59]
     session.update(auth_method="oidc", oidc_identity=key,
-                   oidc_display_name=display_name(token["userinfo"]),
+                   oidc_display_name=display_name(token["userinfo"]) if provider_created else user.username,
+                   oidc_created_user=provider_created,
                    oidc_expires_at=time.time() + config["SESSION_LIFETIME_SECONDS"])
     return redirect(safe_next(pending.get("next")))

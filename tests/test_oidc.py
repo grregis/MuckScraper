@@ -198,6 +198,21 @@ def test_verified_display_name_is_separate_from_identity_and_escaped(app, flow):
         assert session["oidc_display_name"] == "Updated name"
 
 
+def test_linked_account_displays_its_local_username(app, flow):
+    with app.app_context():
+        local = User(username="local-name", email="local@example.com", role="reader", is_active=True)
+        db.session.add(local)
+        db.session.flush()
+        db.session.add(OIDCIdentity(user=local, identity_key=identity_key(ENV["OIDC_ISSUER_URL"], "fixture-subject"),
+                                    issuer=ENV["OIDC_ISSUER_URL"], subject="fixture-subject"))
+        db.session.commit()
+    client, start, finish = flow
+    assert finish(start(), preferred_username="Provider name")[0].status_code == 302
+    profile = client.get("/auth/profile", base_url="https://reader.example")
+    assert b"<dt>Username</dt><dd>local-name</dd>" in profile.data
+    assert b"Provider name" not in profile.data
+
+
 @pytest.mark.parametrize("claims, expected", [
     ({"preferred_username": " Alice ", "name": "Other"}, "Alice"),
     ({"preferred_username": None, "name": "Alice Smith"}, "Alice Smith"),
