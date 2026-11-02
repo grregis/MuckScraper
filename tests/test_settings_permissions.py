@@ -34,3 +34,26 @@ def test_provider_secrets_never_render_in_cleartext(app):
         text = repr(_provider_rows(config_store.field_states(rows={})))
     assert 'fixture-private-provider-token' not in text
     assert 'oken' in text
+
+
+def test_llm_test_refuses_during_a_run_and_while_ollama_is_offline(app):
+    from datetime import datetime
+    from news_fetcher import llm_client
+    admin = SimpleNamespace(is_authenticated=True, has_role=lambda minimum: True)
+    offline = {'providers': [{'provider': 'ollama', 'tier': 'quality', 'online': False}]}
+    running = {'status': 'running', 'started_at': datetime.utcnow().isoformat()}
+    with app.test_request_context():
+        path = url_for('admin.llm_test')
+    with patch('aggregator.permissions.current_user', admin), \
+         patch.object(llm_client, 'is_configured', return_value=True), \
+         patch.object(llm_client, 'provider_for_tier', return_value='ollama'), \
+         patch.object(llm_client, 'generate_text') as generate:
+        with patch('aggregator.blueprints.admin.llm_settings._load_json_setting', return_value=running), \
+             patch.object(llm_client, 'llm_status_detail', return_value=offline):
+            body = app.test_client().post(path, json={'tier': 'quality'}).get_json()
+        assert body['ok'] is False and 'in progress' in body['message']
+        with patch('aggregator.blueprints.admin.llm_settings._load_json_setting', return_value=None), \
+             patch.object(llm_client, 'llm_status_detail', return_value=offline):
+            body = app.test_client().post(path, json={'tier': 'quality'}).get_json()
+        assert body['ok'] is False and 'offline' in body['message']
+        generate.assert_not_called()

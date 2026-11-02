@@ -6,6 +6,19 @@
 {% from '_config_fields.html' import config_field, config_field_styles %}
 {% block title %}LLM providers{% endblock %}
 {% block settings_key %}llm{% endblock %}
+{% from 'breadcrumb.html' import back_link %}
+{% from 'icons.html' import theme_toggle %}
+{% from 'account_menu.html' import account_menu with context %}
+{% block topbar %}{% call feed_topbar() %}
+    <div class="topbar-left crumb-bar">
+        <span class="topbar-title">MuckScraper</span>
+        {{ back_link(url_for('admin.tools_page'), 'Back to Admin Tools') }}
+    </div>
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
+{% endcall %}{% endblock %}
 {% block settings_body %}
 <div class="page-head">
     <h1>LLM providers</h1>
@@ -41,7 +54,7 @@
                 {%- endfor %}
             </select>
             <span class="muted test-result" id="test-result-{{ key }}" aria-live="polite">{% if not t.configured %}Not configured{% endif %}</span>
-            <button type="button" class="btn btn-quiet" data-test-tier="{{ key }}"{% if not t.configured %} disabled{% endif %}>Test</button>
+            <button type="button" class="btn btn-quiet" data-test-tier="{{ key }}" data-provider="{{ t.provider }}"{% if not t.configured %} disabled{% endif %}>Test</button>
         </span>
     </div>
     {%- endfor %}
@@ -180,19 +193,31 @@
     });
 
     // Which Ollama host answers right now (primary, or the fallback covering for it).
+    // An offline Ollama disables its Test buttons at once, rather than letting a
+    // test wait out its full timeout.
     (function () {
         const el = document.getElementById('ollama-live');
-        if (!el) return;
         fetch('{{ url_for("admin.ollama_status_detail") }}')
             .then(r => r.json())
             .then(data => {
                 const entry = (data.providers || []).find(e => e.provider === 'ollama');
-                if (!entry) { el.innerHTML = '<span class="dot ok"></span>Configured'; return; }
-                el.innerHTML = entry.online
-                    ? '<span class="dot ok"></span>' + (entry.role === 'fallback' ? 'Online on fallback' : 'Online')
-                    : '<span class="dot bad"></span>Offline';
+                if (el) {
+                    if (!entry) { el.innerHTML = '<span class="dot ok"></span>Configured'; }
+                    else {
+                        el.innerHTML = entry.online
+                            ? '<span class="dot ok"></span>' + (entry.role === 'fallback' ? 'Online on fallback' : 'Online')
+                            : '<span class="dot bad"></span>Offline';
+                    }
+                }
+                if (entry && !entry.online) {
+                    document.querySelectorAll('[data-test-tier][data-provider="ollama"]').forEach((button) => {
+                        button.disabled = true;
+                        document.getElementById('test-result-' + button.dataset.testTier).textContent =
+                            'Ollama is offline (asleep or unreachable)';
+                    });
+                }
             })
-            .catch(() => { el.textContent = 'Status unavailable'; });
+            .catch(() => { if (el) el.textContent = 'Status unavailable'; });
     })();
 </script>
 {% endblock %}
