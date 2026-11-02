@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_LABELS = {
     "ollama": "Ollama",
-    "anthropic": "Anthropic",
     "gemini": "Gemini",
     "groq": "Groq",
     "openrouter": "OpenRouter",
@@ -29,6 +28,8 @@ PROVIDER_LABELS = {
 # Which tier each kind of pipeline work uses. Mirrors the generate_text()
 # call sites: the high-volume label/yes-no calls are fast, anything a reader
 # sees as prose is main (see the TIER_* comments in llm_client.py).
+# This list is kept by hand. When a generate_text(tier=...) call site is added
+# or moved, update its row here too, or this page will show the old tier.
 TASK_ROUTES = [
     ("Article and story summaries", "quality"),
     ("Deep reports and article analysis", "quality"),
@@ -159,10 +160,23 @@ def llm_test():
     checked without waiting for the next pipeline run."""
     from news_fetcher import llm_client as llm
 
+    from . import FETCH_RUN_STATUS_KEY
+    from .tools import _is_running_and_fresh
+
     tier = llm.TIER_FAST if (request.get_json(silent=True) or {}).get("tier") == "fast" else llm.TIER_QUALITY
     provider = llm.provider_for_tier(tier)
     if not llm.is_configured(tier):
         return jsonify({"ok": False, "provider": provider, "message": "Not configured."})
+    # A test during a run makes Ollama swap models and skews that run's timings.
+    if _is_running_and_fresh(_load_json_setting(FETCH_RUN_STATUS_KEY)):
+        return jsonify({"ok": False, "provider": provider,
+                        "message": "A pipeline run is in progress. Test again when it finishes."})
+    # A sleeping Ollama box would otherwise make the test wait out its full timeout.
+    if provider == "ollama":
+        entry = next((e for e in llm.llm_status_detail()["providers"] if e["provider"] == "ollama"), None)
+        if entry and not entry["online"]:
+            return jsonify({"ok": False, "provider": provider,
+                            "message": "Ollama is offline (asleep or unreachable)."})
     started = time.monotonic()
     try:
         reply = llm.generate_text("Reply with the single word OK.", timeout=30, tier=tier)
