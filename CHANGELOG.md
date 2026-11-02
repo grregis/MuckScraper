@@ -6,6 +6,15 @@ All notable changes to MuckScraper are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Optional OpenID Connect sign-in** (#28, thanks @rinseaid). Sign in through
+  your own identity provider (Keycloak, Authentik, Pocket ID and others) with
+  the existing accounts and Reader / Scraper / Admin roles. Off by default
+  (`OIDC_ENABLED`); password login stays unless you turn it off. Existing
+  accounts are linked explicitly with `flask link-oidc-identity`, never by a
+  matching email. Needs HTTPS for both the provider and the app. Setup in
+  `docs/OIDC.md`. The migration only adds an `oidc_identities` table.
+
 ### Changed
 - **Article summaries and analyses read up to 24,000 characters of the
   article** (was the first 3,000 and 3,500). Long pieces are summarised from

@@ -245,6 +245,16 @@ OPINION_TITLE_PATTERNS = (
     re.compile(r"^\s*(?:opinion|editorial)\s*[:|]", re.IGNORECASE),
 )
 
+# Columnists whose outlet marks a column only by putting the writer's name in
+# front of the title, under an ordinary news URL. Breitbart files John Nolte's
+# columns under /politics/, /the-media/... as "Nolte: ..." (25 stored as news by
+# 2026-10-30; two were in an edition story). Matched per host because most
+# "Name:" title prefixes are quote attributions ("Vance: ...", "Maher: ..."),
+# which are news, and another outlet's "Nolte:" may be a quote from Nick Nolte.
+OPINION_COLUMNIST_TITLE_PREFIXES = {
+    "breitbart.com": ("nolte",),
+}
+
 # Shopping/affiliate content: product roundups, deal roundups, "shop this
 # sale" pieces. Not news, and it is explicitly promotional (affiliate-linked
 # product recommendations), which is what a reader flagged 2026-09-10.
@@ -333,6 +343,17 @@ def is_cartoon(title=None, url=None):
     return any(hint in path for hint in OPINION_URL_HINTS) and bool(CARTOONIST_SLUG.match(slug))
 
 
+def _has_columnist_prefix(title, host):
+    prefix, colon, _ = title.partition(":")
+    if not colon:
+        return False
+    prefix = prefix.strip().lower()
+    for domain, names in OPINION_COLUMNIST_TITLE_PREFIXES.items():
+        if (host == domain or host.endswith("." + domain)) and prefix in names:
+            return True
+    return False
+
+
 def is_opinion_article(title=None, url=None):
     """Op-eds, columns, and editorial-board pieces -- not reporting."""
     normalized_title = (title or "").strip()
@@ -340,10 +361,13 @@ def is_opinion_article(title=None, url=None):
         return True
 
     parsed = urlparse(url or "")
+    host = parsed.netloc.lower().removeprefix("www.")
+    if _has_columnist_prefix(normalized_title, host):
+        return True
     parsed_path = parsed.path.lower()
     if any(hint in parsed_path for hint in OPINION_URL_HINTS):
         return True
-    host_path = parsed.netloc.lower().removeprefix("www.") + parsed_path
+    host_path = host + parsed_path
     return any(host_path.startswith(prefix) for prefix in OPINION_URL_PREFIXES)
 
 
