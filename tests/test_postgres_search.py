@@ -24,3 +24,11 @@ def test_web_syntax_does_not_add_fuzzy_matches(monkeypatch):
     for query in ('Ukraine -Russia', '"New York"', 'Ukraine OR Russia'):
         assert search.search_article_ids(query) == [1]
         assert search.search_story_ids(query) == [1]
+
+
+def test_query_side_folds_accents_before_matching():
+    # Stored vectors are unaccented, so the query must be too: "Mbappe" and
+    # "Mbappé" should both find "Mbappé" in the story text.
+    sql, params = search._tsquery_sql('Mbappe', True)
+    assert 'immutable_unaccent(:q)' in sql
+    assert params == {'q': 'Mbappe:*'}

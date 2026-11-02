@@ -8,9 +8,11 @@ article text D. Tags in stored HTML are dropped by the text parser.
 
 Matching is by English word stems, with the last word of a plain query also
 matched as a prefix ("ukra" finds Ukraine) so as-you-type search works.
-Quoted phrases, OR and -word use web-search syntax instead. When word matching
-finds few hits, titles are also matched by trigram word similarity (pg_trgm,
-`%>` at its default 0.6 threshold), which catches typos and partial names.
+Accents are folded on both sides (immutable_unaccent, migration e6f2a9c4b701),
+so "Mbappe" finds "Mbappé". Quoted phrases, OR and -word use web-search syntax
+instead. When word matching finds few hits, titles are also matched by trigram
+word similarity (pg_trgm, `%>` at 0.5 rather than its default 0.6), which
+catches typos and partial names such as "Olesky" for Oleshky.
 
 Replaced Meilisearch (2026-10-22): about 120,000 articles per six months is
 small for Postgres, every search already ended in a Postgres query, and the
@@ -29,6 +31,9 @@ TEXT_CONFIG = "english"
 MAX_QUERY_CHARS = 200
 # Below this many word matches, trigram title matches are added after them.
 FUZZY_TOP_UP_BELOW = 10
+# Trigram word similarity for the typo fallback. pg_trgm's default is 0.6, which
+# misses one-letter typos in names ("Olesky" against "Oleshky" scores 0.57).
+FUZZY_THRESHOLD = 0.5
 # Article hits count for less than the story's own title/summary hits when
 # ranking stories, plus a small bonus for every further matching article.
 ARTICLE_HIT_WEIGHT = 0.5
@@ -51,14 +56,14 @@ def _tsquery_sql(query, prefix):
     """(SQL for a tsquery, params). Web-search syntax when the query uses it,
     otherwise all words required with the last one as a prefix."""
     if _WEB_SYNTAX.search(query):
-        return f"websearch_to_tsquery('{TEXT_CONFIG}', :q)", {"q": query}
+        return f"websearch_to_tsquery('{TEXT_CONFIG}', immutable_unaccent(:q))", {"q": query}
     words = _WORD.findall(query)
     if not words:
         return None, {}
     terms = list(words)
     if prefix:
         terms[-1] = f"{terms[-1]}:*"
-    return f"to_tsquery('{TEXT_CONFIG}', :q)", {"q": " & ".join(terms)}
+    return f"to_tsquery('{TEXT_CONFIG}', immutable_unaccent(:q))", {"q": " & ".join(terms)}
 
 
 def _window_sql(column, since, until, params):
@@ -80,6 +85,24 @@ def _run(sql, params):
         raise SearchUnavailableError(str(exc).splitlines()[0]) from exc
 
 
+def _set_fuzzy_threshold(value):
+    # SET returns no rows, so it can't go through _run()'s fetchall().
+    try:
+        db.session.execute(db.text(f"SET LOCAL pg_trgm.word_similarity_threshold = {value}"))
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        raise SearchUnavailableError(str(exc).splitlines()[0]) from exc
+
+
+def _run_fuzzy(sql, params):
+    """_run() with the typo threshold for this transaction only."""
+    _set_fuzzy_threshold(FUZZY_THRESHOLD)
+    try:
+        return _run(sql, params)
+    finally:
+        _set_fuzzy_threshold("DEFAULT")
+
+
 def _ordered_unique(ids, limit):
     seen = set()
     ordered = []
@@ -99,13 +122,14 @@ def _fuzzy_story_ids(query, limit, since, until, exclude):
         "AND EXISTS (SELECT 1 FROM articles a WHERE a.story_id = s.id AND " + " AND ".join(window) + ")"
         if window else ""
     )
-    rows = _run(
+    rows = _run_fuzzy(
         f"""
         SELECT s.id
         FROM stories s
-        WHERE (s.title %> :q OR s.headline %> :q)
+        WHERE (s.title %> immutable_unaccent(:q) OR s.headline %> immutable_unaccent(:q))
           {window_sql}
-        ORDER BY greatest(word_similarity(:q, s.title), word_similarity(:q, coalesce(s.headline, ''))) DESC,
+        ORDER BY greatest(word_similarity(immutable_unaccent(:q), s.title),
+                          word_similarity(immutable_unaccent(:q), coalesce(s.headline, ''))) DESC,
                  s.id DESC
         LIMIT :n
         """,
@@ -118,13 +142,13 @@ def _fuzzy_article_ids(query, limit, since, until, exclude):
     params = {"q": query, "n": limit}
     window = _window_sql("a.date", since, until, params)
     window_sql = ("AND " + " AND ".join(window)) if window else ""
-    rows = _run(
+    rows = _run_fuzzy(
         f"""
         SELECT a.id
         FROM articles a
-        WHERE a.title %> :q
+        WHERE a.title %> immutable_unaccent(:q)
           {window_sql}
-        ORDER BY word_similarity(:q, a.title) DESC, a.date DESC NULLS LAST
+        ORDER BY word_similarity(immutable_unaccent(:q), a.title) DESC, a.date DESC NULLS LAST
         LIMIT :n
         """,
         params,

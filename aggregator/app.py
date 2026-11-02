@@ -40,6 +40,9 @@ def init_db():
     with app.app_context():
         db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS vector"))
         db.session.execute(db.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        from aggregator.models import SEARCH_SETUP_SQL
+        for statement in SEARCH_SETUP_SQL:
+            db.session.execute(db.text(statement))
         db.session.commit()
         db.create_all()
 
