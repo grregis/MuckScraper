@@ -26,7 +26,6 @@
         </dl>
     </div>
 
-    {% if not oidc_managed %}
     <div class="card">
         <h2>Feed defaults</h2>
         <p class="hint">What the site and the story lists open with. The Filters button in the feed can still change them for a visit, and its “Save as my default” updates these.</p>
@@ -65,6 +64,7 @@
         </form>
     </div>
 
+    {% if not oidc_managed %}
     <div class="card">
         <h2>Change email</h2>
         <form method="POST">
