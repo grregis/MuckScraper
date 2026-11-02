@@ -10,22 +10,31 @@ from news_fetcher import llm_client, saved_settings
 
 
 class SecretBoxTests(unittest.TestCase):
-    def test_round_trip_with_derived_key(self):
-        from aggregator import secret_box
-        with mock.patch.dict(os.environ, {"SECRET_KEY": "s" * 32, "CONFIG_ENCRYPTION_KEY": ""}):
-            token = secret_box.encrypt("sk-ant-secret-1234")
-            self.assertNotIn("sk-ant-secret", token)
-            self.assertEqual(secret_box.decrypt(token), "sk-ant-secret-1234")
-            self.assertEqual(secret_box.key_source(), "SECRET_KEY")
-
-    def test_explicit_key_and_key_change(self):
+    def test_round_trip_with_explicit_key(self):
         from cryptography.fernet import Fernet
         from aggregator import secret_box
         with mock.patch.dict(os.environ, {"SECRET_KEY": "s" * 32, "CONFIG_ENCRYPTION_KEY": Fernet.generate_key().decode()}):
-            token = secret_box.encrypt("gsk_abc")
+            token = secret_box.encrypt("sk-ant-secret-1234")
+            self.assertNotIn("sk-ant-secret", token)
+            self.assertEqual(secret_box.decrypt(token), "sk-ant-secret-1234")
             self.assertEqual(secret_box.key_source(), "CONFIG_ENCRYPTION_KEY")
-            self.assertEqual(secret_box.decrypt(token), "gsk_abc")
+
+    def test_no_key_means_no_saving_and_no_reading(self):
+        # SECRET_KEY is set, but it is never a fallback for the encryption key.
+        from cryptography.fernet import Fernet
+        from aggregator import secret_box
         with mock.patch.dict(os.environ, {"SECRET_KEY": "s" * 32, "CONFIG_ENCRYPTION_KEY": ""}):
+            self.assertIsNone(secret_box.key_source())
+            with self.assertRaises(secret_box.KeyNotConfigured):
+                secret_box.encrypt("gsk_abc")
+            self.assertIsNone(secret_box.decrypt(Fernet(Fernet.generate_key()).encrypt(b"gsk_abc").decode()))
+
+    def test_key_change_makes_saved_secrets_unreadable(self):
+        from cryptography.fernet import Fernet
+        from aggregator import secret_box
+        with mock.patch.dict(os.environ, {"CONFIG_ENCRYPTION_KEY": Fernet.generate_key().decode()}):
+            token = secret_box.encrypt("gsk_abc")
+        with mock.patch.dict(os.environ, {"CONFIG_ENCRYPTION_KEY": Fernet.generate_key().decode()}):
             # Another key can't read it: None, not an exception.
             self.assertIsNone(secret_box.decrypt(token))
 
@@ -43,6 +52,9 @@ class ValidateTests(unittest.TestCase):
         self.assertIsNotNone(validate("OLLAMA_MODEL", "two words", "model"))
         self.assertIsNotNone(validate("GROQ_API_KEY", "has space", "secret"))
         self.assertIsNone(validate("GROQ_API_KEY", "", "secret"))
+        with mock.patch.dict(os.environ, {"CONFIG_ENCRYPTION_KEY": ""}):
+            # Without a dedicated key there is nowhere to keep a saved key.
+            self.assertIsNotNone(validate("GROQ_API_KEY", "gsk_abc", "secret"))
         self.assertIsNone(validate("NYT_API_DAILY_LIMIT", "450", "int"))
         self.assertIsNotNone(validate("NYT_API_DAILY_LIMIT", "-1", "int"))
         self.assertIsNotNone(validate("NYT_API_DAILY_LIMIT", "lots", "int"))
@@ -60,6 +72,13 @@ class SavedSettingsTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(saved_settings.get("NYT_API_DAILY_LIMIT", "450"), "450")
 
+    def test_unreadable_saved_key_stays_blank(self):
+        # A saved key that can't be decrypted is "" in the overrides; the
+        # environment must not quietly take its place.
+        saved_settings.set_source(lambda: {"NYT_API_KEY": ""})
+        with mock.patch.dict(os.environ, {"NYT_API_KEY": "env-key"}):
+            self.assertEqual(saved_settings.get("NYT_API_KEY"), "")
+
     def test_unchanged_source_keeps_last_values(self):
         answers = iter([{"NEWS_API_KEY": "k1"}, None, None])
         saved_settings.set_source(lambda: next(answers))
@@ -74,11 +93,18 @@ class ConfigureTests(unittest.TestCase):
     def test_override_beats_environment_and_blank_falls_back(self):
         env = {"LLM_PROVIDER": "ollama", "ANTHROPIC_MODEL": "env-model", "LLM_FAST_PROVIDER": "groq"}
         with mock.patch.dict(os.environ, env):
-            llm_client.configure({"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "k", "ANTHROPIC_MODEL": ""})
+            llm_client.configure({"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "k"})
             self.assertEqual(llm_client.LLM_PROVIDER, "anthropic")
             self.assertEqual(llm_client.ANTHROPIC_MODEL, "env-model")
             self.assertEqual(llm_client.ANTHROPIC_FAST_MODEL, "env-model")
             self.assertEqual(llm_client.LLM_FAST_PROVIDER, "groq")
+
+    def test_blank_saved_key_does_not_fall_back_to_environment(self):
+        with mock.patch.dict(os.environ, {"GROQ_API_KEY": "env-groq-key"}):
+            llm_client.configure({"GROQ_API_KEY": ""})
+            self.assertEqual(llm_client.GROQ_API_KEY, "")
+            llm_client.configure({})
+            self.assertEqual(llm_client.GROQ_API_KEY, "env-groq-key")
 
     def test_same_as_main_undoes_environment_fast_provider(self):
         with mock.patch.dict(os.environ, {"LLM_PROVIDER": "ollama", "LLM_FAST_PROVIDER": "groq"}):

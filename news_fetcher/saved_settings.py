@@ -47,9 +47,10 @@ def snapshot():
 
 
 def get(name, default=""):
-    """The saved value of `name`, else the environment variable, else `default`."""
+    """The saved value of `name`, else the environment variable, else `default`.
+    A saved entry that is blank (a saved key that can't be decrypted) stays
+    blank rather than falling back to the environment."""
     refresh()
-    value = _overrides.get(name)
-    if value is None or not str(value).strip():
-        value = os.environ.get(name, default)
-    return str(value).strip()
+    if name in _overrides:
+        return str(_overrides[name] or "").strip()
+    return str(os.environ.get(name, default)).strip()

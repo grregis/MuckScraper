@@ -152,7 +152,9 @@ def _sync_config():
 
 def configure(overrides=None):
     """Rebind the provider settings from the environment plus `overrides`
-    ({name: value}; a blank or missing value means "use the environment")."""
+    ({name: value}; a missing name means "use the environment". A blank value
+    stays blank: that is a saved key that can't be decrypted, which must not
+    fall back to the environment)."""
     global LLM_PROVIDER, LLM_FAST_PROVIDER
     global OLLAMA_HOST, OLLAMA_FALLBACK_HOST, OLLAMA_MODEL, OLLAMA_FAST_MODEL
     global ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_FAST_MODEL
@@ -162,10 +164,9 @@ def configure(overrides=None):
     overrides = overrides or {}
 
     def get(name):
-        value = overrides.get(name)
-        if value is None or not str(value).strip():
-            value = os.environ.get(name, _ENV_DEFAULTS.get(name, ""))
-        return str(value).strip()
+        if name in overrides:
+            return str(overrides[name] or "").strip()
+        return str(os.environ.get(name, _ENV_DEFAULTS.get(name, ""))).strip()
 
     old_hosts = (OLLAMA_HOST, OLLAMA_FALLBACK_HOST)
     old_gemini_key = GEMINI_API_KEY

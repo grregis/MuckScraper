@@ -17,7 +17,7 @@
             <code>{{ f.name }}</code>
             {%- if f.source == 'saved' %}
             <span class="chip chip-saved">Saved</span>
-            {%- if f.unreadable %}<span class="field-warn">Can't be decrypted with the current key; enter it again.</span>{% endif %}
+            {%- if f.unreadable %}<span class="field-warn">Saved key can't be decrypted: re-enter it or restore the original encryption key.</span>{% endif %}
             {%- if f.kind == 'secret' %}
             <label class="clear"><input type="checkbox" name="clear_{{ f.name }}" value="1"> Remove saved key{% if f.env_hint %} (back to environment){% endif %}</label>
             {%- endif %}

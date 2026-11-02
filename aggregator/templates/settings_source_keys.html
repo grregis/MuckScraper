@@ -8,7 +8,7 @@
 {% block settings_body %}
 <div class="page-head">
     <h1>Source API keys</h1>
-    <p>Optional keys for news APIs. The default RSS feeds work without any of them. Keys are encrypted with a key from {{ 'CONFIG_ENCRYPTION_KEY' if key_source == 'CONFIG_ENCRYPTION_KEY' else 'SECRET_KEY (set CONFIG_ENCRYPTION_KEY to use a separate one)' }} and never shown again after saving.</p>
+    <p>Optional keys for news APIs. The default RSS feeds work without any of them. Keys are encrypted with CONFIG_ENCRYPTION_KEY and never shown again after saving.{% if not key_source %} This install has no CONFIG_ENCRYPTION_KEY, so saving a key needs one: add it to .env and restart.{% endif %}</p>
 </div>
 
 {% include '_flashes.html' %}

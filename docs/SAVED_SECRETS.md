@@ -14,13 +14,13 @@ Generate a dedicated key with:
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-With `CONFIG_ENCRYPTION_KEY` blank, the implementation derives a key from `SECRET_KEY` using HKDF-SHA256 and a fixed application-specific context. That preserves the fork's existing behavior. A dedicated key is preferable: session-key rotation can then happen independently.
+There is no fallback key. `CONFIG_ENCRYPTION_KEY` is required to save a key, and without it saved keys can't be read. `install.sh` generates it, and rotating `SECRET_KEY` leaves saved keys alone.
 
 The app must decrypt keys to call providers. This protects a database-only backup, not a compromised application host or an attacker holding both the database and its encryption key.
 
 ## Backup and restore
 
-Back up the database and the encryption key separately. Keep the key in a protected secret store or equivalent access-controlled backup, rather than in the database dump. If using the fallback, preserve the original `SECRET_KEY` instead.
+Back up the database and the encryption key separately. Keep the key in a protected secret store or equivalent access-controlled backup, rather than in the database dump. A saved key that can't be decrypted is not replaced by an environment variable: Settings asks for it to be entered again.
 
 Restore the original key into all processes before reading the restored database. With the same key, the encrypted rows work unchanged. With a missing or different key, Settings flags each saved key as unreadable; the ciphertext remains in the database. Restore the original key or enter the provider key again. There is no recovery from ciphertext alone.
 

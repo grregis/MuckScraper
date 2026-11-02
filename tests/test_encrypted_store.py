@@ -32,7 +32,8 @@ def test_database_contains_ciphertext_and_restore_needs_original_key(app):
     # Restoring the ciphertext with the same key works; another key flags it.
     with patch.dict('os.environ', CONFIG_ENCRYPTION_KEY=Fernet.generate_key().decode()):
         assert config_store.field_states()['NEWS_API_KEY']['unreadable']
-        assert 'NEWS_API_KEY' not in config_store._read_overrides()
+        # Blank, not missing: the environment must not take the key's place.
+        assert config_store._read_overrides()['NEWS_API_KEY'] == ''
     assert config_store._read_overrides()['NEWS_API_KEY'] == 'private-newsapi-token'
     assert 'private-newsapi-token' not in repr(config_store.field_states())
 
@@ -76,3 +77,11 @@ def test_admin_settings_pages_render_without_exposing_saved_keys(app):
         assert response.status_code == 200
         assert 'private-browser-fixture-key' not in response.text
         assert response.text.count('<title>') == 1
+
+
+def test_placeholder_encryption_key_is_refused():
+    from aggregator import create_app
+    with patch.dict('os.environ', SECRET_KEY='a' * 40,
+                    CONFIG_ENCRYPTION_KEY='replace_with_a_generated_encryption_key', DATABASE_URL='sqlite://'):
+        with pytest.raises(RuntimeError, match='placeholder'):
+            create_app()

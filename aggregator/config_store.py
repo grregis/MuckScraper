@@ -95,6 +95,8 @@ def validate(name, value, kind=None):
     if kind == "int":
         return None if value.isdigit() and 0 < int(value) <= 100000 else "Enter a whole number."
     if kind == "secret":
+        if not secret_box.key_configured():
+            return "Saving keys needs CONFIG_ENCRYPTION_KEY in .env. install.sh generates one."
         if len(value) > 500 or any(c.isspace() for c in value):
             return "That doesn't look like an API key."
     return None
@@ -167,9 +169,9 @@ def _read_overrides():
         if key not in ALL_NAMES:
             continue
         if secret_value:
-            plaintext = secret_box.decrypt(secret_value)
-            if plaintext:
-                overrides[key] = plaintext
+            # A saved key that can't be read stays blank. The environment must
+            # not quietly take its place: Settings flags the key, and the log says why.
+            overrides[key] = secret_box.decrypt(secret_value) or ""
         elif value:
             overrides[key] = value
     return overrides
