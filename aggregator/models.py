@@ -287,7 +287,19 @@ class User(db.Model, UserMixin):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return bool(self.password_hash) and check_password_hash(self.password_hash, password)
+
+
+class OIDCIdentity(db.Model):
+    """A provider identity bound to a local account. No provider tokens are stored."""
+    __tablename__ = "oidc_identities"
+
+    identity_key = db.Column(db.String(64), primary_key=True)
+    issuer = db.Column(db.Text, nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user = db.relationship(User, backref=db.backref("oidc_identities", cascade="all, delete-orphan"))
+
 
 
 class ScrapeBlocklist(db.Model):
