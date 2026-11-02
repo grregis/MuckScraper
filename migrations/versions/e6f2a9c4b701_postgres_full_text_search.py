@@ -1,7 +1,7 @@
 """Postgres full-text search replaces Meilisearch.
 
 Revision ID: e6f2a9c4b701
-Revises: a9c4e2f7b1d5
+Revises: a4c6e8b0d2f5
 Create Date: 2026-10-22
 
 Adds a generated `search_vector` column with a GIN index to stories and
@@ -15,26 +15,34 @@ the duration depends on database size and hardware; queries wait on it.
 from alembic import op
 
 revision = 'e6f2a9c4b701'
-down_revision = 'a9c4e2f7b1d5'
+down_revision = 'a4c6e8b0d2f5'
 branch_labels = None
 depends_on = None
 
 STORY_SEARCH_VECTOR_SQL = (
-    "setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(headline, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(summary, '')), 'B') || "
-    "setweight(to_tsvector('english'::regconfig, left(coalesce(deep_report, ''), 8000)), 'C')"
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(headline, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(summary, ''))), 'B') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(left(coalesce(deep_report, ''), 8000))), 'C')"
 )
 ARTICLE_SEARCH_VECTOR_SQL = (
-    "setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(summary, '')), 'B') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(source, '')), 'C') || "
-    "setweight(to_tsvector('english'::regconfig, left(coalesce(content, ''), 6000)), 'D')"
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(summary, ''))), 'B') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(source, ''))), 'C') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(left(coalesce(content, ''), 6000))), 'D')"
 )
 
 
 def upgrade():
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+    # Accents are folded on both sides, so "Mbappe" finds "Mbappé". A generated
+    # column needs an IMMUTABLE expression, so unaccent gets a SQL wrapper.
+    op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
+    op.execute(
+        "CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text "
+        "LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT "
+        "AS $$ SELECT public.unaccent('public.unaccent', $1) $$"
+    )
     op.execute(
         "ALTER TABLE stories ADD COLUMN IF NOT EXISTS search_vector tsvector "
         f"GENERATED ALWAYS AS ({STORY_SEARCH_VECTOR_SQL}) STORED"
@@ -60,3 +68,4 @@ def downgrade():
     op.execute("DROP INDEX IF EXISTS ix_stories_search_vector")
     op.execute("ALTER TABLE articles DROP COLUMN IF EXISTS search_vector")
     op.execute("ALTER TABLE stories DROP COLUMN IF EXISTS search_vector")
+    op.execute("DROP FUNCTION IF EXISTS immutable_unaccent(text)")

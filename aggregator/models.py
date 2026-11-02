@@ -15,17 +15,26 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # summaries, C source and deep report, D article text. The stored HTML's tags
 # are dropped by the text parser. Must stay identical to the migration that
 # added them (migrations/versions/e6f2a9c4b701_postgres_full_text_search.py).
+# Run before create_all() on a fresh install: the search-vector columns below
+# call immutable_unaccent(), which must exist first (aggregator/app.py
+# init_db). Migration e6f2a9c4b701 runs the same statements.
+SEARCH_SETUP_SQL = (
+    "CREATE EXTENSION IF NOT EXISTS unaccent",
+    "CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text "
+    "LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT "
+    "AS $$ SELECT public.unaccent('public.unaccent', $1) $$",
+)
 STORY_SEARCH_VECTOR_SQL = (
-    "setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(headline, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(summary, '')), 'B') || "
-    "setweight(to_tsvector('english'::regconfig, left(coalesce(deep_report, ''), 8000)), 'C')"
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(headline, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(summary, ''))), 'B') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(left(coalesce(deep_report, ''), 8000))), 'C')"
 )
 ARTICLE_SEARCH_VECTOR_SQL = (
-    "setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(summary, '')), 'B') || "
-    "setweight(to_tsvector('english'::regconfig, coalesce(source, '')), 'C') || "
-    "setweight(to_tsvector('english'::regconfig, left(coalesce(content, ''), 6000)), 'D')"
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(summary, ''))), 'B') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(source, ''))), 'C') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(left(coalesce(content, ''), 6000))), 'D')"
 )
 
 # Many-to-many junction tables
