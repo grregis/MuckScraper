@@ -1,10 +1,10 @@
+{% extends '_app_page.html' %}
 {% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/article.html -->
 {% from 'icons.html' import icon, theme_toggle_label %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -337,15 +337,9 @@
         }
         {% include 'sidebar_styles.html' %}
     </style>
-</head>
-<body>
-
-<div class="layout">
-{% include 'sidebar_nav.html' %}
-<div class="page-body">
-
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {% if article.story_id %}
@@ -358,7 +352,12 @@
         <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}
+{% endblock %}
+{% block body %}
+
+{% from 'breadcrumb.html' import back_link %}
+
 
 <div class="container">
     <div class="article-card">
@@ -509,8 +508,8 @@
     </div>
 </div>
 
-</div>
-</div>
+{% endblock %}
+{% block scripts %}
 
 <script>
     {% include 'sidebar_script.html' %}
@@ -630,5 +629,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}
