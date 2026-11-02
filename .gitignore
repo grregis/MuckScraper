@@ -21,6 +21,7 @@ tests/*
 !tests/test_settings_form_ownership.py
 !tests/test_ai_task_network_errors.py
 !tests/test_navigation_access.py
+!tests/test_oidc.py
 
 # Personal Headline feature files
 aggregator/public_app.py

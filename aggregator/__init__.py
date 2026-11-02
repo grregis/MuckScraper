@@ -55,6 +55,9 @@ def create_app():
     login.init_app(app)
     csrf.init_app(app)
 
+    from aggregator.oidc import init_app as init_oidc
+    init_oidc(app, os.environ)
+
     @login.user_loader
     def load_user(id):
         from aggregator.models import User
