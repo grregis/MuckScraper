@@ -78,7 +78,9 @@ def profile():
     shared machine can't be used to take the account over.
     """
     oidc_managed = session.get("auth_method") == "oidc"
-    if request.method == "POST" and oidc_managed:
+    # Feed defaults are preferences, so OIDC accounts keep them. Credentials
+    # stay with the identity provider.
+    if request.method == "POST" and oidc_managed and request.form.get("action") != "feed_defaults":
         abort(403)
     if request.method == "POST":
         action = request.form.get("action")

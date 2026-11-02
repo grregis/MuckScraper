@@ -89,7 +89,14 @@
                     {{ bias_line(story) }}
                 </div>
             </div>
-            {{ caller() }}
+        </div>
+        <div class="card-rail">
+            <div class="card-menu">
+                <button type="button" class="card-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="More actions" title="More actions">{{ icon('more-horizontal') }}</button>
+                <div class="card-menu-pop" role="menu" hidden>
+                    <div class="card-menu-items">{{ caller() }}</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
