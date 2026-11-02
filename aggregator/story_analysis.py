@@ -2,8 +2,8 @@
 
 The deep_report prompts (seed_defaults.py, deep_report.*) ask for a fixed set
 of "Label: text" paragraphs. The story page lays these out as cards or as
-titled subsections (Philip, 2026-10-23; the reader picks one under Appearance
-on their profile), so the text is parsed once here instead of in Jinja.
+titled subsections (the sections layout is not wired to a setting yet), so the
+text is parsed once here instead of in Jinja.
 
 Each section gets a `kind`, which decides where it goes and how it looks:
 "lead" (the first section), "left" / "center" / "right" (the politics
@@ -75,12 +75,21 @@ def _kind_for(label):
     return "other"
 
 
+_BULLET = re.compile(r"^[-•]\s+")
+
+
 def _split(text):
     """[(label or None, [paragraph, ...]), ...] from the raw report."""
     sections = []
     for line in (text or "").split("\n"):
         line = line.strip()
         if not line:
+            continue
+        # Bullets under a label belong to that label. Splitting them on their
+        # colon turned each one into a section of its own.
+        bullet = _BULLET.match(line)
+        if bullet and sections:
+            sections[-1][1].append("• " + line[bullet.end():])
             continue
         head, sep, rest = line.partition(":")
         if sep and 0 < len(head.strip()) < MAX_LABEL and rest.strip():

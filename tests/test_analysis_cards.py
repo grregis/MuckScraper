@@ -1,6 +1,6 @@
-"""The story page's analysis layouts (Philip, 2026-10-23): the report is
-split into its labelled sections (aggregator/story_analysis.py) and shown as
-Cards (default) or Sections, picked under Appearance on the profile page.
+"""The story page's analysis layouts: the report is split into its labelled
+sections (aggregator/story_analysis.py) and shown as Cards (the story page's
+layout) or Sections.
 
 The parser tests need nothing; the page tests run against the scratch
 Postgres database named by API_TEST_DATABASE_URL, like tests/test_reads.py,
@@ -54,6 +54,20 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(a["lead"]["paragraphs"], ["A new battery chemistry.", "It lasts twice as long."])
         self.assertEqual(a["buckets"], [])
         self.assertEqual([s["icon"] for s in a["others"]], ["zap", "message-square"])
+
+    def test_bullets_stay_in_their_label(self):
+        report = ("Key details:\n"
+                  "- Location: Chunmubri village in Gorkha district.\n"
+                  "• Missing Persons: Two women and three men.\n"
+                  "What's missing: Official counts.")
+        a = story_analysis.layout(report)
+        labels = [s["label"] for s in a["sections"]]
+        self.assertEqual(labels, ["Key details", "What's missing"])
+        self.assertEqual(a["sections"][0]["paragraphs"],
+                         ["• Location: Chunmubri village in Gorkha district.",
+                          "• Missing Persons: Two women and three men."])
+        self.assertEqual(a["lead"]["label"], "Key details")
+        self.assertEqual([s["icon"] for s in a["others"]], ["eye-off"])
 
     def test_unlabelled_text_still_renders(self):
         a = story_analysis.layout("Just one plain paragraph, no labels at all.")

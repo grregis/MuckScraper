@@ -6,8 +6,8 @@
 {% from 'oped_columns.html' import oped_columns, oped_roundup with context %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/story_analysis.css') }}">
     <meta charset="utf-8">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/story_analysis.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
