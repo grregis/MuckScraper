@@ -11,6 +11,7 @@
 # and Gemini can produce embeddings -- see get_embedding().
 
 import os
+import re
 import time
 import logging
 import requests
@@ -84,6 +85,10 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 GEMINI_FAST_MODEL = os.environ.get("GEMINI_FAST_MODEL", "") or GEMINI_MODEL
 GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+GEMINI_MIN_INTERVAL_SECONDS = float(os.environ.get("GEMINI_MIN_INTERVAL_SECONDS", "0"))
+
+_last_gemini_request_time = 0.0
+_gemini_daily_quota_logged = False
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 # No default model name on purpose. This used to default to
@@ -447,14 +452,90 @@ def _generate_text_ollama(prompt, timeout, model=None):
     return _ollama_request("generate", _call)
 
 
-GEMINI_MAX_RETRIES = 3
-GEMINI_RETRY_BASE_WAIT_SECONDS = 15
+GEMINI_MAX_RETRIES = 2
+
+
+def _parse_gemini_rate_limit(e):
+    code = getattr(e, "code", None)
+    status = getattr(e, "status", None)
+    err_str = str(e)
+
+    is_429 = (
+        code == 429
+        or status == "RESOURCE_EXHAUSTED"
+        or "429" in err_str
+        or "RESOURCE_EXHAUSTED" in err_str
+    )
+    if not is_429:
+        return False, False, 0.0
+
+    details = getattr(e, "details", None) or {}
+    if isinstance(details, dict) and "error" in details:
+        details = details["error"].get("details", [])
+    if not isinstance(details, list):
+        details = [details] if isinstance(details, dict) else []
+
+    quota_ids = []
+    retry_delay = None
+
+    for item in details:
+        if not isinstance(item, dict):
+            continue
+        for violation in item.get("violations", []):
+            if isinstance(violation, dict) and "quotaId" in violation:
+                quota_ids.append(str(violation["quotaId"]))
+        if "quotaId" in item:
+            quota_ids.append(str(item["quotaId"]))
+        if "retryDelay" in item:
+            retry_delay = item["retryDelay"]
+
+    all_quota_str = " ".join(quota_ids) + " " + err_str
+
+    is_daily = bool(
+        re.search(r"per[_-]?day", all_quota_str, re.IGNORECASE)
+        or "daily" in all_quota_str.lower()
+        or "free tier quota exhausted" in all_quota_str.lower()
+    )
+    if is_daily:
+        return True, True, 0.0
+
+    delay_sec = 15.0
+    if retry_delay is not None:
+        if isinstance(retry_delay, (int, float)):
+            delay_sec = float(retry_delay)
+        elif isinstance(retry_delay, str):
+            clean_delay = retry_delay.rstrip("s").strip()
+            try:
+                delay_sec = float(clean_delay)
+            except ValueError:
+                delay_sec = 15.0
+        elif isinstance(retry_delay, dict):
+            sec = retry_delay.get("seconds", 0)
+            nanos = retry_delay.get("nanos", 0)
+            delay_sec = float(sec) + float(nanos) / 1e9
+    else:
+        match = re.search(r'["\']?retryDelay["\']?:\s*["\']?([0-9]+(?:\.[0-9]+)?)\s*s?["\']?', err_str)
+        if match:
+            try:
+                delay_sec = float(match.group(1))
+            except ValueError:
+                pass
+
+    return True, False, delay_sec
 
 
 def _generate_text_gemini(prompt, timeout, model=None, _attempt=0):
+    global _last_gemini_request_time, _gemini_daily_quota_logged
     if not GEMINI_API_KEY:
         return None
+
+    if GEMINI_MIN_INTERVAL_SECONDS > 0:
+        elapsed = time.time() - _last_gemini_request_time
+        if elapsed < GEMINI_MIN_INTERVAL_SECONDS:
+            time.sleep(GEMINI_MIN_INTERVAL_SECONDS - elapsed)
+
     try:
+        _last_gemini_request_time = time.time()
         client = _get_gemini_client()
         response = client.models.generate_content(
             model=model or GEMINI_MODEL,
@@ -463,15 +544,24 @@ def _generate_text_gemini(prompt, timeout, model=None, _attempt=0):
         text = (response.text or "").strip()
         return text or None
     except Exception as e:
-        err_str = str(e)
-        if ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str) and _attempt < GEMINI_MAX_RETRIES:
-            wait_seconds = GEMINI_RETRY_BASE_WAIT_SECONDS * (_attempt + 1)
+        is_429, is_daily, delay_sec = _parse_gemini_rate_limit(e)
+        if is_daily:
+            if not _gemini_daily_quota_logged:
+                _gemini_daily_quota_logged = True
+                logger.warning(
+                    "  [llm_client] Gemini daily quota exhausted -- skipping retries and failing fast"
+                )
+            return None
+
+        if is_429 and _attempt < GEMINI_MAX_RETRIES:
+            wait_seconds = min(max(1.0, delay_sec), OPENAI_COMPATIBLE_MAX_RETRY_WAIT_SECONDS)
             logger.info(
-                f"  [llm_client] Gemini rate-limited (429/RESOURCE_EXHAUSTED), retrying in {wait_seconds}s "
+                f"  [llm_client] Gemini per-minute rate-limited, retrying in {wait_seconds:.0f}s "
                 f"({_attempt + 1}/{GEMINI_MAX_RETRIES})"
             )
             time.sleep(wait_seconds)
             return _generate_text_gemini(prompt, timeout, model=model, _attempt=_attempt + 1)
+
         logger.info(f"  [llm_client] Gemini generate error: {e}")
         return None
 
