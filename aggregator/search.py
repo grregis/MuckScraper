@@ -6,6 +6,15 @@ search is always in step with the data and there is nothing to rebuild.
 Weights: titles and headlines A, summaries B, source and deep report C,
 article text D. Tags in stored HTML are dropped by the text parser.
 
+Ranking puts title matches first: a story whose own title or headline has
+every word, then a story with an article whose title has them, then the
+rest. Articles likewise: title matches first, then newest first. Titles are
+checked against a small `title_vector` column. An article's `search_vector`
+holds up to 6,000 characters of text, so Postgres stores it out of line, and
+reading it back for every match (to score it with ts_rank) was most of the
+time a broad word such as "senate" took. Matching only uses the GIN index,
+which never reads it.
+
 Matching is by English word stems, with the last word of a plain query also
 matched as a prefix ("ukra" finds Ukraine) so as-you-type search works.
 Accents are folded on both sides (immutable_unaccent, migration e6f2a9c4b701),
@@ -34,10 +43,10 @@ FUZZY_TOP_UP_BELOW = 10
 # Trigram word similarity for the typo fallback. pg_trgm's default is 0.6, which
 # misses one-letter typos in names ("Olesky" against "Oleshky" scores 0.57).
 FUZZY_THRESHOLD = 0.5
-# Article hits count for less than the story's own title/summary hits when
-# ranking stories, plus a small bonus for every further matching article.
-ARTICLE_HIT_WEIGHT = 0.5
-EXTRA_ARTICLE_BONUS = 0.05
+# Within a tier, a story's score is its own text rank plus this much per
+# doubling of its matching articles, so a story many outlets mention in
+# passing still rises above one that mentions the words once.
+ARTICLE_COUNT_BONUS = 0.05
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 _WEB_SYNTAX = re.compile(r'"|(^|\s)-\w|\bOR\b')
@@ -170,7 +179,7 @@ def search_story_ids(query, limit=250, since=None, until=None, prefix=True):
     tsquery, params = _tsquery_sql(query, prefix)
     ids = []
     if tsquery:
-        params.update(n=limit, article_weight=ARTICLE_HIT_WEIGHT, bonus=EXTRA_ARTICLE_BONUS)
+        params.update(n=limit, bonus=ARTICLE_COUNT_BONUS)
         article_window = _window_sql("a.date", since, until, params)
         article_window_sql = ("AND " + " AND ".join(article_window)) if article_window else ""
         story_window_sql = (
@@ -178,22 +187,34 @@ def search_story_ids(query, limit=250, since=None, until=None, prefix=True):
             + article_window_sql + ")"
             if article_window else ""
         )
+        # MATERIALIZED hides the query from the planner. When it can see it,
+        # it picks a sequential scan for a common word such as "trump", which
+        # reads every article's out-of-line search_vector to test it and takes
+        # several times longer than the GIN index does.
+        # A story whose own title matches is always in `own` (its
+        # search_vector holds the title too), so the full join needs no
+        # second look at stories that matched only through articles.
         rows = _run(
             f"""
-            WITH q AS (SELECT {tsquery} AS tsq),
-            hits AS (
-                SELECT s.id AS story_id, ts_rank(s.search_vector, q.tsq) AS rank
+            WITH q AS MATERIALIZED (SELECT {tsquery} AS tsq),
+            own AS (
+                SELECT s.id AS story_id,
+                       s.title_vector @@ q.tsq AS title_hit,
+                       ts_rank(s.search_vector, q.tsq) AS rank
                 FROM stories s, q
                 WHERE s.search_vector @@ q.tsq {story_window_sql}
-                UNION ALL
-                SELECT a.story_id, ts_rank(a.search_vector, q.tsq) * :article_weight
+            ),
+            art AS (
+                SELECT a.story_id, count(*) AS n, bool_or(a.title_vector @@ q.tsq) AS title_hit
                 FROM articles a, q
                 WHERE a.search_vector @@ q.tsq AND a.story_id IS NOT NULL {article_window_sql}
+                GROUP BY a.story_id
             )
-            SELECT story_id, max(rank) + :bonus * ln(count(*)) AS score
-            FROM hits
-            GROUP BY story_id
-            ORDER BY score DESC, story_id DESC
+            SELECT coalesce(own.story_id, art.story_id) AS story_id,
+                   CASE WHEN own.title_hit THEN 2 WHEN art.title_hit THEN 1 ELSE 0 END AS tier,
+                   coalesce(own.rank, 0) + :bonus * ln(1 + coalesce(art.n, 0)) / ln(2) AS score
+            FROM own FULL JOIN art ON art.story_id = own.story_id
+            ORDER BY tier DESC, score DESC, story_id DESC
             LIMIT :n
             """,
             params,
@@ -216,13 +237,14 @@ def search_article_ids(query, limit=250, since=None, until=None, prefix=True):
         params["n"] = limit
         window = _window_sql("a.date", since, until, params)
         window_sql = ("AND " + " AND ".join(window)) if window else ""
+        # MATERIALIZED: see search_story_ids.
         rows = _run(
             f"""
-            WITH q AS (SELECT {tsquery} AS tsq)
+            WITH q AS MATERIALIZED (SELECT {tsquery} AS tsq)
             SELECT a.id
             FROM articles a, q
             WHERE a.search_vector @@ q.tsq {window_sql}
-            ORDER BY ts_rank(a.search_vector, q.tsq) DESC, a.date DESC NULLS LAST
+            ORDER BY a.title_vector @@ q.tsq DESC, a.date DESC NULLS LAST, a.id DESC
             LIMIT :n
             """,
             params,

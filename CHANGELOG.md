@@ -23,6 +23,9 @@ All notable changes to MuckScraper are documented here.
   (132,000 articles, 1.07 GB) the migration took about 90 seconds: about a
   minute or two per 100,000 articles, with the articles table locked meanwhile.
   Larger databases and slower hardware take longer.
+  Results whose title or headline has the search words come first. A story
+  whose own headline matches leads, then one with a matching article title,
+  then stories that only mention the words.
   Remove the Meilisearch service, dependencies and `MEILI_*` variables from any
   custom Compose overrides and `.env`. After confirming the upgrade, remove the
   old Meilisearch container and, if no longer needed, its `meili_data` directory.
