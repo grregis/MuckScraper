@@ -59,6 +59,12 @@
     <div class="ft-right">
         <button type="button" class="ft-search-toggle" id="ft-search-toggle" aria-controls="ft-search-area"
                 aria-expanded="{{ 'true' if q else 'false' }}" aria-label="Search" title="Search">{{ icon('search') }}</button>
+        {#- Same square as Search and Filters so the row keeps one height. The
+            page defines toggleTheme(); theme.css shows the moon or the sun. #}
+        <button type="button" class="ft-theme-toggle" id="theme-toggle" onclick="toggleTheme()"
+                aria-label="Switch between light and dark" title="Light or dark">
+            <span class="theme-when-light">{{ icon('moon') }}</span><span class="theme-when-dark">{{ icon('sun') }}</span>
+        </button>
         {{ account_menu() }}
     </div>
 </header>
