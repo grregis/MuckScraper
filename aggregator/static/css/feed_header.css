@@ -242,6 +242,25 @@
 .ft-search-toggle:hover, .ft-search-toggle[aria-expanded="true"] { background: var(--accent); border-color: var(--accent-light); }
 .ft-search-toggle:focus-visible { outline: 2px solid var(--sidebar-accent-text); outline-offset: 2px; }
 
+/* ── Light/dark button: the same square as Search and Filters ── */
+.ft-theme-toggle {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--header-input-border);
+    background: var(--header-input-bg);
+    color: var(--on-accent);
+    font-size: 18px;
+    cursor: pointer;
+}
+.ft-theme-toggle:hover { background: var(--accent); border-color: var(--accent-light); }
+.ft-theme-toggle:focus-visible { outline: 2px solid var(--sidebar-accent-text); outline-offset: 2px; }
+
 /* ── Filters ── */
 .ft-filters { position: relative; flex: 0 0 auto; }
 .ft-filter-btn {
@@ -429,6 +448,13 @@
 /* Narrow phones: the Light/Dark button shows its icon only, so the logo,
    section name and account fit on one row. */
 @media (max-width: 480px) {
+    /* Tighter spacing so the section name keeps its room beside the three
+       square buttons (search, light/dark, account). Body-scoped to win over
+       theme.css's small-screen .topbar rules. */
+    body .feed-topbar { padding-left: 12px; padding-right: 12px; column-gap: 8px; }
+    body .feed-topbar .sidebar-toggle-btn { margin-right: 0; }
+    .ft-left, .ft-right { gap: 4px; }
+    body .feed-topbar .ft-logo { font-size: 15px; }
     .feed-topbar .theme-toggle { padding: 6px 8px; }
     .feed-topbar .theme-toggle .theme-when-light,
     .feed-topbar .theme-toggle .theme-when-dark { font-size: 0; gap: 0; }
