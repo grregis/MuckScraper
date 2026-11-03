@@ -37,6 +37,17 @@ ARTICLE_SEARCH_VECTOR_SQL = (
     "setweight(to_tsvector('english'::regconfig, immutable_unaccent(left(coalesce(content, ''), 6000))), 'D')"
 )
 
+# Titles alone, for ranking title matches first (aggregator/search.py). Small
+# enough to stay in the row, unlike an article's search_vector. Must stay
+# identical to migrations e6f2a9c4b701 and b3d7f1a9c2e8.
+STORY_TITLE_VECTOR_SQL = (
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A') || "
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(headline, ''))), 'A')"
+)
+ARTICLE_TITLE_VECTOR_SQL = (
+    "setweight(to_tsvector('english'::regconfig, immutable_unaccent(coalesce(title, ''))), 'A')"
+)
+
 # Many-to-many junction tables
 story_topics = db.Table("story_topics",
     db.Column("story_id", db.Integer, db.ForeignKey("stories.id"), primary_key=True),
@@ -105,6 +116,7 @@ class Story(db.Model):
     opinion_roundup_generated_at = db.Column(db.DateTime, nullable=True)
     # Deferred: only search reads it, so loading a story never pulls it in.
     search_vector = deferred(db.Column(TSVECTOR, db.Computed(STORY_SEARCH_VECTOR_SQL, persisted=True)))
+    title_vector = deferred(db.Column(TSVECTOR, db.Computed(STORY_TITLE_VECTOR_SQL, persisted=True)))
 
     topics   = db.relationship("Topic",   secondary=story_topics,  back_populates="stories")
     articles = db.relationship("Article", backref="story", lazy=True)
@@ -179,6 +191,7 @@ class Article(db.Model):
     copy_overlap = db.Column(db.Float, nullable=True)
     copy_checked_at = db.Column(db.DateTime, nullable=True)
     search_vector = deferred(db.Column(TSVECTOR, db.Computed(ARTICLE_SEARCH_VECTOR_SQL, persisted=True)))
+    title_vector = deferred(db.Column(TSVECTOR, db.Computed(ARTICLE_TITLE_VECTOR_SQL, persisted=True)))
 
     topics = db.relationship("Topic", secondary=article_topics, back_populates="articles")
     copy_of = db.relationship("Article", remote_side=[id], foreign_keys=[copy_of_id])
