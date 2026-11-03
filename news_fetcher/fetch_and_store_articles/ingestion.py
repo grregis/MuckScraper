@@ -306,7 +306,7 @@ def store_opinion_feed(articles_data):
     return metrics
 
 
-def store_articles(articles_data, topic_name, provider=None):
+def store_articles(articles_data, topic_name, provider=None, assign_topic=None):
     """
     Store a list of normalized article dicts into the database,
     tagging them with the given topic.
@@ -470,10 +470,10 @@ def store_articles(articles_data, topic_name, provider=None):
             if classified_topic not in story.topics:
                 story.topics.append(classified_topic)
 
-        # If this article was fetched from a labeled feed/query,
-        # associate that topic directly with the story as well.
-        if topic_name and topic_name not in ("Global News", "Targeted Right RSS Enrichment", "Targeted Left RSS Enrichment"):
-            feed_topic = TopicModel.query.filter_by(name=topic_name).first()
+        # If this article was fetched from an opted-in feed whose label matches
+        # an active topic, associate that topic directly with the story as well.
+        if assign_topic:
+            feed_topic = TopicModel.query.filter_by(name=assign_topic, is_active=True).first()
             if feed_topic and feed_topic not in story.topics:
                 story.topics.append(feed_topic)
 

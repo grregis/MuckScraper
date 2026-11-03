@@ -259,7 +259,8 @@ def fetch_and_store_rss():
         source_name, articles = _fetch_with_fallback(feed.url, max_entries=max_entries)
         if articles:
             topic_tag = feed.label or "Global News"
-            feed_metrics = store_articles(articles, topic_tag, provider="rss")
+            assign_topic = feed.label if (getattr(feed, "assign_topic", False) and feed.label) else None
+            feed_metrics = store_articles(articles, topic_tag, provider="rss", assign_topic=assign_topic)
             metrics["feeds_with_articles"] += 1
             metrics["input_articles"] += feed_metrics.get("input_articles", 0)
             metrics["stored"] += feed_metrics.get("stored", 0)
