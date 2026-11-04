@@ -90,6 +90,10 @@ muckscraper/
 │   ├── __init__.py                 # App factory
 │   ├── app.py                      # Main Flask entry point
 │   ├── models.py                   # SQLAlchemy models
+│   ├── permissions.py              # Roles (reader, scraper, admin) and public read access
+│   ├── accounts.py                 # Account form validation (profile page, user admin)
+│   ├── oidc.py                     # Optional OpenID Connect sign-in (docs/OIDC.md)
+│   ├── navigation.py               # "Back to Feed" links that return to the list you came from
 │   ├── filters.py                  # Jinja filters and display helpers
 │   ├── constants.py                # Shared constants (AGGREGATORS; TOPICS is dead, topics are DB-backed)
 │   ├── display_time.py             # DISPLAY_TIMEZONE handling for shown dates
@@ -98,15 +102,18 @@ muckscraper/
 │   ├── article_signals.py          # Ingest heuristics: roundup/betting patterns, bias bucketing, independent-source checks
 │   ├── search.py                   # Full-text search (Postgres)
 │   ├── story_view.py               # Story view helpers
+│   ├── story_analysis.py           # Splits a story's analysis into its labelled sections
+│   ├── article_copies.py           # Articles that carry another outlet's text
+│   ├── opinion.py                  # Op/Ed columns linked to stories (read-only helpers)
 │   ├── blueprints/
 │   │   ├── admin/                  # Admin and maintenance routes (package: articles, bulk_actions, config_crud, tools, ...)
-│   │   ├── auth.py                 # Login/logout routes
+│   │   ├── auth.py                 # Sign-in (password or OIDC), sign-out, profile
 │   │   └── public.py               # Public reader routes
 │   ├── static/                     # Shared static assets (css/theme.css holds the colour tokens)
 │   └── templates/                  # Jinja templates
 ├── docker_restart_proxy/           # Small service that lets the admin UI restart containers (and the MCP server read logs)
 ├── mcp_server/                     # Optional read-only MCP server for AI assistants (docs/MCP.md)
-├── docs/                           # Longer guides (MCP.md)
+├── docs/                           # Longer guides (MCP.md, OIDC.md)
 ├── migrations/                     # Alembic migration files
 ├── news_fetcher/
 │   ├── Dockerfile                  # Scheduler image
@@ -117,6 +124,7 @@ muckscraper/
 │   ├── quality_report.py           # Read-only quality report for a run
 │   ├── rss_fetcher.py              # RSS ingestion helpers
 │   ├── google_news.py              # Resolves Google News search-feed links to publisher URLs
+│   ├── bylines.py                  # Cleans article bylines from feeds and publisher pages
 │   ├── copy_detector.py            # Marks copied articles (wire copies) within a story
 │   ├── opinion_linker.py           # Links Op/Ed columns to stories, writes opinion roundups
 │   ├── scheduler.py                # Scheduled fetch runner
@@ -131,12 +139,15 @@ muckscraper/
 │   ├── cleanup_duplicates.py       # Utility: deduplicate articles and stories
 │   └── merge_outlets.py            # Legacy script; use Merge Outlets in Admin Tools instead
 ├── tests/                          # Automated tests
+├── screenshots/                    # Images used in this README
 ├── boot.sh                         # Docker app entrypoint
 ├── install.sh                      # First-time setup and upgrades
 ├── bootstrap_admin.py              # Admin user creation script
 ├── docker-compose.yml              # Local stack definition
 ├── Dockerfile                      # App image
 ├── requirements.txt                # Python dependencies
+├── CHANGELOG.md                    # Release history and upgrade notes
+├── LICENSE                         # MIT licence
 └── .env.sample                     # Example environment configuration
 ```
 
@@ -163,7 +174,7 @@ Recommended deployment:
 
 What the live deployment runs on, as a guide:
 
-- **The Docker stack:** 2 CPU cores and 8 GB of RAM is plenty (the containers use about 1.5 GB between them). Allow about 10 GB of disk for the images, plus the database: about 1 GB for 120,000 articles over six months, including its search indexes.
+- **The Docker stack:** 2 CPU cores and 8 GB of RAM is plenty (the containers use about 1.5 GB between them). Allow about 10 GB of disk for the images, plus the database: about 1.7 GB for 135,000 articles, search columns included.
 - **The LLM:** a GPU makes the difference. A full run makes about 1,200 LLM calls, one after another, so every second per call adds up. The live site uses a 10 GB GPU with `gemma4:12b-it-qat` (`OLLAMA_THINK=false`) and `nomic-embed-text`, both held on the GPU together; a full run of 250-300 new articles takes 25-35 minutes. On a smaller card, `gemma4:e4b-it-qat` (about 3 GB of VRAM) works. Ollama can run on a different machine from the stack (set `OLLAMA_HOST`).
 - **Ollama's context size:** set `OLLAMA_CONTEXT_LENGTH` to at least `16384` on the Ollama server (in its service environment, not in this `.env`). Older Ollama versions default to 4,096 tokens, which cuts off long story-summary prompts. MuckScraper never asks for a context size per call, so the server's setting is what every call gets.
 - **No GPU?** Send the summaries, or everything, to a cloud provider instead; see LLM behavior below.
@@ -424,3 +435,4 @@ Important knobs include:
 
 - **[Langfuse](https://langfuse.com/)** — LLM observability and tracing, invaluable for debugging prompts and iterating on model behavior during development.
 - **[AllSides](https://www.allsides.com/)** — outlet bias ratings that inform MuckScraper's bias labeling. Their commitment to balanced news exposure is very much in the spirit of this project.
+- **[Meilisearch](https://www.meilisearch.com/)** — powered MuckScraper's search from the early days until November 2026, when a contributor's pull request (#32) moved search into Postgres. It was quick to set up and served the project well while it grew; thanks to its team for a great open-source search engine.
