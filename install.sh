@@ -26,8 +26,8 @@ if [ ! -f .env ]; then
     first_run=true
 fi
 
-# Auto-generate SECRET_KEY and MEILI_MASTER_KEY if they're still the sample
-# placeholders — these are purely mechanical, unlike API keys or the admin
+# Auto-generate SECRET_KEY if it is still the sample
+# placeholder — these are purely mechanical, unlike API keys or the admin
 # password, which need a human to actually decide.
 random_hex() {
     if command -v openssl >/dev/null 2>&1; then
@@ -41,15 +41,10 @@ if grep -Eq '^SECRET_KEY=(replace_with_a_generated_secret_key|generate_with_pyth
     sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=$(random_hex)/" .env && rm -f .env.bak
     ok "SECRET_KEY set"
 fi
-if grep -Eq '^MEILI_MASTER_KEY=(replace_with_a_generated_meilisearch_key|replace_with_a_real_meilisearch_key)' .env; then
-    info "Generating a Meilisearch master key"
-    sed -i.bak "s/^MEILI_MASTER_KEY=.*/MEILI_MASTER_KEY=$(random_hex)/" .env && rm -f .env.bak
-    ok "MEILI_MASTER_KEY set"
-fi
 
 if [ "$first_run" = true ]; then
     warn "Now edit .env with your Ollama host and models and an admin password"
-    warn "(news API keys are optional; SECRET_KEY and MEILI_MASTER_KEY are already set),"
+    warn "(news API keys are optional; SECRET_KEY is already set),"
     warn "then re-run ./install.sh to continue."
     exit 0
 fi
@@ -75,8 +70,8 @@ if [ "$placeholders_left" = true ]; then
     esac
 fi
 
-info "Building and starting postgres, meilisearch, and app..."
-docker compose up -d --build postgres meilisearch app
+info "Building and starting postgres and app..."
+docker compose up -d --build postgres app
 
 info "Setting up the database (pgvector extension + tables) and admin user..."
 info "(retries automatically while Postgres finishes starting up)"

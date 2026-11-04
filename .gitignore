@@ -26,6 +26,7 @@ tests/*
 !tests/test_rss_feed_topics.py
 !tests/test_analysis_cards.py
 !tests/test_settings_permissions.py
+!tests/test_postgres_search.py
 
 # Personal Headline feature files
 aggregator/public_app.py
