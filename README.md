@@ -435,4 +435,4 @@ Important knobs include:
 
 - **[Langfuse](https://langfuse.com/)** — LLM observability and tracing, invaluable for debugging prompts and iterating on model behavior during development.
 - **[AllSides](https://www.allsides.com/)** — outlet bias ratings that inform MuckScraper's bias labeling. Their commitment to balanced news exposure is very much in the spirit of this project.
-- **[Meilisearch](https://www.meilisearch.com/)** — powered MuckScraper's search from the early days until November 2026, when a contributor's pull request (#32) moved search into Postgres. It was quick to set up and served the project well while it grew; thanks to its team for a great open-source search engine.
+- **[Meilisearch](https://www.meilisearch.com/)** — powered MuckScraper's search from the early days until November 2026, when [bballdavis](https://github.com/bballdavis) moved search into Postgres ([#32](https://github.com/grregis/MuckScraper/pull/32)). It was quick to set up and served the project well while it grew; thanks to its team for a great open-source search engine.
