@@ -22,7 +22,7 @@ HEADERS_DEFAULT = {
 # The allowlist lives in aggregator/html_safety.py so the templates filter
 # with exactly the same rules at render time.
 from aggregator.html_safety import ALLOWED_ATTRIBUTES, ALLOWED_TAGS, sanitize_html  # noqa: E402,F401
-from news_fetcher.bylines import author_from_html  # noqa: E402
+from news_fetcher.bylines import author_from_html, jsonld_items  # noqa: E402
 
 # No crawler user agent and no headless browser for paywalled sites (Regis,
 # 2026-10-21). Posing as Googlebot is how 12ft.io got past paywalls before
@@ -535,6 +535,38 @@ def extract_with_readability(html, url):
     return None
 
 
+_ARTICLE_TYPES = {
+    "article",
+    "newsarticle",
+    "analysisnewsarticle",
+    "askpublicnewsarticle",
+    "backgroundnewsarticle",
+    "opinionnewsarticle",
+    "reportagenewsarticle",
+    "reviewnewsarticle",
+    "blogposting",
+    "liveblogposting",
+    "report",
+    "webpage",
+}
+
+
+def _is_article_type(item):
+    if not isinstance(item, dict):
+        return False
+    raw_type = item.get("@type")
+    if not raw_type:
+        return False
+    types = raw_type if isinstance(raw_type, list) else [raw_type]
+    for t in types:
+        if not isinstance(t, str):
+            continue
+        clean = t.rsplit("/", 1)[-1].rsplit("#", 1)[-1].split(":")[-1].strip().lower()
+        if clean in _ARTICLE_TYPES or clean.endswith("article"):
+            return True
+    return False
+
+
 def extract_structured_metadata(html, url):
     """
     Extract article-ish text from JSON-LD, OpenGraph, Twitter cards, and
@@ -556,14 +588,26 @@ def extract_structured_metadata(html, url):
             payload = json.loads(raw)
         except Exception:
             continue
-        stack = payload if isinstance(payload, list) else [payload]
-        for item in stack:
+        top_items = payload if isinstance(payload, list) else [payload]
+        for item in jsonld_items(payload):
             if not isinstance(item, dict):
                 continue
-            body = item.get("articleBody") or item.get("description")
-            headline = item.get("headline")
-            if body:
-                candidates.append((headline, body))
+            is_top = any(item is t for t in top_items)
+            entity = item.get("mainEntity")
+            entity_items = []
+            if is_top:
+                entity_items.append(item)
+            elif _is_article_type(item):
+                entity_items.append(item)
+
+            if isinstance(entity, dict) and _is_article_type(entity):
+                entity_items.append(entity)
+
+            for target_item in entity_items:
+                body = target_item.get("articleBody") or target_item.get("description")
+                headline = target_item.get("headline") or item.get("headline")
+                if body:
+                    candidates.append((headline, body))
 
     meta_fields = [
         ("meta", {"property": "og:description"}),
@@ -583,13 +627,28 @@ def extract_structured_metadata(html, url):
     best_html = None
     best_len = 0
     for headline, body in candidates:
-        clean_body = _clean_text(body)
-        if len(clean_body) < 140:
+        if isinstance(body, list):
+            raw_body = "\n\n".join(str(p) for p in body if p)
+        else:
+            raw_body = str(body or "")
+
+        paragraphs = [_clean_text(p) for p in re.split(r'\n\s*\n', raw_body)]
+        paragraphs = [p for p in paragraphs if p]
+
+        total_len = sum(len(p) for p in paragraphs)
+        if total_len < 140:
             continue
+
         parts = []
         if headline:
-            parts.append(f"<h2>{bleach.clean(headline, strip=True)}</h2>")
-        parts.append(f"<p>{bleach.clean(clean_body, strip=True)}</p>")
+            clean_hl = _clean_text(headline)
+            if clean_hl:
+                parts.append(f"<h2>{bleach.clean(clean_hl, strip=True)}</h2>")
+        for p in paragraphs:
+            cleaned_p = bleach.clean(p, strip=True)
+            if cleaned_p:
+                parts.append(f"<p>{cleaned_p}</p>")
+
         candidate_html = sanitize_html("<div>" + "".join(parts) + "</div>")
         if len(candidate_html) > best_len:
             best_html = candidate_html

@@ -1,9 +1,13 @@
+{% extends 'settings_base.html' %}
+{% block title %}Scrape Blocklist — MuckScraper{% endblock %}
+{% block settings_key %}scrapeblock{% endblock %}
+{% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% from 'breadcrumb.html' import back_link %}
+{% block head %}{{ super() }}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
@@ -11,7 +15,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
-    <title>Scrape Blocklist — MuckScraper</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -127,10 +131,8 @@
         .empty { padding: 48px; text-align: center; color: var(--text-faint); font-style: italic; }
     </style>
     <script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script>
-</head>
-<body>
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
+{% endblock %}
+{% block topbar %}{% call feed_topbar() %}
     <div class="topbar-left crumb-bar">
         <span class="topbar-title">MuckScraper</span>
         {{ back_link(url_for('admin.tools_page'), 'Back to Admin Tools') }}
@@ -139,7 +141,10 @@
         {{ theme_toggle() }}
         {{ account_menu() }}
     </div>
-</div>
+{% endcall %}{% endblock %}
+{% block settings_body %}
+
+
 
 <div class="container">
     <h1>Scrape Blocklist</h1>
@@ -323,5 +328,4 @@
     </div>
 </div>
 
-</body>
-</html>
+{% endblock %}

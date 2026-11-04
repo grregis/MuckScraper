@@ -1,8 +1,12 @@
+{% extends 'settings_base.html' %}
+{% block title %}Admin Tools — MuckScraper{% endblock %}
+{% block settings_key %}overview{% endblock %}
+{% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% from 'breadcrumb.html' import back_link %}
+{% block head %}{{ super() }}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -12,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
-    <title>Admin Tools — MuckScraper</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
@@ -337,8 +341,18 @@
             .tool-card { border-right: none; }
         }
     </style>
-</head>
-<body>
+{% endblock %}
+{% block topbar %}{% call feed_topbar() %}
+    <div class="topbar-left crumb-bar">
+        <span class="topbar-title">MuckScraper</span>
+        {{ back_link(feed_back_url(), 'Back to Feed') }}
+    </div>
+    <div class="topbar-right">
+        {{ theme_toggle() }}
+        {{ account_menu() }}
+    </div>
+{% endcall %}{% endblock %}
+{% block settings_body %}
 {% macro bulk_task_status_box(action) %}
 <div class="status-box" id="bulk-status-box-{{ action }}">
     <div class="status-line">
@@ -348,17 +362,8 @@
     <div class="status-meta" id="bulk-meta-{{ action }}"></div>
 </div>
 {% endmacro %}
-{% from 'breadcrumb.html' import back_link %}
-<div class="topbar">
-    <div class="topbar-left crumb-bar">
-        <span class="topbar-title">MuckScraper</span>
-        {{ back_link(feed_back_url(), 'Back to Feed') }}
-    </div>
-    <div class="topbar-right">
-        {{ theme_toggle() }}
-        {{ account_menu() }}
-    </div>
-</div>
+
+
 
 <div class="container">
     <h1>Admin Tools</h1>
@@ -550,21 +555,6 @@
                 </form>
                 {{ bulk_task_status_box("scrape_all_missing") }}
             </div>
-            <div class="tool-card">
-                <div class="tool-card-title">Reindex Search</div>
-                <p>Rebuilds the Meilisearch story and article indexes from the database so admin search stays fast and can search both stories and articles.</p>
-                <div class="meta-row">
-                    <span class="badge">Maintenance</span>
-                </div>
-                <button type="button" class="btn" id="reindex-search-btn" onclick="startSearchReindex()">Reindex Search</button>
-                <div class="status-box" id="reindex-search-status-box">
-                    <div class="status-line">
-                        <span class="status-pill idle" id="reindex-search-state">Idle</span>
-                    </div>
-                    <div class="status-copy" id="reindex-search-message">Search index has not been rebuilt in this app session yet.</div>
-                    <div class="status-meta" id="reindex-search-meta"></div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -706,83 +696,6 @@
         return date.toLocaleString();
     }
 
-    function applySearchReindexStatus(status) {
-        const button = document.getElementById('reindex-search-btn');
-        const state = document.getElementById('reindex-search-state');
-        const message = document.getElementById('reindex-search-message');
-        const meta = document.getElementById('reindex-search-meta');
-
-        const currentStatus = status.status || 'idle';
-        state.className = `status-pill ${currentStatus}`;
-        state.textContent = currentStatus === 'running'
-            ? 'Working'
-            : currentStatus === 'success'
-                ? 'Successful'
-                : currentStatus === 'error'
-                    ? 'Failed'
-                    : 'Idle';
-
-        message.textContent = status.message || 'No search reindex status available.';
-
-        const details = [];
-        if (status.started_at) details.push(`Started: ${formatStatusTimestamp(status.started_at)}`);
-        if (status.finished_at) details.push(`Finished: ${formatStatusTimestamp(status.finished_at)}`);
-        if (status.story_documents !== null && status.story_documents !== undefined) {
-            details.push(`Stories: ${status.story_documents}`);
-        }
-        if (status.article_documents !== null && status.article_documents !== undefined) {
-            details.push(`Articles: ${status.article_documents}`);
-        }
-        meta.textContent = details.join(' · ');
-
-        if (currentStatus === 'running') {
-            button.disabled = true;
-            button.textContent = 'Reindex Running...';
-        } else {
-            button.disabled = false;
-            button.textContent = 'Reindex Search';
-        }
-    }
-
-    function pollSearchReindexStatus() {
-        fetch('{{ url_for("admin.reindex_search_status") }}')
-            .then(r => r.json())
-            .then(applySearchReindexStatus)
-            .catch(() => {
-                applySearchReindexStatus({
-                    status: 'error',
-                    message: 'Could not load reindex status.',
-                });
-            });
-    }
-
-    function startSearchReindex() {
-        const button = document.getElementById('reindex-search-btn');
-        button.disabled = true;
-        button.textContent = 'Starting...';
-
-        fetch('{{ url_for("admin.reindex_search") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
-            }
-        })
-            .then(async (response) => {
-                const data = await response.json();
-                applySearchReindexStatus(data.status || {});
-                if (!response.ok && response.status !== 409) {
-                    throw new Error(data.message || 'Failed to start search reindex.');
-                }
-            })
-            .catch((error) => {
-                applySearchReindexStatus({
-                    status: 'error',
-                    message: error.message || 'Failed to start search reindex.',
-                });
-            });
-    }
-
     const BULK_TASK_ACTIONS = [
         'ollama_catchup', 'scrape_all_missing', 'reclassify_articles',
         'force_resummarize', 'audit_scrapes',
@@ -849,10 +762,7 @@
     applyTheme(savedTheme);
     pollOllamaActiveHost();
     setInterval(pollOllamaActiveHost, 30000);
-    pollSearchReindexStatus();
-    setInterval(pollSearchReindexStatus, 5000);
     pollBulkTaskStatuses();
     setInterval(pollBulkTaskStatuses, 5000);
 </script>
-</body>
-</html>
+{% endblock %}

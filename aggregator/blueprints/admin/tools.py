@@ -8,7 +8,7 @@ from aggregator.models import AppSetting
 
 from . import admin, DOCKER_RESTART_PROXY_URL, CONTAINER_SERVICE_NAMES, MANUAL_FETCH_STATUS_KEY, FETCH_RUN_STATUS_KEY, BULK_TASK_ACTIONS, ORPHANED_TASK_STALE_AFTER
 from ._shared import _load_json_setting, _save_json_setting
-from ._tasks import _bulk_task_status_payload, _search_reindex_status_payload
+from ._tasks import _bulk_task_status_payload
 from .config_crud import pipeline_schedule_restart_needed
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ def _running_operations():
     container restart could interrupt, each tagged with which of this
     project's containers restarting would interrupt (`affects`). Covers:
     scheduled fetch/pipeline runs, manual on-demand fetches, the six bulk
-    admin actions, per-resource AI tasks, and search reindexing.
+    admin actions and per-resource AI tasks.
     """
     ops = []
 
@@ -174,15 +174,6 @@ def _running_operations():
                 "affects": {"app", "postgres"},
                 "started_at": payload.get("started_at"),
             })
-
-    reindex_status = _search_reindex_status_payload()
-    if _is_running_and_fresh(reindex_status):
-        ops.append({
-            "kind": "other",
-            "label": "Search reindex",
-            "affects": {"app", "postgres", "meilisearch"},
-            "started_at": reindex_status.get("started_at"),
-        })
 
     return ops
 

@@ -1,0 +1,15 @@
+/* Shared frame from the dev visual refresh. Colours stay in theme.css. */
+/* The header stays pinned, and the desktop sidebar fills the space under it.
+   --topbar-h is the header's measured height (set in _app_page.html): the
+   header wraps on narrow or short windows, so a fixed offset is wrong. */
+.feed-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 24px; background: var(--topbar-bg); color: var(--topbar-text); }
+.feed-topbar h1 { font-size: 18px; color: var(--topbar-text); }
+.feed-topbar .header-controls, .feed-topbar .topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.feed-topbar .sidebar-toggle-btn { flex: 0 0 auto; }
+.feed-topbar + .layout { min-height: calc(100vh - var(--topbar-h, 72px)); }
+@media (min-width: 769px) and (min-height: 501px) {
+ .feed-topbar + .layout .sidebar { top: var(--topbar-h, 72px); height: calc(100vh - var(--topbar-h, 72px)); }
+}
+@media (max-width: 768px), (max-height: 500px) {
+ .feed-topbar { padding: 12px 16px; gap: 8px; }
+}

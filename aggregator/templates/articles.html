@@ -1,11 +1,11 @@
+{% extends '_app_page.html' %}
 {% from 'story_card_macros.html' import story_card, bias_balance, bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'pagination.html' import pager %}
 <!-- muckscraperHeadlinesGoogleNEW/aggregator/templates/articles.html -->
 {% from 'icons.html' import icon, theme_toggle_label %}
-<!DOCTYPE html>
-<html data-theme="light">
-<head>
+
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -45,27 +45,11 @@
             /* A flex item won't shrink below its widest child without this;
                on a phone All Stories was 564px wide. */
             min-width: 0;
-            padding: 0 40px;
+            /* Space under the shared header (_feed_topbar.html). */
+            padding: 20px 40px 0;
             max-width: var(--width-list);
             margin: 0 auto;
             position: relative;
-        }
-
-        /* Dark top bar, matching every other page (headlines_feed.html,
-           admin_tools.html, story.html, ...) instead of the page's own
-           translucent light header this used to carry -- see CLAUDE.md's
-           note on tokens drifting per-template. */
-        .main-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            position: sticky;
-            top: 0;
-            background: var(--topbar-bg);
-            padding: 16px 40px;
-            margin-bottom: 20px;
-            z-index: 100;
         }
 
         h1 { font-size: 18px; font-weight: 800; color: var(--topbar-text); letter-spacing: -0.5px; }
@@ -363,26 +347,22 @@
         }
 
         @media (max-width: 900px) {
-            .main { padding: 0 20px; }
-            .main-header { padding: 16px 20px; }
+            .main { padding: 20px 20px 0; }
         }
     </style>
-</head>
-<body>
-
-<div class="layout">
-
-    {% include 'sidebar_nav.html' %}
-
-    <div class="page-body">
-    <div class="main-header">
+{% endblock %}
+{% block topbar %}
+{% call feed_topbar() %}
         <h1>MuckScraper</h1>
 
         <div class="header-controls">
             <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">{{ theme_toggle_label() }}</button>
             {{ account_menu() }}
         </div>
-    </div>
+    {% endcall %}
+{% endblock %}
+{% block body %}
+
 
     <div class="main">
 
@@ -549,8 +529,8 @@
         {{ pager(page, total_pages) }}
 
     </div>
-    </div>
-</div>
+    {% endblock %}
+{% block scripts %}
 
 <div id="ai-task-status" style="display:none; position:fixed; right:20px; bottom:20px; max-width:320px; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,0.08); z-index:1200;"></div>
 
@@ -695,5 +675,4 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/local_time.js') }}" data-timezone="{{ config['DISPLAY_TIMEZONE'] }}"></script>
-</body>
-</html>
+{% endblock %}

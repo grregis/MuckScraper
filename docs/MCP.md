@@ -24,7 +24,7 @@ It is **read-only**. It cannot fetch, restart, rescrape or change settings.
 | `scrape_health` | Blocked and failed scrapes by domain. |
 | `bias_coverage` | Rated, unrated and abandoned outlets. |
 | `containers` | Container states, start times, restart counts, disk space, database size. |
-| `search_health` | Meilisearch up, and in step with the database. |
+| `search_health` | Full-text search columns and indexes present (migrations applied). |
 | `code_live_check` | Whether the running app and scheduler have the newest code loaded (the scheduler only loads code at startup). |
 | `runbook` | The documented procedure for a topic, from this repo's docs. |
 
