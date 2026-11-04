@@ -384,6 +384,7 @@ class RssFeed(db.Model):
     # Fetched instead when `url` answers with an HTTP error or can't be
     # parsed; normally a Google News search feed for the same outlet/section.
     fallback_url = db.Column(db.String, nullable=True)
+    assign_topic = db.Column(db.Boolean, default=False, server_default=db.false(), nullable=False)
 
 
 class PromptTemplate(db.Model):

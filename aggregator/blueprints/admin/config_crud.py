@@ -74,9 +74,13 @@ def add_rss_feed():
     bucket = request.form.get("bucket", "").strip()
     label = request.form.get("label", "").strip() or None
     fallback_url = request.form.get("fallback_url", "").strip() or None
+    assign_topic = request.form.get("assign_topic") == "on"
 
     if url and bucket in RSS_FEED_BUCKETS and not RssFeed.query.filter_by(url=url, bucket=bucket).first():
-        db.session.add(RssFeed(url=url, bucket=bucket, label=label, enabled=True, fallback_url=fallback_url))
+        db.session.add(RssFeed(
+            url=url, bucket=bucket, label=label, enabled=True,
+            fallback_url=fallback_url, assign_topic=assign_topic
+        ))
         db.session.commit()
         logger.info(f"[RssFeeds] Added feed: {url} ({bucket})")
     return redirect(url_for("admin.rss_feeds_page"))
@@ -89,6 +93,7 @@ def update_rss_feed(feed_id):
     feed.label = request.form.get("label", "").strip() or None
     feed.fallback_url = request.form.get("fallback_url", "").strip() or None
     feed.enabled = request.form.get("enabled") == "on"
+    feed.assign_topic = request.form.get("assign_topic") == "on"
     db.session.commit()
     return redirect(url_for("admin.rss_feeds_page"))
 

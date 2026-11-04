@@ -23,6 +23,7 @@ tests/*
 !tests/test_navigation_access.py
 !tests/test_oidc.py
 !tests/test_scraper_metadata.py
+!tests/test_rss_feed_topics.py
 
 # Personal Headline feature files
 aggregator/public_app.py
