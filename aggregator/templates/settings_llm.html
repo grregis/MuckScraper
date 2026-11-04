@@ -111,6 +111,28 @@
             <span aria-hidden="true"></span>
         </label>
     </form>
+    <form class="row" id="analyze-all" method="POST" action="{{ url_for('admin.toggle_analyze_all_stories') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="enabled" value="{{ 'false' if analyze_all_enabled else 'true' }}">
+        <span>
+            <span class="row-label">Analyse every story</span>
+            <span class="row-sub">Every run, summarise and analyse every story that gained articles, not only the edition's. Each run takes about 30&ndash;40 minutes longer.
+                {%- if analyze_all_source == 'admin' %} Set here; <code>ANALYZE_ALL_STORIES</code> in .env says {{ 'on' if analyze_all_env else 'off' }}.{% else %} From <code>ANALYZE_ALL_STORIES</code> in .env.{% endif %}</span>
+        </span>
+        <label class="switch">
+            <span class="visually-hidden">Analyse every story</span>
+            <input type="checkbox" onchange="this.form.submit()"{% if analyze_all_enabled %} checked{% endif %}>
+            <span aria-hidden="true"></span>
+        </label>
+    </form>
+    {%- if analyze_all_source == 'admin' %}
+    <form class="row" method="POST" action="{{ url_for('admin.toggle_analyze_all_stories') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reset" value="true">
+        <span class="row-sub">Go back to the .env setting ({{ 'on' if analyze_all_env else 'off' }}).</span>
+        <button type="submit" class="btn btn-quiet">Use .env setting</button>
+    </form>
+    {%- endif %}
 </section>
 {% endblock %}
 

@@ -76,6 +76,10 @@ from .edition_content import (  # noqa: F401
     _auto_article_deep_analysis_enabled,
     _fill_story_content,
     process_current_edition,
+    ANALYZE_ALL_STORIES_SETTING_KEY,
+    analyze_all_stories_setting,
+    analyze_all_stories_enabled,
+    analyze_all_recent_stories,
 )
 from .maintenance import (  # noqa: F401
     generate_missing_embeddings,
