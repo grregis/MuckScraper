@@ -24,6 +24,8 @@ tests/*
 !tests/test_oidc.py
 !tests/test_scraper_metadata.py
 !tests/test_rss_feed_topics.py
+!tests/test_analysis_cards.py
+!tests/test_settings_permissions.py
 
 # Personal Headline feature files
 aggregator/public_app.py

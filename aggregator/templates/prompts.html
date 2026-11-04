@@ -1,10 +1,12 @@
-{% extends '_app_page.html' %}
+{% extends 'settings_base.html' %}
+{% block title %}Prompts — MuckScraper{% endblock %}
+{% block settings_key %}prompts{% endblock %}
 {% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 
 {% from 'breadcrumb.html' import back_link %}
-{% block head %}
+{% block head %}{{ super() }}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon_32.png') }}">
@@ -12,7 +14,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
-    <title>Prompts — MuckScraper</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -74,7 +76,7 @@
         {{ account_menu() }}
     </div>
 {% endcall %}{% endblock %}
-{% block body %}
+{% block settings_body %}
 
 
 
