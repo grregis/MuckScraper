@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -125,3 +126,60 @@ def test_gemini_min_interval_pacing(monkeypatch):
 
     assert result == "Paced result"
     mock_sleep.assert_called_once_with(1.5)
+
+
+def test_gemini_daily_quota_logged_resets_on_success(monkeypatch, caplog):
+    """A successful call to Gemini resets _gemini_daily_quota_logged so subsequent exhaustion logs again."""
+    mock_client = MagicMock()
+    monkeypatch.setattr(llm_client, "_get_gemini_client", lambda: mock_client)
+
+    error_response = {
+        "error": {
+            "code": 429,
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "Resource has been exhausted",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {"quotaId": "GenerateRequestsPerDayPerProject"}
+                    ],
+                }
+            ],
+        }
+    }
+    per_day_err = ClientError(429, error_response)
+    mock_success = MagicMock()
+    mock_success.text = "Success response"
+
+    # Sequence: 1. Daily quota fail -> 2. Daily quota fail (suppressed log) -> 3. Success (resets) -> 4. Daily quota fail (logged again)
+    mock_client.models.generate_content.side_effect = [
+        per_day_err,
+        per_day_err,
+        mock_success,
+        per_day_err,
+    ]
+
+    with caplog.at_level(logging.WARNING, logger="news_fetcher.llm_client"):
+        # 1. First failure sets flag to True and logs warning
+        res1 = _generate_text_gemini("Prompt 1", timeout=10)
+        assert res1 is None
+        assert llm_client._gemini_daily_quota_logged is True
+        assert caplog.text.count("Gemini daily quota exhausted") == 1
+
+        # 2. Second failure does not log again
+        res2 = _generate_text_gemini("Prompt 2", timeout=10)
+        assert res2 is None
+        assert caplog.text.count("Gemini daily quota exhausted") == 1
+
+        # 3. Successful call resets flag to False
+        res3 = _generate_text_gemini("Prompt 3", timeout=10)
+        assert res3 == "Success response"
+        assert llm_client._gemini_daily_quota_logged is False
+
+        # 4. Subsequent failure logs warning again and re-sets flag
+        res4 = _generate_text_gemini("Prompt 4", timeout=10)
+        assert res4 is None
+        assert llm_client._gemini_daily_quota_logged is True
+        assert caplog.text.count("Gemini daily quota exhausted") == 2
+

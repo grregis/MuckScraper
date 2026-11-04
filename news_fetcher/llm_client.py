@@ -542,6 +542,7 @@ def _generate_text_gemini(prompt, timeout, model=None, _attempt=0):
             contents=prompt,
         )
         text = (response.text or "").strip()
+        _gemini_daily_quota_logged = False
         return text or None
     except Exception as e:
         is_429, is_daily, delay_sec = _parse_gemini_rate_limit(e)
