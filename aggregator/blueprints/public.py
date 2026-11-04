@@ -3,6 +3,8 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import current_user
+from aggregator import story_analysis
+from aggregator.blueprints.admin._shared import story_bias_totals
 from aggregator.permissions import public_or_login, public_read_enabled
 from aggregator.search import healthcheck as meili_healthcheck
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
@@ -166,10 +168,12 @@ def view_story(story_id):
     ollama_online = check_ollama_status(TIER_QUALITY)
 
     apply_aggregator_filter(story)
+    story_bias_totals(story)
 
     return render_template(
         "story.html",
         story=story,
+        analysis=story_analysis.layout(story.deep_report),
         opinion=opinion_for_story(story.id),
         ollama_online=ollama_online,
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
