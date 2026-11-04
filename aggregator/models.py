@@ -7,6 +7,25 @@ from datetime import datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import deferred
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.schema import CreateColumn
+
+
+# Tests build the schema in SQLite, which has no tsvector or to_tsvector().
+# There the generated search columns become plain TEXT; Postgres DDL is
+# unchanged. Without this, any test calling db.create_all() fails since #32
+# (tests/test_rss_feed_topics.py did).
+@compiles(TSVECTOR, "sqlite")
+def _tsvector_as_text_on_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
+
+@compiles(CreateColumn, "sqlite")
+def _plain_search_columns_on_sqlite(element, compiler, **kw):
+    column = element.element
+    if isinstance(column.type, TSVECTOR):
+        return "%s TEXT" % compiler.preparer.format_column(column)
+    return compiler.visit_create_column(element, **kw)
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
