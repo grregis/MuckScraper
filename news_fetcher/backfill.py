@@ -55,7 +55,8 @@ LOG_LINES_KEPT = 40
 RUN_STALE_AFTER = timedelta(hours=3)   # same cutoff as the admin restart guard
 SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")   # = scheduler.TIMEZONE
 ORDERS = ("newest", "oldest")
-CONTENT_FLOOR = 500
+CONTENT_FLOOR = 500        # = summarizer.ARTICLE_DEEP_ANALYSIS_MIN_CHARS (on raw text here)
+READABLE_MIN_CHARS = 200   # summarize_story / generate_deep_report skip below this
 
 # Providers whose calls cost nothing per call on a typical install. Anything
 # else (Gemini, Groq, an OpenAI-compatible endpoint) needs an explicit
@@ -311,23 +312,33 @@ def stories_needing_work_query():
     from sqlalchemy import and_, case, func, or_
     from aggregator import db
     from aggregator.models import Article, Story
-    has_text = func.length(func.coalesce(Article.content, "")) >= CONTENT_FLOOR
+    length = func.length(func.coalesce(Article.content, ""))
     n = func.count(Article.id)
+    # A multi-article story summary or deep report needs at least one article
+    # with readable text; without one the summariser skips the story, so
+    # picking it would only cost a wasted visit on every start.
+    readable = func.sum(case((length >= READABLE_MIN_CHARS, 1), else_=0)) > 0
     return (
         db.session.query(Story.id, func.max(Article.fetched_at).label("latest"))
         .join(Article, Article.story_id == Story.id)
         .group_by(Story.id)
         .having(or_(
-            # no story summary, and something to write one from
-            and_(func.coalesce(Story.summary, "") == "",
-                 or_(n > 1, func.sum(case((or_(func.coalesce(Article.content, "") != "",
-                                               func.coalesce(Article.summary, "") != ""), 1), else_=0)) > 0)),
-            and_(n > 1, func.coalesce(Story.deep_report, "") == ""),
+            # single-source story without a summary, whose article has one or can get one
+            and_(n == 1, func.coalesce(Story.summary, "") == "",
+                 func.sum(case((or_(func.coalesce(Article.content, "") != "",
+                                    func.coalesce(Article.summary, "") != ""), 1), else_=0)) > 0),
+            # multi-source story: summary or report missing, or stale
+            and_(n > 1, readable, or_(
+                func.coalesce(Story.summary, "") == "",
+                func.coalesce(Story.deep_report, "") == "",
+                and_(Story.summary_generated_at.isnot(None),
+                     func.max(Article.fetched_at) > Story.summary_generated_at))),
+            # an article with text and no summary
             func.sum(case((and_(func.coalesce(Article.content, "") != "",
                                 func.coalesce(Article.summary, "") == ""), 1), else_=0)) > 0,
-            func.sum(case((and_(has_text, func.coalesce(Article.deep_analysis, "") == ""), 1), else_=0)) > 0,
-            and_(n > 1, Story.summary_generated_at.isnot(None),
-                 func.max(Article.fetched_at) > Story.summary_generated_at),
+            # an article long enough to analyse, without an analysis
+            func.sum(case((and_(length >= CONTENT_FLOOR,
+                                func.coalesce(Article.deep_analysis, "") == ""), 1), else_=0)) > 0,
         ))
     )
 
@@ -447,7 +458,11 @@ def run_backfill(order="newest"):
                         counts["article analyses"] += 1
                         db.session.commit()
 
-            if n >= 2:
+            readable = any(len(sm.strip_html(a.content or "").strip()) >= READABLE_MIN_CHARS
+                           for a in articles)
+            if n >= 2 and not readable:
+                report.log("  no article with readable text: no story summary or report possible", save=False)
+            elif n >= 2:
                 stale = bool(story.summary_generated_at) and any(
                     a.fetched_at and a.fetched_at > story.summary_generated_at for a in articles)
                 redo_summary = not story.summary or stale
