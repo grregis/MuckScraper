@@ -1,6 +1,6 @@
 {% from 'icons.html' import icon %}
 {% from 'account_menu.html' import account_menu with context %}
-{# Header-only extraction. Live search and Filters are added by later PRs. #}
+{# The shared header. Live search under the search box comes in a later PR. #}
 {% macro feed_topbar(section_title=none, search_action=none, q="", hidden={}, filter_count=0, suggest_scope=none, placeholder="Search stories, articles, outlets") %}
 {% if section_title is none %}<header class="topbar feed-topbar">{{ caller() }}</header>{% else %}
 <header class="topbar feed-topbar{% if q %} search-open{% endif %}">
