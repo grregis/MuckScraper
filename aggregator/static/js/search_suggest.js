@@ -1,4 +1,6 @@
-// Live search extracted from dev feed_header.js. Scraped text uses textContent.
+// Live results under the shared header's search box (_feed_topbar.html), from
+// /admin/search/suggest. Scraped titles and outlet names go in as textContent,
+// never HTML.
 (function () {
     const form = document.querySelector('.ft-search');
     const input = document.getElementById('feed-search');
