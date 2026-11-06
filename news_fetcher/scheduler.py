@@ -6,7 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score, is_independent_source
 from aggregator.models import AppSetting, PipelineSchedule, ScheduledFetch
-from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
+from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, analyze_all_recent_stories, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.headline_generator import generate_headlines_for_stale_stories
 from news_fetcher.copy_detector import mark_recent_copies
 from news_fetcher.opinion_linker import link_opinion_and_write_roundups
@@ -1113,6 +1113,19 @@ def run_all_fetches(run_full_pipeline=True):
             run_metrics["steps"]["opinion_roundups"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["daily_horoscope"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["static_export"] = {"status": "skipped", "reason": "fetch_only_run"}
+
+        # Opt-in (ANALYZE_ALL_STORIES / Settings > LLM providers): summaries and
+        # analyses for every story with new articles, not only edition stories.
+        # Last, on full and fetch-only runs alike, so the edition, export and
+        # posts are never held up by it.
+        logging.info("--- Analysing all recent stories (if enabled) ---")
+        try:
+            run_metrics["steps"]["analyze_all_stories"] = analyze_all_recent_stories()
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Error analysing all recent stories: {e}")
+            run_metrics["status"] = "partial_error"
+            run_metrics["steps"]["analyze_all_stories"] = {"status": "error", "reason": str(e)}
 
         set_last_fetch_time()
         run_metrics["finished_at"] = datetime.utcnow().isoformat()

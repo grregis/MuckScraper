@@ -1,7 +1,7 @@
 """Postgres full-text search replaces Meilisearch.
 
 Revision ID: e6f2a9c4b701
-Revises: a4c6e8b0d2f5
+Revises: b5e1f7a2c4d9
 Create Date: 2026-10-22
 
 Adds a generated `search_vector` column with a GIN index to stories and
@@ -19,7 +19,7 @@ adds it to databases that ran the earlier version.
 from alembic import op
 
 revision = 'e6f2a9c4b701'
-down_revision = 'a4c6e8b0d2f5'
+down_revision = 'b5e1f7a2c4d9'
 branch_labels = None
 depends_on = None
 

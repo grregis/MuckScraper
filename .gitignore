@@ -22,6 +22,13 @@ tests/*
 !tests/test_ai_task_network_errors.py
 !tests/test_navigation_access.py
 !tests/test_oidc.py
+!tests/test_gemini_rate_limit.py
+!tests/test_oidc_logout_tokens.py
+!tests/test_scraper_metadata.py
+!tests/test_rss_feed_topics.py
+!tests/test_analysis_cards.py
+!tests/test_settings_permissions.py
+!tests/test_postgres_search.py
 
 # Personal Headline feature files
 aggregator/public_app.py

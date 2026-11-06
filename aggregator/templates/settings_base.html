@@ -1,0 +1,68 @@
+{#- Settings: the app frame with a section list beside the content (settings
+    mock, 2026-10-22). A settings page extends this, names its entry and fills
+    settings_body:
+
+        {% extends 'settings_base.html' %}
+        {% block title %}Topics{% endblock %}
+        {% block settings_key %}topics{% endblock %}
+        {% block settings_body %}...{% endblock %}
+
+    The list itself comes from settings_sections() (blueprints/admin/settings_nav.py).
+    Styles: static/css/app_page.css. -#}
+{% extends '_app_page.html' %}
+{% set shared_sidebar = false %}
+{% from 'icons.html' import icon %}
+{% block section %}Settings{% endblock %}
+{% block nav %}settings{% endblock %}
+{% block head %}<script src="{{ url_for('static', filename='js/theme_toggle.js') }}"></script><title>{% block title %}Settings{% endblock %}</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">{% endblock %}
+{% block topbar %}{% from 'account_menu.html' import account_menu with context %}{% from 'icons.html' import theme_toggle %}{% call feed_topbar() %}<span class="topbar-title">MuckScraper / Settings</span><div class="header-controls">{{ theme_toggle() }}{{ account_menu() }}</div>{% endcall %}{% endblock %}
+{% block body_class %}app-page settings-page{% endblock %}
+{% block body %}
+<div class="settings">
+    <nav class="settings-nav" aria-label="Settings sections">
+        <label class="settings-find">
+            <span class="visually-hidden">Find a setting</span>
+            {{ icon('search') }}
+            <input type="search" id="settings-find" placeholder="Find a setting" autocomplete="off">
+        </label>
+        {%- for group in settings_sections(self.settings_key()|trim) %}
+        <div class="settings-group">
+            <div class="settings-group-name">{{ group.name }}</div>
+            {%- for item in group['items'] %}
+            <a class="settings-link" href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>
+                <span>{{ item.label }}</span>
+                {%- if item.is_new %}<span class="chip chip-new">NEW</span>
+                {%- elif item.count is not none %}<span class="count">{{ item.count }}</span>{% endif %}
+            </a>
+            {%- endfor %}
+        </div>
+        {%- endfor %}
+    </nav>
+    <main class="settings-main">
+        <div class="settings-content">
+            {% block settings_body %}{% endblock %}
+        </div>
+    </main>
+</div>
+<script>
+    // Narrow the section list as you type; Enter opens the first match.
+    (function () {
+        const input = document.getElementById('settings-find');
+        if (!input) return;
+        const links = Array.from(document.querySelectorAll('.settings-link'));
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            links.forEach((a) => { a.hidden = q && !a.textContent.toLowerCase().includes(q); });
+            document.querySelectorAll('.settings-group').forEach((g) => {
+                g.hidden = !g.querySelector('.settings-link:not([hidden])');
+            });
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            const first = links.find((a) => !a.hidden);
+            if (first) { e.preventDefault(); location.href = first.href; }
+        });
+    })();
+</script>
+{% endblock %}
+{%- if false %}{% block settings_key %}{% endblock %}{% endif %}

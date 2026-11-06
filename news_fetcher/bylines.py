@@ -105,7 +105,7 @@ def _jsonld_author_names(value):
     return []
 
 
-def _jsonld_items(payload):
+def jsonld_items(payload):
     stack = payload if isinstance(payload, list) else [payload]
     for item in stack:
         if not isinstance(item, dict):
@@ -138,7 +138,7 @@ def author_from_html(html, source_name=None):
             payload = json.loads(script.string or script.get_text() or "")
         except Exception:
             continue
-        for item in _jsonld_items(payload):
+        for item in jsonld_items(payload):
             if "author" not in item:
                 continue
             names = [clean_byline(n, source_name) for n in _jsonld_author_names(item["author"])]

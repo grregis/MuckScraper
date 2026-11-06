@@ -7,6 +7,25 @@ from datetime import datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import deferred
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.schema import CreateColumn
+
+
+# Tests build the schema in SQLite, which has no tsvector or to_tsvector().
+# There the generated search columns become plain TEXT; Postgres DDL is
+# unchanged. Without this, any test calling db.create_all() fails since #32
+# (tests/test_rss_feed_topics.py did).
+@compiles(TSVECTOR, "sqlite")
+def _tsvector_as_text_on_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
+
+@compiles(CreateColumn, "sqlite")
+def _plain_search_columns_on_sqlite(element, compiler, **kw):
+    column = element.element
+    if isinstance(column.type, TSVECTOR):
+        return "%s TEXT" % compiler.preparer.format_column(column)
+    return compiler.visit_create_column(element, **kw)
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -351,6 +370,17 @@ class OIDCIdentity(db.Model):
     user = db.relationship(User, backref=db.backref("oidc_identities", cascade="all, delete-orphan"))
 
 
+class OIDCLogoutToken(db.Model):
+    """One encrypted ID token per optional provider-logout session."""
+    __tablename__ = "oidc_logout_tokens"
+
+    handle_hash = db.Column(db.String(64), primary_key=True)
+    identity_key = db.Column(db.String(64), db.ForeignKey("oidc_identities.identity_key", ondelete="CASCADE"), nullable=False)
+    client_id = db.Column(db.Text, nullable=False)
+    encrypted_token = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
 
 class ScrapeBlocklist(db.Model):
     """
@@ -434,6 +464,7 @@ class RssFeed(db.Model):
     # Fetched instead when `url` answers with an HTTP error or can't be
     # parsed; normally a Google News search feed for the same outlet/section.
     fallback_url = db.Column(db.String, nullable=True)
+    assign_topic = db.Column(db.Boolean, default=False, server_default=db.false(), nullable=False)
 
 
 class PromptTemplate(db.Model):

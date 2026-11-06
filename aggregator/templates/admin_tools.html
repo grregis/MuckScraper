@@ -1,10 +1,12 @@
-{% extends '_app_page.html' %}
+{% extends 'settings_base.html' %}
+{% block title %}Admin Tools — MuckScraper{% endblock %}
+{% block settings_key %}overview{% endblock %}
 {% set shared_sidebar = false %}
 {% from 'icons.html' import theme_toggle %}
 {% from 'account_menu.html' import account_menu with context %}
 
 {% from 'breadcrumb.html' import back_link %}
-{% block head %}
+{% block head %}{{ super() }}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -14,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon_192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon_512.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon_180.png') }}">
-    <title>Admin Tools — MuckScraper</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <style>
         :root {
@@ -350,7 +352,7 @@
         {{ account_menu() }}
     </div>
 {% endcall %}{% endblock %}
-{% block body %}
+{% block settings_body %}
 {% macro bulk_task_status_box(action) %}
 <div class="status-box" id="bulk-status-box-{{ action }}">
     <div class="status-line">

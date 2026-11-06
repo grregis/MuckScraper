@@ -78,7 +78,8 @@
                     <h2><a href="{{ url_for('public.view_story', story_id=story.id, back=current_back()) }}">{{ story.display_headline }}</a></h2>
                     {% set article_count = story.articles|length %}
                     <div class="card-meta">
-                        <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}{% if story.source_count is defined %} · {{ story.source_count }} outlet{{ 's' if story.source_count != 1 else '' }}{% endif %}</span>
+                        <span class="meta-item">{{ article_count }} article{{ 's' if article_count != 1 else '' }}</span>
+                        {% if story.source_count is defined %}<span class="meta-item">{{ story.source_count }} outlet{{ 's' if story.source_count != 1 else '' }}</span>{% endif %}
                         {% if story.has_ai_headline %}<span class="meta-item">AI headline</span>{% endif %}
                         {% if story.deep_report %}<span class="card-flag">Analysis</span>{% endif %}
                         {% if story.edition_has_updates %}<span class="card-flag flag-new">New updates</span>{% endif %}

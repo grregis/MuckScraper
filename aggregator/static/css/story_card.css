@@ -45,14 +45,21 @@
 .story h2 a:hover { color: var(--accent-text); text-decoration: underline; }
 
 /* One muted row: "Updated 3 hours ago · 7 articles · AI headline", plus flags. */
+/* The "·" sits in the gap before each item. An item that wraps to the start
+   of a line has its dot pushed past the row's left edge, where overflow
+   clips it, so a wrapped line never starts with a stray dot. */
 .card-meta {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 0;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px;
     font-size: var(--fs-meta); color: var(--text-muted);
     margin-bottom: 16px;
+    overflow: hidden;
 }
-.card-meta .meta-item + .meta-item::before { content: "·"; margin: 0 8px; color: var(--text-faint); }
+.card-meta .meta-item + .meta-item { position: relative; }
+.card-meta .meta-item + .meta-item::before {
+    content: "·"; position: absolute; left: -18px; width: 18px; text-align: center;
+    color: var(--text-faint);
+}
 .card-flag {
-    margin-left: 10px;
     padding: 2px 8px; border-radius: 6px;
     font-size: var(--fs-label); font-weight: 700;
     background: var(--accent); color: var(--on-accent);
@@ -110,9 +117,17 @@
 
 /* Compact cards (story_card(story, compact=true), All / Grouped Stories):
    a thumbnail, the headline and counts, and on the right the date over the
-   Left/Center/Right line (Philip, 2026-10-22). The .lcr pieces are in
+   Left/Center/Right line. The .lcr pieces are in
    feed_header.css. */
 .story.compact { border-radius: 12px; margin-bottom: 10px; scroll-margin-top: 80px; }
+/* The ⋯ popover has to reach past the card's bottom edge, so the compact card
+   doesn't clip its children. Its rounded corners still hold: the thumbnail
+   clips itself (.story-image) and the rest sits inside the card's padding. */
+.story.compact { overflow: visible; }
+/* Each card is its own stacking context (hover transform, transition), so the
+   card with the open menu is lifted above the cards after it
+   (feed_header.js toggles .menu-open). */
+.story.compact.menu-open { position: relative; z-index: 10; }
 .story.compact:hover { transform: none; box-shadow: var(--shadow); }
 .story.compact .story-layout { gap: 16px; padding: 12px; align-items: flex-start; }
 .story.compact .story-image {
