@@ -2,6 +2,7 @@
 
 import feedparser
 import logging
+import requests
 from collections import Counter
 from datetime import datetime
 from datetime import timedelta
@@ -40,6 +41,30 @@ def _feed_fallback_url(feed_url):
 def _fetch_with_fallback(feed_url, **kwargs):
     """fetch_feed() with the feed's fallback_url, if one is set."""
     return fetch_feed(feed_url, fallback_url=_feed_fallback_url(feed_url), **kwargs)
+
+
+# feedparser.parse(url) has no timeout: on 2026-11-06 the Washington Post's
+# feed server accepted the connection and then sent nothing, and the run
+# waited on it (10 min, then again on its Op/Ed feed, until the connection
+# was closed by hand). Download with requests instead: (connect, read)
+# seconds, the read one being the longest silence allowed.
+FEED_TIMEOUT = (10, 20)
+
+
+def _parse_feed(url):
+    """Download a feed with a timeout, then parse it. A stalled server raises
+    a requests exception, which fetch_feed() treats as a failed feed (and uses
+    the fallback). An HTTP error comes back as `status`, as feedparser
+    reports it when it downloads the feed itself."""
+    response = requests.get(url, timeout=FEED_TIMEOUT,
+                            headers={"User-Agent": feedparser.USER_AGENT})
+    feed = feedparser.parse(
+        response.content,
+        response_headers={k.lower(): v for k, v in response.headers.items()},
+    )
+    feed["status"] = response.status_code
+    feed["href"] = response.url
+    return feed
 
 
 def _feed_failed(feed):
@@ -112,7 +137,7 @@ def fetch_feed(feed_url, max_entries=30, fallback_url=None):
     2026-10-14 and took its op-eds out of the Op/Ed mix.
     """
     try:
-        feed = feedparser.parse(feed_url)
+        feed = _parse_feed(feed_url)
         if fallback_url and _feed_failed(feed):
             logger.warning(
                 f"  [RSS] {feed_url[:60]} failed (HTTP {feed.get('status', '-')}); "
