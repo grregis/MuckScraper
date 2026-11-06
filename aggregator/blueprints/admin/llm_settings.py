@@ -5,8 +5,8 @@ Routing, keys, models and Ollama hosts can be saved here
 (aggregator/config_store.py); a saved value overrides the environment
 variable of the same name and a cleared one falls back to it. Keys are
 encrypted before they reach the database and never come back to the
-browser. The page also has the auto deep-analysis switch and a one-line
-test call per tier.
+browser. The page also has the auto deep-analysis and analyse-all
+switches and a one-line test call per tier.
 """
 import logging
 import time
@@ -18,7 +18,7 @@ from aggregator import db, config_store, secret_box
 from aggregator.permissions import ROLE_ADMIN, role_required
 
 from . import admin
-from ._shared import _load_json_setting
+from ._shared import _load_json_setting, _save_json_setting
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +153,10 @@ def _provider_rows(states):
 def llm_providers_page():
     from news_fetcher import llm_client as llm
     AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY = "auto_article_deep_analysis_enabled"
+    from news_fetcher.fetch_and_store_articles.edition_content import (
+        _env_flag, analyze_all_stories_setting,
+    )
+    analyze_all_enabled, analyze_all_source = analyze_all_stories_setting()
 
     tiers = {
         "quality": {
@@ -182,7 +186,29 @@ def llm_providers_page():
         routes=routes,
         embedding_provider=llm.EMBEDDING_PROVIDER,
         auto_article_deep_analysis_enabled=bool(_load_json_setting(AUTO_ARTICLE_DEEP_ANALYSIS_SETTING_KEY)),
+        analyze_all_enabled=analyze_all_enabled,
+        analyze_all_source=analyze_all_source,
+        analyze_all_env=_env_flag("ANALYZE_ALL_STORIES"),
     )
+
+
+@admin.route("/settings/llm/analyze-all", methods=["POST"])
+@role_required(ROLE_ADMIN)
+def toggle_analyze_all_stories():
+    """The analyse-all switch. \"reset\" forgets it, so ANALYZE_ALL_STORIES
+    in .env decides again."""
+    from aggregator import db
+    from aggregator.models import AppSetting
+    from news_fetcher.fetch_and_store_articles import ANALYZE_ALL_STORIES_SETTING_KEY
+    if request.form.get("reset") == "true":
+        AppSetting.query.filter_by(key=ANALYZE_ALL_STORIES_SETTING_KEY).delete()
+        db.session.commit()
+        logger.info("[Settings] analyze_all_stories reset to the .env value")
+    else:
+        enabled = request.form.get("enabled") == "true"
+        _save_json_setting(ANALYZE_ALL_STORIES_SETTING_KEY, enabled)
+        logger.info(f"[Settings] analyze_all_stories set to {enabled}")
+    return redirect(url_for("admin.llm_providers_page") + "#analyze-all")
 
 
 @admin.route("/settings/llm/test", methods=["POST"])

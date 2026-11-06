@@ -126,6 +126,7 @@
                 <tr>
                     <th>URL</th>
                     <th>Label</th>
+                    <th>Assign Topic</th>
                     <th>Enabled</th>
                     <th></th>
                     <th></th>
@@ -137,6 +138,7 @@
                     <td class="url-cell">{{ feed.url }}
                             <input form="rss-feed-{{ feed.id }}" type="url" class="fallback-input" name="fallback_url" value="{{ feed.fallback_url or '' }}" placeholder="Fallback feed if this one fails (optional)" aria-label="Fallback feed URL"></td>
                     <td><input form="rss-feed-{{ feed.id }}" type="text" class="label-input" name="label" value="{{ feed.label or '' }}" placeholder="Label"></td>
+                    <td><input form="rss-feed-{{ feed.id }}" type="checkbox" name="assign_topic" title="File this feed's stories under the topic named by its label" aria-label="File this feed's stories under the topic named by its label" {{ 'checked' if feed.assign_topic else '' }}></td>
                     <td><input form="rss-feed-{{ feed.id }}" type="checkbox" name="enabled" {{ 'checked' if feed.enabled else '' }}></td>
                     <td>
                         <form id="rss-feed-{{ feed.id }}" method="POST" action="{{ url_for('admin.update_rss_feed', feed_id=feed.id) }}">
@@ -171,6 +173,9 @@
                 {% endfor %}
             </select>
             <input type="text" class="label-input" name="label" placeholder="Label (optional)">
+            <label style="font-size: 13px; display: inline-flex; align-items: center; gap: 4px;" title="File this feed's stories under the topic named by its label">
+                <input type="checkbox" name="assign_topic"> File under topic
+            </label>
             <input type="url" class="url-input" name="fallback_url" placeholder="Fallback feed if it fails (optional)" aria-label="Fallback feed URL">
             <button type="submit" class="add-btn">+ Add Feed</button>
         </form>

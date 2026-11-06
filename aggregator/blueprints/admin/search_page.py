@@ -5,7 +5,7 @@ Two tabs share one query box and one time window:
   rule as the story listings). Counts cover all of the story's articles.
 - Articles: an article matches on its own publish date.
 
-Text queries go through Meilisearch, capped at SEARCH_CANDIDATE_LIMIT hits, and
+Text queries go through Postgres full-text search, capped at SEARCH_CANDIDATE_LIMIT hits, and
 the exact window is then applied in SQL. Without a query the tables are browsed
 straight from SQL.
 """
@@ -63,14 +63,14 @@ STORY_SORTABLE = {"headline", "articles", "sources", "left", "center", "right", 
 ARTICLE_SORTABLE = {"title", "outlet", "date", "bias", "story", "story_articles"}
 
 
-# With a text query the rows default to Meilisearch's own ranking, best match
+# With a text query the rows default to Postgres full-text search's own ranking, best match
 # first. Sorting the <= 1000 candidates by date instead put strong matches
 # pages behind weak recent ones.
 RELEVANCE = "relevance"
 
 
 def _relevance_order(id_column, ranked_ids):
-    """ORDER BY position in Meilisearch's ranked id list, or None if there is
+    """ORDER BY position in Postgres full-text search's ranked id list, or None if there is
     no ranked list (no query, or the SQL fallback)."""
     if not ranked_ids:
         return None
@@ -362,7 +362,7 @@ def search_page():
                     text_query, limit=SEARCH_CANDIDATE_LIMIT, since=window["since"], until=window["until"]
                 )
         except SearchUnavailableError as exc:
-            logger.warning("Meilisearch unavailable for search page, using SQL match: %s", exc)
+            logger.warning("Postgres full-text search unavailable for search page, using SQL match: %s", exc)
             degraded = True
             candidate_ids = None
 

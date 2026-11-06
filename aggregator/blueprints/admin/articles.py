@@ -63,7 +63,7 @@ def list_articles(per_page=25, force_multi=False):
         return redirect(url_for("public.view_story", story_id=story_id))
 
     query = Story.query.join(Article).group_by(Story.id)
-    meili_story_ids = None
+    ranked_story_ids = None
 
     # Existence check only: the story is kept if any article is in the window,
     # but its displayed articles are never filtered, so older ones still show.
@@ -89,13 +89,13 @@ def list_articles(per_page=25, force_multi=False):
 
     if active_search_query:
         try:
-            meili_story_ids = search_story_ids(active_search_query, since=cutoff)
+            ranked_story_ids = search_story_ids(active_search_query, since=cutoff)
         except SearchUnavailableError as exc:
-            logger.warning("Meilisearch unavailable, falling back to SQL search: %s", exc)
+            logger.warning("Full-text search failed, falling back to SQL substring search: %s", exc)
 
-        if meili_story_ids is not None:
-            if meili_story_ids:
-                query = query.filter(Story.id.in_(meili_story_ids))
+        if ranked_story_ids is not None:
+            if ranked_story_ids:
+                query = query.filter(Story.id.in_(ranked_story_ids))
             else:
                 query = query.filter(False)
         else:
@@ -118,9 +118,9 @@ def list_articles(per_page=25, force_multi=False):
                     )
                 )
 
-    if meili_story_ids:
+    if ranked_story_ids:
         order_by = [
-            case({story_id: index for index, story_id in enumerate(meili_story_ids)}, value=Story.id),
+            case({story_id: index for index, story_id in enumerate(ranked_story_ids)}, value=Story.id),
             func.max(Article.date).desc(),
         ]
     else:

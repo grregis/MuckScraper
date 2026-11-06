@@ -14,7 +14,7 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 
 from aggregator import create_app, db
-from aggregator.models import OIDCIdentity, User
+from aggregator.models import OIDCIdentity, OIDCLogoutToken, User
 from aggregator.oidc import configuration, identity_key
 
 
@@ -50,11 +50,13 @@ def app(monkeypatch):
         # are unnecessary for the authentication lifecycle.
         User.__table__.create(db.engine)
         OIDCIdentity.__table__.create(db.engine)
+        OIDCLogoutToken.__table__.create(db.engine)
     # Do not keep an app context across browser requests: Flask's g caches
     # user/CSRF state for that context, unlike separate production requests.
     yield application
     with application.app_context():
         db.session.remove()
+        OIDCLogoutToken.__table__.drop(db.engine)
         OIDCIdentity.__table__.drop(db.engine)
         User.__table__.drop(db.engine)
     socket.socket.connect.assert_not_called()
@@ -165,6 +167,44 @@ def test_failed_auto_login_does_not_loop(app, flow):
     assert client.get("/auth/login", base_url="https://reader.example").status_code == 200
     # The normal sign-in button can retry after a failure.
     assert finish(start())[0].status_code == 302
+
+
+@pytest.mark.parametrize("endpoint", [None, "http://issuer.example/logout", "https://user:pass@issuer.example/logout", "https://issuer.example/logout#fragment"])
+def test_provider_logout_rejects_unsafe_endpoints(endpoint):
+    from aggregator.oidc import logout_request
+    assert logout_request({"CLIENT_ID": "test", "POST_LOGOUT_REDIRECT_URI": "https://reader.example/callback"}, endpoint, "verified-token") is None
+
+
+def test_optional_provider_logout_preserves_auto_login_pause(app, flow, monkeypatch):
+    client, start, finish = flow
+    app.config["OIDC"]["AUTO_LOGIN"] = True
+    app.config["OIDC"]["POST_LOGOUT_REDIRECT_URI"] = "https://reader.example/auth/oidc/logout/callback"
+    remote = app.extensions["muckscraper_oidc"]
+    metadata = dict(remote.load_server_metadata(), end_session_endpoint="https://issuer.example/logout")
+    monkeypatch.setattr(remote, "load_server_metadata", Mock(return_value=metadata))
+    assert finish(start())[0].status_code == 302
+    profile = client.get("/auth/profile", base_url="https://reader.example")
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', profile.get_data(as_text=True)).group(1)
+    response = client.post("/auth/logout", data={"csrf_token": csrf},
+                           headers={"Referer": "https://reader.example/auth/profile"}, base_url="https://reader.example")
+    assert response.status_code == 302
+    assert response.location.startswith("https://issuer.example/logout?")
+    params = parse_qs(urlsplit(response.location).query)
+    assert params["id_token_hint"][0]
+    state = params["state"][0]
+    with client.session_transaction() as session:
+        assert "_user_id" not in session and session["oidc_auto_login_paused"] is True
+    assert client.get("/auth/oidc/logout/callback?state=bad", base_url="https://reader.example").status_code == 403
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 403
+    finish(start())
+    profile = client.get("/auth/profile", base_url="https://reader.example")
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', profile.get_data(as_text=True)).group(1)
+    response = client.post("/auth/logout", data={"csrf_token": csrf},
+                           headers={"Referer": "https://reader.example/auth/profile"}, base_url="https://reader.example")
+    state = parse_qs(urlsplit(response.location).query)["state"][0]
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 302
+    assert client.get("/auth/login", base_url="https://reader.example").status_code == 200
+    assert client.get("/auth/oidc/logout/callback", query_string={"state": state}, base_url="https://reader.example").status_code == 403
 
 
 def test_auto_login_logout_stays_signed_out(app, flow):
