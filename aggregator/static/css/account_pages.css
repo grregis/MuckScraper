@@ -17,6 +17,8 @@ h1 { font-size: var(--fs-page-title); font-weight: 800; margin-bottom: 8px; }
 .facts dt { color: var(--text-muted); font-weight: 600; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; max-width: 420px; }
 .field label { font-size: var(--fs-meta); font-weight: 700; color: var(--text-muted); }
+/* A checkbox row: its own line, spaced like a .field, so the form's button sits below it. */
+.check-field { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; max-width: 420px; font-size: 14px; color: var(--text); cursor: pointer; }
 input[type="text"], input[type="email"], input[type="password"], select {
     font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
     border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px;
