@@ -6,6 +6,8 @@ backfill helper.
 """
 
 import logging
+import os
+import time
 from datetime import datetime, timedelta
 import json
 from aggregator import db
@@ -85,10 +87,16 @@ def _auto_article_deep_analysis_enabled():
         return False
 
 
-def _fill_story_content(story, metrics):
+def _fill_story_content(story, metrics, analyse_articles=None, stale_threshold=STALE_ARTICLE_THRESHOLD):
     """
     Generate any missing summary/deep-report/child-article-summary content
     for a single story. Returns True if anything was generated or reset.
+
+    analyse_articles: also write each article's deep analysis. None (edition
+    stories) follows the Auto article deep analysis toggle; the analyse-all
+    step passes True, since analysing everything is what it was turned on for.
+    stale_threshold: new articles since the last story summary that make the
+    summary and deep report be rewritten; the analyse-all step passes 1.
     """
     from news_fetcher.summarizer import (
         summarize_story,
@@ -114,7 +122,7 @@ def _fill_story_content(story, metrics):
                 1 for a in story.articles
                 if a.fetched_at and a.fetched_at > story.summary_generated_at
             )
-            if new_article_count >= STALE_ARTICLE_THRESHOLD:
+            if new_article_count >= stale_threshold:
                 logger.info(
                     f"  [Processor] Story stale ({new_article_count} new articles "
                     f"since last analysis): {story.title[:60]}"
@@ -134,8 +142,13 @@ def _fill_story_content(story, metrics):
             article.content and not article.summary
             for article in story.articles
         )
+        missing_child_analyses = bool(analyse_articles) and any(
+            not article.deep_analysis and article_has_analysable_content(article)
+            for article in story.articles
+        )
 
-        if not story_is_stale and story_outputs_ready and not missing_child_summaries:
+        if (not story_is_stale and story_outputs_ready and not missing_child_summaries
+                and not missing_child_analyses):
             metrics["stable_stories_skipped"] += 1
             return changed
 
@@ -157,7 +170,9 @@ def _fill_story_content(story, metrics):
         # only filter is enough real article text to analyse. Off by default
         # for new installs -- see _auto_article_deep_analysis_enabled(). Measured
         # 2026-10-07 on gemma4-12b: ~3.7 s per article.
-        if _auto_article_deep_analysis_enabled():
+        if analyse_articles is None:
+            analyse_articles = _auto_article_deep_analysis_enabled()
+        if analyse_articles:
             for article in story.articles:
                 if (
                     not article.deep_analysis
@@ -305,4 +320,125 @@ def process_current_edition(backfill_recent=False):
                 metrics["backfilled_edition_ids"].append(edition.id)
 
     logger.info("[Processor] Current edition processing complete.")
+    return metrics
+
+
+# ── Analyse every story, every run (opt-in) ──
+# Off by default: editions only need their own stories filled, and doing every
+# story roughly doubles a full run and quadruples a fetch-only one (measured
+# 2026-11-04 on gemma4-12b via llama.cpp: about +30-40 min a run for ~270 new
+# articles). ANALYZE_ALL_STORIES in .env sets the default; the switch on
+# Settings > LLM providers overrides it until it is reset.
+ANALYZE_ALL_STORIES_SETTING_KEY = "analyze_all_stories_enabled"
+# Stories with an article fetched this recently are candidates. Longer than the
+# gap between runs, so a story whose calls failed is retried next run.
+ANALYZE_ALL_LOOKBACK_HOURS = 24
+_TRUE_WORDS = {"1", "true", "yes", "on"}
+
+
+def _env_flag(name, default=False):
+    value = os.environ.get(name, "").strip().lower()
+    if not value:
+        return default
+    return value in _TRUE_WORDS
+
+
+def analyze_all_stories_setting():
+    """(enabled, source): source is "admin" when the Settings switch has been
+    used, else "env" (ANALYZE_ALL_STORIES, default off)."""
+    from aggregator.models import AppSetting
+
+    setting = AppSetting.query.filter_by(key=ANALYZE_ALL_STORIES_SETTING_KEY).first()
+    if setting is not None:
+        try:
+            return bool(json.loads(setting.value)), "admin"
+        except (ValueError, TypeError):
+            pass
+    return _env_flag("ANALYZE_ALL_STORIES"), "env"
+
+
+def analyze_all_stories_enabled():
+    return analyze_all_stories_setting()[0]
+
+
+def _analyze_all_max_seconds():
+    try:
+        minutes = float(os.environ.get("ANALYZE_ALL_MAX_MINUTES", "") or 90)
+    except ValueError:
+        minutes = 90
+    return max(minutes, 1) * 60
+
+
+def stories_to_analyze(since):
+    """Stories with an article fetched since `since`, biggest first, so a run
+    cut short by the time limit has done the stories with most coverage."""
+    from sqlalchemy import func
+
+    rows = (
+        db.session.query(Story.id)
+        .join(Article, Article.story_id == Story.id)
+        .group_by(Story.id)
+        .having(func.max(Article.fetched_at) >= since)
+        .order_by(func.count(Article.id).desc(), func.max(Article.fetched_at).desc())
+        .all()
+    )
+    return [story_id for (story_id,) in rows]
+
+
+def analyze_all_recent_stories(lookback_hours=ANALYZE_ALL_LOOKBACK_HOURS):
+    """Fill summaries, article analyses and deep reports for every story that
+    gained an article in the last `lookback_hours`, not only edition stories.
+    Runs only when analyze_all_stories_enabled(). Idempotent: a complete story
+    costs one check; one that gained even one article since its last summary
+    gets the new articles summarised and analysed and its own summary and deep
+    report rewritten (editions wait for STALE_ARTICLE_THRESHOLD new articles)."""
+    enabled, source = analyze_all_stories_setting()
+    if not enabled:
+        return {"status": "skipped", "reason": "off", "source": source}
+    if not check_ollama_status(_llm.TIER_QUALITY):
+        logger.info("[AnalyzeAll] Quality-tier LLM offline, skipping.")
+        return {"status": "skipped", "reason": "llm_offline", "source": source}
+
+    started = time.monotonic()
+    limit = _analyze_all_max_seconds()
+    story_ids = stories_to_analyze(datetime.utcnow() - timedelta(hours=lookback_hours))
+    metrics = {
+        "status": "ok",
+        "source": source,
+        "candidates": len(story_ids),
+        "stories_seen": 0,
+        "stories_changed": 0,
+        "story_summaries_generated": 0,
+        "deep_reports_generated": 0,
+        "child_article_summaries_generated": 0,
+        "child_article_analyses_generated": 0,
+        "stale_stories_reset": 0,
+        "stable_stories_skipped": 0,
+    }
+    logger.info(f"[AnalyzeAll] {len(story_ids)} stories with articles from the last {lookback_hours} h")
+    for story_id in story_ids:
+        if time.monotonic() - started > limit:
+            metrics["status"] = "time_limit"
+            logger.warning(
+                f"[AnalyzeAll] Stopped at the {limit / 60:.0f}-minute limit "
+                f"(ANALYZE_ALL_MAX_MINUTES) after {metrics['stories_seen']} of {len(story_ids)} stories; "
+                "the rest are picked up next run."
+            )
+            break
+        story = db.session.get(Story, story_id)
+        if story is None:
+            continue
+        metrics["stories_seen"] += 1
+        if _fill_story_content(story, metrics, analyse_articles=True, stale_threshold=1):
+            metrics["stories_changed"] += 1
+        db.session.expunge_all()  # keep the session small over thousands of stories
+    metrics["duration_seconds"] = round(time.monotonic() - started, 1)
+    logger.info(
+        f"[AnalyzeAll] Done in {metrics['duration_seconds'] / 60:.1f} min: "
+        f"{metrics['stories_changed']} stories changed, "
+        f"{metrics['story_summaries_generated']} story summaries, "
+        f"{metrics['deep_reports_generated']} deep reports, "
+        f"{metrics['child_article_summaries_generated']} article summaries, "
+        f"{metrics['child_article_analyses_generated']} article analyses"
+    )
     return metrics

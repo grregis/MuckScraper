@@ -1,4 +1,5 @@
 {% extends '_app_page.html' %}
+{% from 'story_analysis.html' import story_analysis %}
 {% from 'story_card_macros.html' import bias_tag with context %}
 {% from 'account_menu.html' import account_menu with context %}
 {% from 'icons.html' import icon, theme_toggle_label %}
@@ -6,6 +7,7 @@
 
 {% block head %}
     <meta charset="utf-8">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/story_analysis.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -294,20 +296,7 @@
                 {% endif %}
             </div>
             {% if story.deep_report %}
-                <div class="analysis-content">
-                    {% for line in story.deep_report.split('\n') %}
-                        {% set l = line.strip() %}
-                        {% if l %}
-                            {% if ':' in l and l.split(':')[0].strip()|length < 35 %}
-                                {% set label = l.split(':', 1)[0].strip() %}
-                                {% set rest = l.split(':', 1)[1].strip() %}
-                                <p><strong>{{ label }}:</strong> {{ rest }}</p>
-                            {% else %}
-                                <p>{{ l }}</p>
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-                </div>
+                {{ story_analysis(analysis, story) }}
             {% elif not ollama_online %}
                 <div class="status-msg">
                     Analysis will be generated when Ollama is back online. This story has been queued for processing.

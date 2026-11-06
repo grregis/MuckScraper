@@ -4,7 +4,20 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
-## [Unreleased]
+## [1.1.0] - 2026-11-05
+
+### Upgrading
+- **Run `./install.sh` between fetches.** It applies four migrations. The
+  Postgres search one rewrites and locks the `articles` and `stories` tables
+  while it runs: about 90 seconds for 132,000 articles in testing, roughly a
+  minute or two per 100,000 articles. The other three only add a table or a
+  column.
+- **Meilisearch is gone.** Search now runs in PostgreSQL (see Changed). Remove
+  the Meilisearch service and any `MEILI_*` variables from custom Compose
+  overrides and `.env`. Once you've checked search works, you can delete the
+  old Meilisearch container and its `meili_data` directory.
+- Nothing you configured is changed or discarded. Every new feature below is
+  off until you turn it on.
 
 ### Added
 - **Optional OpenID Connect sign-in** (#28, thanks @rinseaid). Sign in through
@@ -13,24 +26,77 @@ All notable changes to MuckScraper are documented here.
   (`OIDC_ENABLED`); password login stays unless you turn it off. Existing
   accounts are linked explicitly with `flask link-oidc-identity`, never by a
   matching email. Needs HTTPS for both the provider and the app. Setup in
-  `docs/OIDC.md`. The migration only adds an `oidc_identities` table.
+  `docs/OIDC.md`.
+- **Optional sign-out from the identity provider** (#40, thanks @rinseaid).
+  Set `OIDC_POST_LOGOUT_REDIRECT_URI` and register it with your provider, and
+  signing out of MuckScraper also ends the provider session for MuckScraper.
+  Whether your provider's own login also ends depends on its logout flow
+  (Authentik: the provider's invalidation flow). Without it, sign-out stays
+  local as before.
+- **Analyse every story** (`ANALYZE_ALL_STORIES`, off by default, or the
+  switch on Settings > LLM providers). Normally only the stories picked for an
+  edition get article summaries, article analyses and a deep report. With
+  this on, every run (fetch-only runs too) ends by doing every story that
+  gained articles in the last 24 hours, and rewrites a story's summary and
+  deep report whenever it gains an article. Expect each run to take about
+  30-40 minutes longer on a 12B local model, and about 2,000 more LLM calls a
+  day, which matters on paid or rate-limited providers.
+  `ANALYZE_ALL_MAX_MINUTES` (default 90) stops it before it can run into the
+  next scheduled run; whatever it didn't reach is done next time.
+- **Analysis cards on story pages** (#36, thanks @bballdavis). The multi-source
+  report is laid out as cards: left, center and right coverage each get their
+  own section, with the rest of the report below.
+- **One Settings section** (#37, thanks @bballdavis). Users, sources, prompts,
+  the run schedule and a read-only LLM provider overview, with a searchable
+  section list. Every page keeps its route and permission level. Built on a
+  shared page frame and header (#33, thanks @bballdavis).
+- **Topic labels for RSS feeds, per feed** (#41, thanks @parkfour). A feed can
+  now file its articles under its own label as the story's topic. Off for
+  every feed until you tick "File under topic" on /admin/rss-feeds.
 
 ### Changed
+- **Search now uses PostgreSQL** instead of Meilisearch (#32, thanks
+  @bballdavis). Results are always current (no index to rebuild), accents
+  fold ("Mbappe" finds "Mbappé"), close misspellings still match, and stories
+  whose headline or article titles contain the words come first. See
+  Upgrading for the migration.
+- **Big stories: every article counts in the analysis.** Above 15 articles,
+  the deep report and story summary read the newest 10 in full and every
+  other article as a one-line brief from its stored summary, so older
+  coverage is no longer left out.
 - **Article summaries and analyses read up to 24,000 characters of the
   article** (was the first 3,000 and 3,500). Long pieces are summarised from
-  the whole text instead of their opening, and the analysis no longer says a
-  piece lacks evidence that sits further down. Costs about two seconds per
-  long article. Needs a model context of at least ~8k tokens: raise
-  `OLLAMA_CONTEXT_LENGTH` on the Ollama server, or set
+  the whole text instead of their opening. Needs a model context of at least
+  ~8k tokens: raise `OLLAMA_CONTEXT_LENGTH` on the Ollama server, or set
   `ARTICLE_CONTENT_LIMIT=3000` in `.env` to keep the old length.
 - **Story summaries and deep analyses read more of each article.** The story
-  summary takes up to 20,000 characters across its articles (was 9,000) and
-  3,000 per article (was 1,500); the deep analysis up to 24,000 (was 13,500)
-  and 3,000 per article, plus, for each article longer than its excerpt, that
-  article's own analysis (or summary), up to 16,000 more. Article summaries
-  and analyses are now written before the story's, so they are there to use.
-  The biggest prompts are under 10k tokens; with Ollama's old 4k default
-  context, raise `OLLAMA_CONTEXT_LENGTH` (16k is enough).
+  summary takes up to 20,000 characters across its articles (was 9,000); the
+  deep analysis up to 24,000 (was 13,500), plus each long article's own
+  analysis. Article summaries and analyses are now written before the
+  story's. The biggest prompts are under 10k tokens; with Ollama's old 4k
+  default context, raise `OLLAMA_CONTEXT_LENGTH` (16k is enough).
+
+### Fixed
+- **Gemini rate limits** (#42, thanks @parkfour). A per-minute 429 now waits
+  the delay Gemini asks for and retries up to twice; an exhausted daily quota
+  fails fast instead of retrying every call. Optional pacing between requests
+  with `GEMINI_MIN_INTERVAL_SECONDS` (default 0, off).
+- **The OpenAI-compatible provider can be configured again.** Compose now
+  passes `LLM_FAST_PROVIDER` and the `OPENROUTER_*` settings to the app and
+  scheduler; before, setting them in `.env` had no effect.
+- **Article text from more sites** (#43, thanks @parkfour). The fallback that
+  reads a page's JSON-LD now finds the article inside `@graph` lists and
+  `mainEntity`, and keeps its paragraphs.
+- **Opinion kept out of the news**: the Washington Examiner's `/op-eds/`
+  section and Breitbart's "Nolte:" columns are now treated as opinion.
+- **Linked OIDC accounts show their local username** on the profile page
+  (#39, thanks @rinseaid).
+- **Summary buttons recover when a request fails** instead of staying stuck on
+  "Working..." (#26, thanks @rinseaid).
+- **The menu button no longer covers the header**, and the mobile drawer works
+  from the keyboard (Tab stays inside, Escape closes) (#27, thanks @rinseaid).
+- **Settings forms on Topics, RSS Feeds and Pipeline Schedule** use valid
+  markup, so browsers no longer rearrange them (#25, thanks @rinseaid).
 
 ## [1.0.2] - 2026-10-26
 

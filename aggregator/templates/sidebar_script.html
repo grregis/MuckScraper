@@ -131,31 +131,9 @@
             });
     }
 
-    function checkMeiliStatus() {
-        fetch('/meili-status')
-            .then(r => r.json())
-            .then(data => {
-                const dot = document.getElementById('meili-dot');
-                const label = document.getElementById('meili-label');
-                if (data.online) {
-                    dot.className = 'status-dot online';
-                    label.textContent = 'Meili Search Online';
-                } else {
-                    dot.className = 'status-dot offline';
-                    label.textContent = 'Meili Search Offline';
-                }
-            })
-            .catch(() => {
-                document.getElementById('meili-dot').className = 'status-dot offline';
-                document.getElementById('meili-label').textContent = 'Meili Search Offline';
-            });
-    }
-
     {% if current_user.is_authenticated %}
     // Signed-out visitors get no status lights, so nothing to poll.
     checkOllamaStatus();
-    checkMeiliStatus();
 
     setInterval(checkOllamaStatus, 30000);
-    setInterval(checkMeiliStatus, 30000);
     {% endif %}

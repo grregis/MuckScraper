@@ -173,12 +173,16 @@ LOW_VALUE_TITLE_PATTERNS = (
 # Fox News, National Post, Toronto Sun), /opinions/ is 100% Al Jazeera,
 # /editorials/ is 100% Toronto Sun, /commentisfree/ is The Guardian's opinion
 # section. No false positives found across any of these -- every sampled
-# title was a genuine column/op-ed/editorial.
+# title was a genuine column/op-ed/editorial. /op-eds/ is the Washington
+# Examiner's opinion section (2026-11-02): 84 columns had been stored as news
+# since June and one ran as an edition story; it is the only outlet in the
+# corpus with that path.
 OPINION_URL_HINTS = (
     "/opinion/",
     "/opinions/",
     "/editorials/",
     "/commentisfree/",
+    "/op-eds/",
 )
 
 # Host + path prefixes refused outright: not news and not Op/Ed either.

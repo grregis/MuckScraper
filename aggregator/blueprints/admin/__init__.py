@@ -4,7 +4,6 @@ from flask import Blueprint
 
 admin = Blueprint("admin", __name__)
 
-SEARCH_REINDEX_STATUS_KEY = "search_reindex_status_v1"
 MANUAL_FETCH_STATUS_KEY = "manual_fetch_status_v1"
 # Matches news_fetcher/scheduler.py's FETCH_RUN_STATUS_KEY -- duplicated
 # rather than imported to avoid pulling the scheduler module (and its own
@@ -12,7 +11,7 @@ MANUAL_FETCH_STATUS_KEY = "manual_fetch_status_v1"
 FETCH_RUN_STATUS_KEY = "fetch_run_status_v1"
 
 DOCKER_RESTART_PROXY_URL = os.environ.get("DOCKER_RESTART_PROXY_URL", "http://docker-restart-proxy:5001")
-CONTAINER_SERVICE_NAMES = ["postgres", "meilisearch", "scheduler", "app"]
+CONTAINER_SERVICE_NAMES = ["postgres", "scheduler", "app"]
 SCRAPE_STATUS_FILTERS = ("success", "fallback", "blocked", "failed", "skipped", "pending")
 
 # AppSetting key prefixes whose value is a background-task status blob.
@@ -44,3 +43,5 @@ from . import _shared, _tasks, articles, bulk_actions, scrape_blocklist, config_
 # Re-exported because aggregator/app.py does
 # `from aggregator.blueprints.admin import reconcile_orphaned_task_statuses`.
 from ._tasks import reconcile_orphaned_task_statuses  # noqa: E402,F401
+
+from . import settings_nav, llm_settings  # noqa: E402,F401

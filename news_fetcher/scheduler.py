@@ -6,7 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score, is_independent_source
 from aggregator.models import AppSetting, PipelineSchedule, ScheduledFetch
-from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
+from news_fetcher.fetch_and_store_articles import fetch_and_store_articles, process_current_edition, analyze_all_recent_stories, review_ambiguous_grouping_matches, sync_allsides_ratings, publish_edition, retry_unrated_outlets, clear_stale_single_article_headlines
 from news_fetcher.headline_generator import generate_headlines_for_stale_stories
 from news_fetcher.copy_detector import mark_recent_copies
 from news_fetcher.opinion_linker import link_opinion_and_write_roundups
@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 import logging
 import sys
 import os
-import time
 import requests
 import json
 from zoneinfo import ZoneInfo
@@ -692,33 +691,6 @@ def _notify_n8n():
         logging.warning(f"  [n8n] Webhook failed ({e}) — continuing normally")
 
 
-def _update_search_index(since):
-    """Push this run's new/changed stories and articles into Meilisearch.
-
-    Runs after every fetch, full or fetch-only, so search never drifts: the
-    index had silently gone two months stale (2026-07-24 -> 09-30) when it was
-    only rebuilt by hand. Incremental upserts, so search keeps answering
-    throughout; a failure here never fails the run.
-    """
-    from aggregator.search import meili_enabled, index_changed_since
-
-    if not meili_enabled():
-        return {"status": "skipped", "reason": "meili_not_configured"}
-    started = time.monotonic()
-    try:
-        counts = index_changed_since(since)
-    except Exception as e:
-        logging.warning("  [Search] Index update failed: %s", e)
-        return {"status": "error", "reason": str(e)}
-    seconds = round(time.monotonic() - started, 1)
-    logging.info(
-        "  [Search] Indexed %s stories, %s articles; removed %s/%s stale (%.1fs)",
-        counts["story_documents"], counts["article_documents"],
-        counts["stories_deleted"], counts["articles_deleted"], seconds,
-    )
-    return {"status": "ok", "seconds": seconds, **counts}
-
-
 def _refresh_inference_health(ollama_state, label):
     """Probe real Ollama inference and set llm_client's wedged flag.
 
@@ -1142,9 +1114,18 @@ def run_all_fetches(run_full_pipeline=True):
             run_metrics["steps"]["daily_horoscope"] = {"status": "skipped", "reason": "fetch_only_run"}
             run_metrics["steps"]["static_export"] = {"status": "skipped", "reason": "fetch_only_run"}
 
-        run_metrics["steps"]["search_index"] = _update_search_index(
-            datetime.fromisoformat(run_metrics["started_at"])
-        )
+        # Opt-in (ANALYZE_ALL_STORIES / Settings > LLM providers): summaries and
+        # analyses for every story with new articles, not only edition stories.
+        # Last, on full and fetch-only runs alike, so the edition, export and
+        # posts are never held up by it.
+        logging.info("--- Analysing all recent stories (if enabled) ---")
+        try:
+            run_metrics["steps"]["analyze_all_stories"] = analyze_all_recent_stories()
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Error analysing all recent stories: {e}")
+            run_metrics["status"] = "partial_error"
+            run_metrics["steps"]["analyze_all_stories"] = {"status": "error", "reason": str(e)}
 
         set_last_fetch_time()
         run_metrics["finished_at"] = datetime.utcnow().isoformat()

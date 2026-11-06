@@ -315,6 +315,78 @@ DEEP_REPORT_EXCERPT_MAX = 3000
 DEEP_REPORT_DIGEST_BUDGET = 16000
 DEEP_REPORT_DIGEST_MAX = 2500
 
+# Big stories (Regis, 2026-11-03): 59 edition stories in 14 days had more than
+# 15 articles and 18 more than 30 (one 138), so the deep report never saw most
+# of their coverage, sometimes a whole side. Above DEEP_REPORT_MAX_FULL
+# articles the newest BIG_STORY_FULL_ARTICLES keep full excerpts (on smaller
+# budgets) and every other article comes in brief: outlet, title and the start
+# of its stored article summary, filed under its side. The briefs share a
+# budget and fall back to the title alone when a story is huge, so the prompt
+# stays about the size of today's largest (~43k chars, ~11k tokens of 16k).
+# No extra LLM calls: the article summaries are already written by then.
+DEEP_REPORT_MAX_FULL = 15
+BIG_STORY_FULL_ARTICLES = 10
+DEEP_REPORT_BIG_CONTENT_BUDGET = 18000
+DEEP_REPORT_BIG_DIGEST_BUDGET = 10000
+DEEP_REPORT_BRIEF_BUDGET = 14000
+STORY_SUMMARY_MAX_FULL = 10
+STORY_SUMMARY_BRIEF_BUDGET = 8000
+BRIEF_MAX = 300
+BRIEF_MIN = 60
+BRIEF_NOTE = ("Articles marked \"In brief\" are earlier coverage of the same story, "
+              "given as a short summary only; the ones with excerpts are the newest.")
+_SUMMARY_LABELS = re.compile(r"\b(The big picture|Why it matters|Quick analysis|What's happening|What's next):\s*", re.I)
+
+
+def article_brief(article):
+    """An article's stored summary as one plain line, without its section labels."""
+    text = _SUMMARY_LABELS.sub("", strip_html(article.summary or ""))
+    return " ".join(text.split())
+
+
+def brief_limits(articles, budget, per_article_max=BRIEF_MAX, minimum=BRIEF_MIN):
+    """{article id: chars of brief text}. Shared out like the excerpts; when a
+    share would be under `minimum` the article gets its title only (0)."""
+    lengths = [len(article_brief(a)) for a in articles]
+    title_cost = sum(len(a.title or "") + 30 for a in articles)
+    limits = _story_summary_excerpt_limits(lengths, budget=max(budget - title_cost, 0),
+                                           per_article_max=per_article_max)
+    return {a.id: (limit if limit and limit >= min(minimum, length) else 0)
+            for a, limit, length in zip(articles, limits, lengths)}
+
+
+def brief_text(article, limit):
+    text = article_brief(article)
+    if not limit or not text:
+        return ""
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + " ..."
+
+
+def split_full_and_brief(story, max_full, full_count):
+    """(full, brief, excluded): stories up to `max_full` usable articles are
+    unchanged (all full); bigger ones keep the newest `full_count` full and
+    every other article (copies aside) brief.
+
+    The outlier filter only picks the full set. Run over a whole big story it
+    dropped on-topic coverage (24 of 77 on the Alaska ballot story: Peltola's
+    denials, Trump's calls to remove her), since one anchor article can't
+    stand for 80; a stray brief costs a line, a lost side costs the report."""
+    originals = original_articles_for(story)
+    if len(originals) <= max_full:
+        full, excluded = _select_story_prompt_articles(story, limit=max_full)
+        return full, [], excluded
+    full, excluded = _select_story_prompt_articles(story, limit=full_count)
+    from datetime import datetime as _dt
+    taken = {a.id for a in full} | {a.id for a in excluded}
+    brief = sorted((a for a in originals if a.id not in taken),
+                   key=lambda a: getattr(a, "date", None) or _dt.min, reverse=True)
+    return full, brief, excluded
+
+
+def original_articles_for(story):
+    from aggregator.article_copies import original_articles
+    return original_articles(story.articles)
+
 
 def article_digest(article):
     """The most in-depth text already written about an article: its deep
@@ -373,7 +445,8 @@ def summarize_story(story):
     analysis_type = detect_analysis_type(story)
     persona = get_persona(analysis_type)
 
-    prompt_articles, excluded_articles = _select_story_prompt_articles(story, limit=10)
+    prompt_articles, brief_articles, excluded_articles = split_full_and_brief(
+        story, STORY_SUMMARY_MAX_FULL, STORY_SUMMARY_MAX_FULL)
     readable_articles = [
         article for article in prompt_articles
         if len(strip_html(article.content or "").strip()) >= 200
@@ -408,6 +481,17 @@ def summarize_story(story):
         article_texts.append(text)
 
     combined = "\n\n".join(article_texts)
+    if brief_articles:
+        limits_brief = brief_limits(brief_articles, STORY_SUMMARY_BRIEF_BUDGET)
+        lines = [BRIEF_NOTE]
+        for article in brief_articles:
+            outlet_name = article.outlet.name if article.outlet else (article.source or "Unknown source")
+            line = f"- {outlet_name}: {article.title}"
+            text = brief_text(article, limits_brief.get(article.id))
+            if text:
+                line += f"\n  In brief: {text}"
+            lines.append(line)
+        combined += "\n\n" + "\n".join(lines)
 
     prompt = render_prompt("story_summary", persona=persona, combined=combined)
     if prompt is None:
@@ -421,6 +505,7 @@ def summarize_story(story):
             "analysis_type": analysis_type,
             "persona": persona,
             "prompt_articles": len(prompt_articles),
+            "brief_articles": len(brief_articles),
             "excluded_prompt_articles": len(excluded_articles),
         }
     )
@@ -468,7 +553,9 @@ def generate_deep_report(story):
     right_articles = []
     unrated_articles = []
 
-    prompt_articles, excluded_articles = _select_story_prompt_articles(story, limit=15)
+    prompt_articles, brief_articles, excluded_articles = split_full_and_brief(
+        story, DEEP_REPORT_MAX_FULL, BIG_STORY_FULL_ARTICLES)
+    big_story = bool(brief_articles)
     readable_articles = [
         article for article in prompt_articles
         if len(strip_html(article.content or "").strip()) >= 200
@@ -492,14 +579,19 @@ def generate_deep_report(story):
     contents = [strip_html(a.content or "").strip() for a in prompt_articles]
     excerpt_limits = dict(zip(
         (a.id for a in prompt_articles),
-        _story_summary_excerpt_limits([len(c) for c in contents], budget=DEEP_REPORT_CONTENT_BUDGET,
+        _story_summary_excerpt_limits([len(c) for c in contents],
+                                      budget=DEEP_REPORT_BIG_CONTENT_BUDGET if big_story else DEEP_REPORT_CONTENT_BUDGET,
                                       per_article_max=DEEP_REPORT_EXCERPT_MAX),
     ))
 
     def excerpt(a):
         return strip_html(a.content or "")[:excerpt_limits.get(a.id, 300)].strip()
 
-    digest_limits = deep_report_digest_limits(prompt_articles, excerpt_limits)
+    digest_limits = deep_report_digest_limits(
+        prompt_articles, excerpt_limits,
+        budget=DEEP_REPORT_BIG_DIGEST_BUDGET if big_story else DEEP_REPORT_DIGEST_BUDGET)
+    brief_ids = {a.id for a in brief_articles}
+    brief_char_limits = brief_limits(brief_articles, DEEP_REPORT_BRIEF_BUDGET) if big_story else {}
 
     def digest(a):
         limit = digest_limits.get(a.id)
@@ -508,7 +600,7 @@ def generate_deep_report(story):
         text = " ".join(article_digest(a).split())
         return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + " ..."
 
-    for article in prompt_articles:
+    for article in prompt_articles + brief_articles:
         score = article.bias_score
         if score is None and article.outlet:
             score = article.outlet.bias_score
@@ -521,33 +613,35 @@ def generate_deep_report(story):
         else:
             right_articles.append(article)
 
+    def article_lines(a):
+        outlet_name = a.outlet.name if a.outlet else (a.source or "Unknown source")
+        lines = [f"- {outlet_name}: {a.title}"]
+        if a.id in brief_ids:
+            text = brief_text(a, brief_char_limits.get(a.id))
+            if text:
+                lines.append(f"  In brief: {text}")
+            return lines
+        snippet = excerpt(a)
+        if snippet:
+            lines.append(f"  Excerpt: {snippet}")
+        whole = digest(a)
+        if whole:
+            lines.append(f"  Analysis of the whole article: {whole}")
+        return lines
+
     def format_articles(articles, label, include_empty=False):
         if not articles:
             return f"\n{label} Sources:\n- None found in the current source set." if include_empty else ""
         lines = [f"\n{label} Sources:"]
         for a in articles:
-            outlet_name = a.outlet.name if a.outlet else (a.source or "Unknown source")
-            lines.append(f"- {outlet_name}: {a.title}")
-            snippet = excerpt(a)
-            if snippet:
-                lines.append(f"  Excerpt: {snippet}")
-            whole = digest(a)
-            if whole:
-                lines.append(f"  Analysis of the whole article: {whole}")
+            lines.extend(article_lines(a))
         return "\n".join(lines)
 
     def format_all_articles(articles):
         """Format all articles without bias grouping for non-political analysis."""
         lines = []
         for a in articles:
-            outlet_name = a.outlet.name if a.outlet else (a.source or "Unknown source")
-            lines.append(f"- {outlet_name}: {a.title}")
-            snippet = excerpt(a)
-            if snippet:
-                lines.append(f"  Excerpt: {snippet}")
-            whole = digest(a)
-            if whole:
-                lines.append(f"  Analysis of the whole article: {whole}")
+            lines.extend(article_lines(a))
         return "\n".join(lines)
 
     # Build prompt based on analysis type
@@ -568,6 +662,7 @@ def generate_deep_report(story):
             f"- Unrated sources found: {len(unrated_articles)}",
         ])
 
+        combined = (BRIEF_NOTE + "\n" + combined) if big_story else combined
         prompt = render_prompt("deep_report.politics", source_availability=source_availability, combined=combined)
 
     elif analysis_type == 'science':
@@ -577,6 +672,7 @@ def generate_deep_report(story):
         if not combined.strip():
             return None
 
+        combined = (BRIEF_NOTE + "\n" + combined) if big_story else combined
         prompt = render_prompt("deep_report.science", combined=combined)
 
     elif analysis_type == 'sports':
@@ -586,6 +682,7 @@ def generate_deep_report(story):
         if not combined.strip():
             return None
 
+        combined = (BRIEF_NOTE + "\n" + combined) if big_story else combined
         prompt = render_prompt("deep_report.sports", combined=combined)
 
     elif analysis_type == 'business':
@@ -595,6 +692,7 @@ def generate_deep_report(story):
         if not combined.strip():
             return None
 
+        combined = (BRIEF_NOTE + "\n" + combined) if big_story else combined
         prompt = render_prompt("deep_report.business", combined=combined)
 
     else:
@@ -605,6 +703,7 @@ def generate_deep_report(story):
         if not combined.strip():
             return None
 
+        combined = (BRIEF_NOTE + "\n" + combined) if big_story else combined
         prompt = render_prompt("deep_report.default", combined=combined)
 
     if prompt is None:
@@ -617,6 +716,7 @@ def generate_deep_report(story):
             "model": MODEL,
             "analysis_type": analysis_type,
             "prompt_articles": len(prompt_articles),
+            "brief_articles": len(brief_articles),
             "excluded_prompt_articles": len(excluded_articles),
             "articles_with_digest": len(digest_limits),
         }
