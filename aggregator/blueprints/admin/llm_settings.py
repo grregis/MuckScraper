@@ -130,6 +130,7 @@ def llm_providers_page():
         _env_flag, analyze_all_stories_setting,
     )
     analyze_all_enabled, analyze_all_source = analyze_all_stories_setting()
+    from news_fetcher.backfill import needs_paid_ack
 
     tiers = {
         "quality": {
@@ -158,6 +159,7 @@ def llm_providers_page():
         analyze_all_enabled=analyze_all_enabled,
         analyze_all_source=analyze_all_source,
         analyze_all_env=_env_flag("ANALYZE_ALL_STORIES"),
+        backfill_needs_ack=needs_paid_ack(tiers["quality"]["provider"]),
     )
 
 
@@ -178,6 +180,32 @@ def toggle_analyze_all_stories():
         _save_json_setting(ANALYZE_ALL_STORIES_SETTING_KEY, enabled)
         logger.info(f"[Settings] analyze_all_stories set to {enabled}")
     return redirect(url_for("admin.llm_providers_page") + "#analyze-all")
+
+
+@admin.route("/settings/llm/backfill")
+@role_required(ROLE_ADMIN)
+def backfill_status():
+    """Progress of the summary/analysis backfill, polled by the page."""
+    from news_fetcher import backfill
+    status = backfill.get_status()
+    status["pending_start"] = backfill.get_control().get("command") == "start"
+    return jsonify(status)
+
+
+@admin.route("/settings/llm/backfill", methods=["POST"])
+@role_required(ROLE_ADMIN)
+def backfill_control():
+    """Start (newest or oldest first) or stop the backfill. The scheduler
+    runs it; this only records the request."""
+    from news_fetcher import backfill
+    data = request.get_json(silent=True) or {}
+    if data.get("action") == "stop":
+        ok, message = backfill.request_stop("admin")
+    else:
+        ok, message = backfill.request_start(
+            data.get("order"), "admin", paid_ack=bool(data.get("paid_ack")))
+    logger.info(f"[Settings] backfill {data.get('action', 'start')}: {message}")
+    return jsonify({"ok": ok, "message": message})
 
 
 @admin.route("/settings/llm/test", methods=["POST"])

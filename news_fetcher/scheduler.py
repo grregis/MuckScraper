@@ -3,6 +3,7 @@
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from aggregator import create_app, db
 from aggregator.article_signals import bias_bucket_for_score, is_independent_source
 from aggregator.models import AppSetting, PipelineSchedule, ScheduledFetch
@@ -19,6 +20,7 @@ from news_fetcher.rss_fetcher import (
     get_skewed_story_ids_for_left_enrichment,
 )
 from news_fetcher import llm_client
+from news_fetcher import backfill
 from datetime import datetime, timedelta, timezone
 import logging
 import sys
@@ -1163,6 +1165,8 @@ if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
+        # A backfill marked running died with the previous process.
+        backfill.mark_interrupted_at_startup()
         # Only fetch on startup if enough time has passed
         if should_fetch_now():
             run_all_fetches(
@@ -1195,6 +1199,19 @@ if __name__ == "__main__":
             name=f"Scheduled {'full pipeline' if run_full_pipeline else 'fetch-only'} run at {hour}:00 ({TIMEZONE})",
             replace_existing=True,
         )
+
+    # Backfill requests from the admin page or the command line. The job only
+    # looks for a request and starts the backfill in its own thread.
+    # APScheduler logs every execution at INFO; keep this one out of the log.
+    logging.getLogger("apscheduler.executors.default").addFilter(
+        lambda record: "Backfill request check" not in record.getMessage())
+    scheduler.add_job(
+        lambda: backfill.poll(app),
+        trigger=IntervalTrigger(seconds=15),
+        id="backfill_poll",
+        name="Backfill request check",
+        replace_existing=True,
+    )
 
     logging.info(
         "Scheduler running with %s scheduled run(s) in %s: %s",

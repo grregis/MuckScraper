@@ -4,6 +4,19 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [Unreleased]
+
+### Added
+- **Backfill summaries and analysis** for stories already in the database
+  (Settings > LLM providers, or `docker compose exec scheduler python -m
+  news_fetcher.backfill start [--oldest]`). Newest or oldest stories first;
+  writes missing article summaries and analyses, story summaries and deep
+  reports. Runs in the scheduler between pipeline runs: it stops by itself
+  10 minutes before the next run and can be stopped at any point without
+  losing work. A hosted provider (Gemini, Groq, a non-local OpenAI-compatible
+  endpoint) needs a confirmation first, since it makes several calls per
+  story.
+
 ## [1.1.0] - 2026-11-05
 
 ### Upgrading

@@ -134,6 +134,44 @@
     </form>
     {%- endif %}
 </section>
+
+<section class="panel" id="backfill">
+    <div class="panel-head">
+        <div>
+            <h2>Backfill summaries and analysis</h2>
+            <p>Go through every story already in the database and write what is missing: article summaries and analyses, the story summary and the deep report (rewritten when the story has gained articles since). Runs in the scheduler between pipeline runs: it waits for the main model, stops by itself 10 minutes before the next run and does not start again afterwards. Stopping is safe at any point; the next start carries on from what is still missing.</p>
+        </div>
+    </div>
+    <div class="row">
+        <span>
+            <span class="row-label">Order</span>
+            <span class="row-sub">Which stories to do first, by their latest article.</span>
+        </span>
+        <span class="backfill-order" role="radiogroup" aria-label="Order">
+            <label><input type="radio" name="backfill-order" value="newest" checked> Newest first</label>
+            <label><input type="radio" name="backfill-order" value="oldest"> Oldest first</label>
+        </span>
+    </div>
+    {%- if backfill_needs_ack %}
+    <div class="row">
+        <label class="row-sub backfill-ack"><input type="checkbox" id="backfill-ack"> Every call goes to {{ provider_labels.get(tiers.quality.provider, tiers.quality.provider) }}. A backfill makes several calls per story, which can cost money or use up a rate limit on a paid provider.</label>
+    </div>
+    {%- endif %}
+    <div class="row">
+        <span>
+            <span class="row-label" id="backfill-state">Checking…</span>
+            <span class="row-sub" id="backfill-detail" aria-live="polite"></span>
+        </span>
+        <span style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-primary" id="backfill-start">Start</button>
+            <button type="button" class="btn btn-quiet" id="backfill-stop" disabled>Stop</button>
+        </span>
+    </div>
+    <details class="row backfill-log-wrap">
+        <summary class="row-sub">Log</summary>
+        <pre id="backfill-log" class="backfill-log">(nothing yet)</pre>
+    </details>
+</section>
 {% endblock %}
 
 {% block styles %}
@@ -148,6 +186,13 @@
     .facts dt { color: var(--text-muted); }
     .facts dd { margin: 0; overflow-wrap: anywhere; }
     .facts code { font-size: 12px; }
+    .backfill-order { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+    .backfill-order label, .backfill-ack { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .backfill-ack { align-items: flex-start; }
+    .backfill-ack input { margin-top: 3px; }
+    details.backfill-log-wrap { display: block; }
+    details.backfill-log-wrap summary { cursor: pointer; }
+    .backfill-log { margin: 8px 0 0; max-height: 320px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 {% endblock %}
 
@@ -200,6 +245,67 @@
                 }
             })
             .catch(() => { if (el) el.textContent = 'Status unavailable'; });
+    })();
+
+    // Backfill: start/stop and progress, polled every 5 s while it runs.
+    (function () {
+        const url = '{{ url_for("admin.backfill_status") }}';
+        const state = document.getElementById('backfill-state');
+        const detail = document.getElementById('backfill-detail');
+        const log = document.getElementById('backfill-log');
+        const start = document.getElementById('backfill-start');
+        const stop = document.getElementById('backfill-stop');
+        const ack = document.getElementById('backfill-ack');
+        const labels = { idle: 'Not run yet', starting: 'Starting', running: 'Running',
+                         stopped: 'Stopped', finished: 'Finished', failed: 'Failed' };
+        let timer = null;
+
+        function render(s) {
+            const active = s.status === 'starting' || s.status === 'running';
+            let head = s.pending_start ? 'Start requested, waiting for the scheduler'
+                                       : (labels[s.status] || s.status);
+            if (s.order && s.status !== 'idle' && !s.pending_start) head += ' · ' + s.order + ' first';
+            state.textContent = head;
+            const parts = [];
+            if (s.total != null) parts.push((s.done || 0).toLocaleString() + ' of ' + s.total.toLocaleString() + ' stories');
+            if (s.minutes != null && s.status !== 'idle') parts.push(Math.round(s.minutes) + ' min');
+            if (s.counts) parts.push(Object.entries(s.counts).map(([k, v]) => v.toLocaleString() + ' ' + k).join(', '));
+            if (active && s.current) parts.push('Now: story ' + s.current.id + ', ' + s.current.headline);
+            if (active && s.stop_at) parts.push('Stops by itself at ' + new Date(s.stop_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+            if (!active && s.stop_reason) parts.push('Reason: ' + s.stop_reason);
+            detail.textContent = parts.join(' · ');
+            log.textContent = (s.log && s.log.length) ? s.log.join('\n') : '(nothing yet)';
+            start.disabled = active || s.pending_start;
+            stop.disabled = !(active || s.pending_start);
+            clearTimeout(timer);
+            timer = setTimeout(refresh, (active || s.pending_start) ? 5000 : 30000);
+        }
+
+        function refresh() {
+            fetch(url).then(r => r.json()).then(render)
+                .catch(() => { state.textContent = 'Status unavailable'; timer = setTimeout(refresh, 30000); });
+        }
+
+        function send(body) {
+            start.disabled = stop.disabled = true;
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content },
+                body: JSON.stringify(body),
+            })
+                .then(r => r.json())
+                .then(data => { detail.textContent = data.message; setTimeout(refresh, 1500); })
+                .catch(e => { detail.textContent = 'Request failed: ' + e; refresh(); });
+        }
+
+        start.addEventListener('click', () => {
+            if (ack && !ack.checked) { detail.textContent = 'Tick the box above first.'; ack.focus(); return; }
+            const order = document.querySelector('input[name="backfill-order"]:checked').value;
+            send({ action: 'start', order, paid_ack: ack ? ack.checked : false });
+        });
+        stop.addEventListener('click', () => send({ action: 'stop' }));
+        refresh();
     })();
 </script>
 {% endblock %}
