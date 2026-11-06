@@ -150,8 +150,11 @@ def profile():
 
 
 def _local_next(value, fallback):
-    """`value` if it is a path on this site, else `fallback`."""
-    if not value or not value.startswith("/") or value.startswith("//") or urlparse(value).netloc:
+    """`value` if it is a path on this site, else `fallback`. Same rules as
+    oidc.safe_next: browsers read a backslash as a slash, so "/\\host" would
+    leave the site."""
+    if (not value or not value.startswith("/") or value.startswith("//")
+            or "\\" in value or any(ord(c) < 32 for c in value) or urlparse(value).netloc):
         return fallback
     return value
 

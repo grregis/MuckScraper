@@ -41,6 +41,17 @@ def test_saved_filters_are_validated_and_belong_to_the_current_user(app):
         assert second == feed_prefs.DEFAULTS
 
 
+@pytest.mark.parametrize('next_url', ['//elsewhere.example/', '/\\elsewhere.example/', '/\\/elsewhere.example', '/admin\narticles'])
+def test_save_never_redirects_off_site(app, next_url):
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['_user_id'] = '1'
+        session['_fresh'] = True
+    response = client.post('/auth/feed-defaults', data={'range': '30d', 'next': next_url})
+    assert response.status_code == 302
+    assert response.location == '/admin/articles'
+
+
 def test_signed_out_cannot_save_filters(app):
     response = app.test_client().post('/auth/feed-defaults', data={'range':'30d'})
     assert response.status_code == 302
