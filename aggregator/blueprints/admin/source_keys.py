@@ -1,5 +1,5 @@
 """Settings › Source API keys: keys for the news APIs ingestion can use
-(NewsAPI, GNews, the New York Times' Article Search). Saved like the LLM
+(NewsAPI and GNews). Saved like the LLM
 provider keys (aggregator/config_store.py): encrypted, write-only, and
 overriding the environment variable of the same name. Ingestion reads them
 through news_fetcher/saved_settings.py."""
@@ -15,11 +15,6 @@ from .llm_settings import save_fields_form
 SOURCES = {
     "newsapi": ("NewsAPI", "Top headlines and keyword search for scheduled fetches.", "https://newsapi.org/register"),
     "gnews": ("GNews", "Top headlines and keyword search for scheduled fetches.", "https://gnews.io/register"),
-    "nyt": ("New York Times",
-            "NYT articles are paywalled, so the scraper only gets their RSS description. With a free "
-            "Article Search API key, a NYT article gets its abstract and opening paragraph instead. "
-            "The key allows 500 requests a day; the limit keeps MuckScraper under that.",
-            "https://developer.nytimes.com/get-started"),
 }
 
 

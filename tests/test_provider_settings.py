@@ -55,9 +55,6 @@ class ValidateTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CONFIG_ENCRYPTION_KEY": ""}):
             # Without a dedicated key there is nowhere to keep a saved key.
             self.assertIsNotNone(validate("GROQ_API_KEY", "gsk_abc", "secret"))
-        self.assertIsNone(validate("NYT_API_DAILY_LIMIT", "450", "int"))
-        self.assertIsNotNone(validate("NYT_API_DAILY_LIMIT", "-1", "int"))
-        self.assertIsNotNone(validate("NYT_API_DAILY_LIMIT", "lots", "int"))
 
 
 class SavedSettingsTests(unittest.TestCase):
@@ -65,19 +62,19 @@ class SavedSettingsTests(unittest.TestCase):
         saved_settings.set_source(None)
 
     def test_saved_value_then_environment_then_default(self):
-        saved_settings.set_source(lambda: {"NYT_API_KEY": "saved-key"})
-        with mock.patch.dict(os.environ, {"NYT_API_KEY": "env-key", "GNEWS_API_KEY": "env-gnews"}):
-            self.assertEqual(saved_settings.get("NYT_API_KEY"), "saved-key")
+        saved_settings.set_source(lambda: {"NEWS_API_KEY": "saved-key"})
+        with mock.patch.dict(os.environ, {"NEWS_API_KEY": "env-key", "GNEWS_API_KEY": "env-gnews"}):
+            self.assertEqual(saved_settings.get("NEWS_API_KEY"), "saved-key")
             self.assertEqual(saved_settings.get("GNEWS_API_KEY"), "env-gnews")
         with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(saved_settings.get("NYT_API_DAILY_LIMIT", "450"), "450")
+            self.assertEqual(saved_settings.get("GNEWS_API_KEY", "fallback"), "fallback")
 
     def test_unreadable_saved_key_stays_blank(self):
         # A saved key that can't be decrypted is "" in the overrides; the
         # environment must not quietly take its place.
-        saved_settings.set_source(lambda: {"NYT_API_KEY": ""})
-        with mock.patch.dict(os.environ, {"NYT_API_KEY": "env-key"}):
-            self.assertEqual(saved_settings.get("NYT_API_KEY"), "")
+        saved_settings.set_source(lambda: {"NEWS_API_KEY": ""})
+        with mock.patch.dict(os.environ, {"NEWS_API_KEY": "env-key"}):
+            self.assertEqual(saved_settings.get("NEWS_API_KEY"), "")
 
     def test_unchanged_source_keeps_last_values(self):
         answers = iter([{"NEWS_API_KEY": "k1"}, None, None])

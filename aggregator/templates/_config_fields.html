@@ -11,7 +11,7 @@
                placeholder="{% if f.source == 'saved' %}Saved key ending {{ f.hint }}. Type to replace{% elif f.source == 'env' %}From environment ({{ f.env_hint }}). Type to override{% else %}Paste a key{% endif %}">
         {%- else %}
         <input type="{{ {'url': 'url', 'int': 'number'}.get(f.kind, 'text') }}" id="{{ f.name }}" name="{{ f.name }}" value="{{ f.saved }}" spellcheck="false"{% if f.kind == 'int' %} min="1" inputmode="numeric"{% endif %}
-               placeholder="{{ f.env or f.default or ('Same as main model' if 'FAST' in f.name else 'Not set') }}">
+               placeholder="{{ f.env or ('Same as main model' if 'FAST' in f.name else 'Not set') }}">
         {%- endif %}
         <span class="field-meta">
             <code>{{ f.name }}</code>

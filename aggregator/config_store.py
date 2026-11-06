@@ -66,10 +66,6 @@ SOURCE_FIELDS = {
     "gnews": [("GNEWS_API_KEY", "API key", "secret")],
 }
 
-# Defaults the code applies when neither a saved value nor the environment
-# sets one, shown as the field's placeholder.
-DEFAULTS = {"NYT_API_DAILY_LIMIT": "450"}
-
 _FIELD_GROUPS = list(PROVIDER_FIELDS.values()) + list(SOURCE_FIELDS.values())
 SECRET_NAMES = {name for fields in _FIELD_GROUPS for name, _, kind in fields if kind == "secret"}
 ALL_NAMES = set(ROUTING_FIELDS) | {name for fields in _FIELD_GROUPS for name, _, _ in fields}
@@ -92,8 +88,6 @@ def validate(name, value, kind=None):
         return None if _URL_RE.match(value) else "Enter a URL starting with http:// or https://."
     if kind == "model":
         return None if _MODEL_RE.match(value) else "Model names have no spaces and are at most 200 characters."
-    if kind == "int":
-        return None if value.isdigit() and 0 < int(value) <= 100000 else "Enter a whole number."
     if kind == "secret":
         if not secret_box.key_configured():
             return "Saving keys needs CONFIG_ENCRYPTION_KEY in .env. install.sh generates one."
@@ -117,8 +111,7 @@ def field_states(rows=None):
     for name in ALL_NAMES:
         row = rows.get(name)
         env = os.environ.get(name, "").strip()
-        state = {"source": "saved" if row else ("env" if env else "unset"), "saved": "", "env": "",
-                 "default": DEFAULTS.get(name, "")}
+        state = {"source": "saved" if row else ("env" if env else "unset"), "saved": "", "env": ""}
         if name in SECRET_NAMES:
             state["env_hint"] = env[-4:] if len(env) > 8 else ("set" if env else "")
             if row:
