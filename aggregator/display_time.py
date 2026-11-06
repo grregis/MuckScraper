@@ -48,7 +48,7 @@ def local_datetime(value: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
 
 
 # One short date format for the feed's story cards and search suggestions,
-# e.g. "Oct 19, 9:39 PM" (Philip, 2026-10-22: every date the same format).
+# e.g. "Oct 19, 9:39 PM", so every date on the feed reads the same way.
 SHORT_DATETIME_FORMAT = "%b %-d, %-I:%M %p"
 
 

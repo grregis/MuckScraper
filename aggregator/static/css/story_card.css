@@ -117,7 +117,7 @@
 
 /* Compact cards (story_card(story, compact=true), All / Grouped Stories):
    a thumbnail, the headline and counts, and on the right the date over the
-   Left/Center/Right line (Philip, 2026-10-22). The .lcr pieces are in
+   Left/Center/Right line. The .lcr pieces are in
    feed_header.css. */
 .story.compact { border-radius: 12px; margin-bottom: 10px; scroll-margin-top: 80px; }
 /* The ⋯ popover has to reach past the card's bottom edge, so the compact card

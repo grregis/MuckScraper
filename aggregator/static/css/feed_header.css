@@ -24,7 +24,7 @@
 }
 :root { --ft-height: 60px; }
 
-/* The bar runs the full width above the sidebar (Philip, 2026-10-22), so the
+/* The bar runs the full width above the sidebar, so the
    sidebar sticks just below it. */
 .feed-layout .sidebar { top: var(--ft-height); height: calc(100vh - var(--ft-height)); }
 .feed-layout { min-height: calc(100vh - var(--ft-height)); }
@@ -49,7 +49,7 @@
 /* Left and right take equal shares of the spare width, so the search sits in
    the middle. On wide screens the left side gets --ft-offset more, which
    moves the search right by half of it: centred on the story column beside
-   the sidebar rather than on the window (Philip, 2026-10-22). The offset is
+   the sidebar rather than on the window. The offset is
    the sidebar's width (none when collapsed) plus the difference between the
    bar's right and left padding (24px - 14px). */
 :root { --ft-offset: 0px; }
