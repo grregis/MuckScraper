@@ -19,11 +19,15 @@ _overrides = {}
 _version = 0
 
 
+# _version changes only when the values do: llm_client rebinds every provider
+# setting when it sees a new version, so a bump with nothing changed (every
+# create_app() installs a source) would undo settings applied since.
 def set_source(source):
     global _source, _overrides, _version
     _source = source
-    _overrides = {}
-    _version += 1
+    if _overrides:
+        _overrides = {}
+        _version += 1
 
 
 def refresh():
@@ -35,7 +39,7 @@ def refresh():
     except Exception as e:  # a settings read must never break a pipeline call
         logger.warning(f"[saved_settings] Could not read saved settings: {e}")
         return
-    if overrides is not None:
+    if overrides is not None and dict(overrides) != _overrides:
         _overrides = dict(overrides)
         _version += 1
 

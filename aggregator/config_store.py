@@ -202,7 +202,10 @@ def reload_now():
 
 
 def install():
-    from news_fetcher import saved_settings
+    from news_fetcher import llm_client, saved_settings
     _state["checked"] = 0.0
     _state["fingerprint"] = None
     saved_settings.set_source(config_source)
+    # Apply the swap now: replacing a source drops the old one's values, and
+    # a later sync would otherwise rebind every provider setting mid-request.
+    llm_client._sync_config()

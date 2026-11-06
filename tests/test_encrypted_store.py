@@ -17,6 +17,10 @@ def app():
             ConfigSetting.__table__.create(db.engine)
             yield app
             db.session.remove()
+    # Saved keys from these tests must not carry into later modules.
+    from news_fetcher import llm_client, saved_settings
+    saved_settings.set_source(None)
+    llm_client._sync_config()
 
 
 def test_database_contains_ciphertext_and_restore_needs_original_key(app):

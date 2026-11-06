@@ -57,9 +57,19 @@ class ValidateTests(unittest.TestCase):
             self.assertIsNotNone(validate("GROQ_API_KEY", "gsk_abc", "secret"))
 
 
+def reset_saved_settings():
+    """Drop the test's settings source and put llm_client back on the
+    environment, caught up with saved_settings' version. Left behind, a newer
+    version makes llm_client's next sync rebind every provider setting, which
+    undoes the patch.object() overrides later test modules rely on."""
+    saved_settings.set_source(None)
+    llm_client._sync_config()
+    llm_client.configure()
+
+
 class SavedSettingsTests(unittest.TestCase):
     def tearDown(self):
-        saved_settings.set_source(None)
+        reset_saved_settings()
 
     def test_saved_value_then_environment_then_default(self):
         saved_settings.set_source(lambda: {"NEWS_API_KEY": "saved-key"})
@@ -85,7 +95,7 @@ class SavedSettingsTests(unittest.TestCase):
 
 class ConfigureTests(unittest.TestCase):
     def tearDown(self):
-        llm_client.configure()
+        reset_saved_settings()
 
     def test_override_beats_environment_and_blank_falls_back(self):
         env = {"LLM_PROVIDER": "ollama", "ANTHROPIC_MODEL": "env-model", "LLM_FAST_PROVIDER": "groq"}
