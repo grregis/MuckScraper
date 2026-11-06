@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 
 from aggregator import db
 from aggregator.article_signals import bias_bucket_for_score
-from aggregator.display_time import local_day_end_utc, local_day_start_utc, local_datetime
+from aggregator.display_time import local_day_end_utc, local_day_start_utc, short_datetime
 from aggregator.models import Article, Outlet, Story, Topic, story_topics
 from aggregator.search import SearchUnavailableError, search_article_ids, search_story_ids
 
@@ -144,7 +144,7 @@ def _effective_bias():
     return func.coalesce(Article.bias_score, Outlet.bias_score)
 
 
-def _story_rows(story_ids, window, sort_key, descending, page, text_query):
+def _story_rows(story_ids, window, sort_key, descending, page, text_query, per_page=SEARCH_PER_PAGE):
     eff = _effective_bias()
     article_count = func.count(Article.id)
     # An article with no outlet row counts by its raw source name.
@@ -193,7 +193,7 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
         query = query.filter(_story_text_match(text_query))
 
     pagination = query.order_by(order.nullslast(), Story.id.desc()).paginate(
-        page=page, per_page=SEARCH_PER_PAGE, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
     items = pagination.items
 
@@ -227,7 +227,7 @@ def _story_rows(story_ids, window, sort_key, descending, page, text_query):
     return rows, pagination
 
 
-def _article_rows(article_ids, window, sort_key, descending, page, text_query):
+def _article_rows(article_ids, window, sort_key, descending, page, text_query, per_page=SEARCH_PER_PAGE):
     eff = _effective_bias()
     sibling = aliased(Article)
     story_article_count = (
@@ -270,7 +270,7 @@ def _article_rows(article_ids, window, sort_key, descending, page, text_query):
         query = query.filter(or_(Article.title.ilike(like), Article.source.ilike(like), Outlet.name.ilike(like)))
 
     pagination = query.order_by(order.nullslast(), Article.id.desc()).paginate(
-        page=page, per_page=SEARCH_PER_PAGE, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
 
     rows = []
@@ -409,7 +409,8 @@ def search_page():
     )
 
 
-# Live search, extracted from dev; uses the existing search backend interface.
+# Live search under the header's search box (static/js/search_suggest.js):
+# the Search page's matching and rows, cut to a few of each.
 SUGGEST_MIN_CHARS = 2
 SUGGEST_STORIES = 5
 SUGGEST_ARTICLES = 4
@@ -447,7 +448,7 @@ def search_suggest():
         "left": row["left"],
         "center": row["center"],
         "right": row["right"],
-        "date": local_datetime(row["updated"]),
+        "date": short_datetime(row["updated"]),
     } for row in story_rows]
     articles = [{
         "title": row["title"],
@@ -455,7 +456,7 @@ def search_suggest():
         "outlet": row["outlet_name"],
         "lean": BIAS_CHIPS[bias_bucket_for_score(row["bias"])][1],
         "lean_class": row["bias_chip"][2],
-        "date": local_datetime(row["date"]),
+        "date": short_datetime(row["date"]),
     } for row in article_rows]
 
     args = {"q": text_query, "range": window["range"]}

@@ -1,4 +1,5 @@
-"""Live search contract; database queries are mocked, permissions are exercised."""
+"""Live search contract; database queries are mocked (autospec, so a call
+the real row helpers would refuse fails here too), permissions are exercised."""
 import importlib
 import os
 import unittest
@@ -34,8 +35,8 @@ class SearchSuggestTests(unittest.TestCase):
                      sources=2, left=1, center=1, right=1, updated=None)
         with patch.object(self.module, 'search_story_ids', return_value=[7]) as search, \
              patch.object(self.module, 'search_article_ids', return_value=[]), \
-             patch.object(self.module, '_story_rows', return_value=([story], SimpleNamespace(total=1))) as rows, \
-             patch.object(self.module, '_article_rows', return_value=([], None)):
+             patch.object(self.module, '_story_rows', autospec=True, return_value=([story], SimpleNamespace(total=1))) as rows, \
+             patch.object(self.module, '_article_rows', autospec=True, return_value=([], None)):
             response = self.client.get('/admin/search/suggest?q=names&range=custom&start=2026-10-01&end=2026-10-02')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['stories'][0]['title'], story['headline'])
@@ -48,8 +49,8 @@ class SearchSuggestTests(unittest.TestCase):
 
     def test_backend_failure_uses_sql_fallback(self):
         with patch.object(self.module, 'search_story_ids', side_effect=self.module.SearchUnavailableError('offline')), \
-             patch.object(self.module, '_story_rows', return_value=([], SimpleNamespace(total=0))) as rows, \
-             patch.object(self.module, '_article_rows', return_value=([], None)):
+             patch.object(self.module, '_story_rows', autospec=True, return_value=([], SimpleNamespace(total=0))) as rows, \
+             patch.object(self.module, '_article_rows', autospec=True, return_value=([], None)):
             response = self.client.get('/admin/search/suggest?q=names')
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(rows.call_args.args[0])
