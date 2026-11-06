@@ -1,12 +1,7 @@
-// The feed's top bar (templates/_feed_topbar.html): live search results under
-// the search box, and the Filters popover. Loaded with `defer`.
-//
-// Results come from /admin/search/suggest as JSON and are built with
-// textContent only: titles and outlet names are scraped text, never HTML.
+// The feed's top bar (templates/_feed_topbar.html): the Filters popover and
+// the phone search button. Loaded with `defer`.
 (function () {
-    const form = document.querySelector('.ft-search');
     const input = document.getElementById('feed-search');
-    const panel = document.getElementById('feed-suggest');
     const filterBtn = document.getElementById('feed-filter-btn');
     const popover = document.getElementById('feed-filters');
 
@@ -15,7 +10,6 @@
         if (!filterBtn || !popover) return;
         popover.hidden = !open;
         filterBtn.setAttribute('aria-expanded', String(open));
-
     }
     if (filterBtn && popover) {
         filterBtn.addEventListener('click', function () { setPopover(popover.hidden); });
