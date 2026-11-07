@@ -15,20 +15,6 @@ printouts
 .gitignore
 .claude
 .agents
-# Our own tests stay local. Tests that come with contributors' pull
-# requests are kept in the repo: un-ignore each one by name.
-tests/*
-!tests/test_settings_form_ownership.py
-!tests/test_ai_task_network_errors.py
-!tests/test_navigation_access.py
-!tests/test_oidc.py
-!tests/test_gemini_rate_limit.py
-!tests/test_oidc_logout_tokens.py
-!tests/test_scraper_metadata.py
-!tests/test_rss_feed_topics.py
-!tests/test_analysis_cards.py
-!tests/test_settings_permissions.py
-!tests/test_postgres_search.py
 
 # Personal Headline feature files
 aggregator/public_app.py
@@ -44,6 +30,22 @@ aggregator/blueprints/personal.py
 news_fetcher/headline_ranker.py
 news_fetcher/editorial_ranker.py
 private_site/
+# their tests
+tests/test_bluesky_post.py
+tests/test_bluesky_standout.py
+tests/test_editorial_rerank.py
+tests/test_export_static_images.py
+tests/test_facebook_post.py
+tests/test_horoscope.py
+tests/test_latest_page.py
+tests/test_opinion_box_patch.py
+tests/test_opinion_page_paths.py
+tests/test_ranker_routing.py
+tests/test_sample_site.py
+tests/test_share_cards.py
+tests/test_short_links.py
+tests/test_standout_gaps.py
+tests/test_x_search_links.py
 site_output/
 docker-compose.private.yml
 
