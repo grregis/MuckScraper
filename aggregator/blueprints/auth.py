@@ -1,10 +1,11 @@
 import secrets
 from datetime import datetime
 
+from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from aggregator import db
+from aggregator import db, feed_prefs
 from aggregator.accounts import email_error, password_error
 from aggregator.models import User
 
@@ -37,7 +38,8 @@ def login():
             user.last_login_at = datetime.utcnow()
             db.session.commit()
             from aggregator.oidc import safe_next
-            return redirect(safe_next(request.args.get("next")))
+            next_page = request.args.get("next")
+            return redirect(safe_next(next_page) if next_page else url_for("public.index"))
         else:
             flash("Invalid username or password")
 
@@ -103,10 +105,18 @@ def profile():
     shared machine can't be used to take the account over.
     """
     oidc_managed = session.get("auth_method") == "oidc"
-    if request.method == "POST" and oidc_managed:
+    # Feed defaults are preferences, so OIDC accounts keep them. Credentials
+    # stay with the identity provider.
+    if request.method == "POST" and oidc_managed and request.form.get("action") != "feed_defaults":
         abort(403)
     if request.method == "POST":
         action = request.form.get("action")
+        if action == "feed_defaults":
+            # Preferences, not credentials: no password needed.
+            # An unticked checkbox sends nothing, so read presence.
+            feed_prefs.save(current_user, {**request.form.to_dict(), "hide_single": "hide_single" in request.form})
+            flash("Feed defaults saved.", "success")
+            return redirect(url_for("auth.profile"))
         if not current_user.check_password(request.form.get("current_password", "")):
             flash("Your current password was not correct.", "error")
         elif action == "email":
@@ -129,4 +139,36 @@ def profile():
                 flash("Password changed.", "success")
         return redirect(url_for("auth.profile"))
 
-    return render_template("profile.html", oidc_managed=oidc_managed)
+    return render_template(
+        "profile.html",
+        oidc_managed=oidc_managed,
+        feed_defaults=feed_prefs.load(current_user),
+        start_pages=feed_prefs.START_PAGES,
+        ranges=feed_prefs.RANGES,
+        scrape_statuses=feed_prefs.SCRAPE_STATUSES,
+    )
+
+
+def _local_next(value, fallback):
+    """`value` if it is a path on this site, else `fallback`. Same rules as
+    oidc.safe_next: browsers read a backslash as a slash, so "/\\host" would
+    leave the site."""
+    if (not value or not value.startswith("/") or value.startswith("//")
+            or "\\" in value or any(ord(c) < 32 for c in value) or urlparse(value).netloc):
+        return fallback
+    return value
+
+
+@auth.route("/feed-defaults", methods=["POST"])
+@login_required
+def save_feed_defaults():
+    """"Save as my default" in the feed's Filters popover: store the filters
+    the list is showing now and go back to it. Fields the form leaves out keep
+    their saved values."""
+    prefs = feed_prefs.load(current_user)
+    for field in ("start_page", "range", "scrape_status", "hide_single"):
+        if field in request.form:
+            prefs[field] = request.form[field]
+    feed_prefs.save(current_user, prefs)
+    flash("Saved as your feed defaults.", "success")
+    return redirect(_local_next(request.form.get("next"), url_for("admin.list_articles")))

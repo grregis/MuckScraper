@@ -4,7 +4,7 @@ from flask import render_template, request, redirect, url_for, jsonify
 from flask_login import current_user
 from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, public_or_login, role_required
 from sqlalchemy import case, func, or_
-from aggregator import db
+from aggregator import db, feed_prefs
 from aggregator.models import Article, Outlet, Story, Topic
 from aggregator.search import SearchUnavailableError, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
@@ -45,19 +45,27 @@ def fetch_page():
 @admin.route("/articles")
 @public_or_login
 def list_articles(per_page=25, force_multi=False):
+    # A parameter the request leaves out falls back to the reader's saved
+    # feed defaults (aggregator/feed_prefs.py), then to the built-in ones.
+    prefs = feed_prefs.load(current_user)
     active_label = request.args.get("topic", None)
-    active_scrape_status = request.args.get("scrape_status", "").strip().lower() or None
+    active_scrape_status = request.args.get("scrape_status", prefs["scrape_status"]).strip().lower() or None
     active_search_query = request.args.get("q", "").strip() or None
     page = max(1, request.args.get("page", 1, type=int) or 1)
-    # On by default: "All Stories" includes single-article stories; "false" hides them.
-    show_single = request.args.get("show_single", "true") != "false"
+    # "All Stories" includes single-article stories unless the reader's
+    # default hides them; show_single=false hides them, true shows them.
+    show_single = request.args.get("show_single", "false" if prefs["hide_single"] else "true") != "false"
     story_id = request.args.get("story_id", type=int)
-    active_range = request.args.get("range", DEFAULT_TIME_RANGE)
+    active_range = request.args.get("range", prefs["range"])
     if active_range not in TIME_RANGES:
         active_range = DEFAULT_TIME_RANGE
 
+    # "all" (or anything unknown) means no scrape filter.
     if active_scrape_status not in SCRAPE_STATUS_FILTERS or not current_user.is_authenticated:
         active_scrape_status = None
+    # Links that keep the current filters pass this, not active_scrape_status:
+    # dropping the parameter would bring back a saved non-"all" default.
+    scrape_param = active_scrape_status or ("all" if prefs["scrape_status"] != "all" else None)
 
     if story_id:
         return redirect(url_for("public.view_story", story_id=story_id))
@@ -140,6 +148,9 @@ def list_articles(per_page=25, force_multi=False):
     for story in stories:
         apply_aggregator_filter(story)
         story_bias_totals(story)
+        # Distinct outlets, counting an article with no outlet row by its raw
+        # source name, as the Search page's Sources column does.
+        story.source_count = len({a.outlet.name if a.outlet else a.source for a in story.articles})
 
     if force_multi:
         active_nav = "grouped"
@@ -154,10 +165,13 @@ def list_articles(per_page=25, force_multi=False):
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_label=active_label,
         active_scrape_status=active_scrape_status,
+        scrape_param=scrape_param,
+        feed_defaults=prefs,
         active_search_query=active_search_query,
         scrape_status_filters=SCRAPE_STATUS_FILTERS,
         page=page,
         total_pages=total_pages,
+        total_stories=pagination.total if pagination else 0,
         show_single=show_single,
         is_multi_view=force_multi,
         # Filter, search and page links stay on the page they came from.

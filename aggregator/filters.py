@@ -1,6 +1,6 @@
 import re
 
-from aggregator.display_time import local_datetime
+from aggregator.display_time import local_datetime, short_datetime
 from aggregator.html_safety import clean_html, plain_text_br
 
 # Section labels article summaries are written with (Smart Brevity, and the
@@ -41,6 +41,7 @@ def register_filters(app):
 
     # Stored timestamps are naive UTC; show them in DISPLAY_TIMEZONE.
     app.add_template_filter(local_datetime, "local_datetime")
+    app.add_template_filter(short_datetime, "short_datetime")
 
     # Article summaries read as one paragraph, without section labels.
     app.add_template_filter(summary_paragraph, "summary_paragraph")

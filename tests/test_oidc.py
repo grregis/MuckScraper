@@ -14,7 +14,7 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 
 from aggregator import create_app, db
-from aggregator.models import OIDCIdentity, OIDCLogoutToken, User
+from aggregator.models import AppSetting, OIDCIdentity, OIDCLogoutToken, User
 from aggregator.oidc import configuration, identity_key
 
 
@@ -51,11 +51,15 @@ def app(monkeypatch):
         User.__table__.create(db.engine)
         OIDCIdentity.__table__.create(db.engine)
         OIDCLogoutToken.__table__.create(db.engine)
+        # The profile and front page read the reader's feed defaults
+        # (aggregator/feed_prefs.py), which live in app_settings.
+        AppSetting.__table__.create(db.engine)
     # Do not keep an app context across browser requests: Flask's g caches
     # user/CSRF state for that context, unlike separate production requests.
     yield application
     with application.app_context():
         db.session.remove()
+        AppSetting.__table__.drop(db.engine)
         OIDCLogoutToken.__table__.drop(db.engine)
         OIDCIdentity.__table__.drop(db.engine)
         User.__table__.drop(db.engine)
