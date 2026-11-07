@@ -1,17 +1,20 @@
-"""Settings › LLM providers: which backend serves each tier, what each
-provider has configured, and which pipeline tasks run on which tier.
+"""Settings › LLM providers: which backend serves each tier, each
+provider's keys and models, and which pipeline tasks run on which tier.
 
-Provider settings are environment variables (news_fetcher/llm_client.py
-reads them at import, in both the app and scheduler containers), so this
-page shows them rather than editing them. The two things it does change
-are the auto deep-analysis and analyse-all switches and a one-line test
-call per tier.
+Routing, keys, models and Ollama hosts can be saved here
+(aggregator/config_store.py); a saved value overrides the environment
+variable of the same name and a cleared one falls back to it. Keys are
+encrypted before they reach the database and never come back to the
+browser. The page also has the auto deep-analysis and analyse-all
+switches and a one-line test call per tier.
 """
 import logging
 import time
 
-from flask import jsonify, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user
 
+from aggregator import db, config_store, secret_box
 from aggregator.permissions import ROLE_ADMIN, role_required
 
 from . import admin
@@ -50,7 +53,7 @@ def _mask(value):
     return f"…{value[-4:]}" if len(value) > 8 else "set"
 
 
-def _provider_rows():
+def _provider_rows(states):
     from news_fetcher import llm_client as llm
 
     quality, fast = llm.LLM_PROVIDER, llm.LLM_FAST_PROVIDER
@@ -85,6 +88,20 @@ def _provider_rows():
         "live": bool(hosts),
     })
     rows.append({
+        "key": "anthropic",
+        "name": "Anthropic",
+        "is_new": True,
+        "roles": uses("anthropic"),
+        "configured": bool(llm.ANTHROPIC_API_KEY and llm.ANTHROPIC_MODEL),
+        "facts": [
+            ("API key", _mask(llm.ANTHROPIC_API_KEY) or "Not set"),
+            ("Main model", llm.ANTHROPIC_MODEL or "Not set"),
+            ("Fast model", llm.ANTHROPIC_FAST_MODEL or "Not set"),
+            ("Max tokens", str(llm.ANTHROPIC_MAX_TOKENS)),
+        ],
+        "env": "ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_FAST_MODEL",
+    })
+    rows.append({
         "key": "gemini",
         "name": "Gemini",
         "roles": uses("gemini"),
@@ -112,6 +129,16 @@ def _provider_rows():
             ],
             "env": f"{key.upper()}_API_KEY, {key.upper()}_MODEL, {key.upper()}_FAST_MODEL",
         })
+
+    for row in rows:
+        row["fields"] = [
+            {"name": name, "label": label, "kind": kind, **states[name]}
+            for name, label, kind in config_store.PROVIDER_FIELDS[row["key"]]
+        ]
+        row["saved_count"] = sum(1 for f in row["fields"] if f["source"] == "saved")
+        # The facts the form doesn't edit (embedding model, endpoint, ...).
+        edited = {f["label"] for f in row["fields"]}
+        row["facts"] = [(label, value) for label, value in row["facts"] if label not in edited]
 
     # Providers in use first (main, then fast, then embeddings), the rest after.
     def order(row):
@@ -148,9 +175,13 @@ def llm_providers_page():
         {"task": task, "tier": tier, **tiers[tier]}
         for task, tier in TASK_ROUTES
     ]
+    states = config_store.field_states()
     return render_template(
         "settings_llm.html",
-        providers=_provider_rows(),
+        providers=_provider_rows(states),
+        routing_states={name: states[name] for name in config_store.ROUTING_FIELDS},
+        chat_providers=llm.CHAT_PROVIDERS,
+        key_source=secret_box.key_source(),
         provider_labels=PROVIDER_LABELS,
         tiers=tiers,
         routes=routes,
@@ -245,3 +276,59 @@ def llm_test():
         "ok": True, "provider": provider, "model": llm.model_for_tier(tier),
         "message": f"Replied in {elapsed_ms} ms.",
     })
+
+
+def _save_all(values):
+    """Validate then save {name: value}; flash and return False on the first
+    error, so a bad field never half-applies a form."""
+    for name, (value, kind) in values.items():
+        error = config_store.validate(name, value, kind)
+        if error:
+            flash(f"{name}: {error}", "error")
+            return False
+    for name, (value, _) in values.items():
+        config_store.save(name, value, current_user.username)
+    db.session.commit()
+    config_store.reload_now()
+    return True
+
+
+@admin.route("/settings/llm/routing", methods=["POST"])
+@role_required(ROLE_ADMIN)
+def save_llm_routing():
+    values = {
+        name: (request.form.get(name, "").strip().lower(), "provider")
+        for name in config_store.ROUTING_FIELDS
+    }
+    if _save_all(values):
+        flash("Routing saved. The scheduler picks it up within a minute.", "success")
+    return redirect(url_for("admin.llm_providers_page"))
+
+
+def save_fields_form(fields):
+    """Save a form of config_field()s (templates/_config_fields.html).
+    Non-key fields are saved as typed (blank goes back to the environment).
+    A key field left blank keeps the saved key; its Remove checkbox deletes
+    it. Returns True when everything saved."""
+    values = {}
+    for name, _, kind in fields:
+        value = request.form.get(name, "").strip()
+        if kind == "secret":
+            if request.form.get(f"clear_{name}"):
+                value = ""
+            elif not value:
+                continue
+        values[name] = (value, kind)
+    return _save_all(values)
+
+
+@admin.route("/settings/llm/provider/<key>", methods=["POST"])
+@role_required(ROLE_ADMIN)
+def save_llm_provider(key):
+    fields = config_store.PROVIDER_FIELDS.get(key)
+    if fields is None:
+        flash("Unknown provider.", "error")
+        return redirect(url_for("admin.llm_providers_page"))
+    if save_fields_form(fields):
+        flash(f"{PROVIDER_LABELS.get(key, key)} settings saved.", "success")
+    return redirect(url_for("admin.llm_providers_page") + f"#provider-{key}")

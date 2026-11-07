@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
+from cryptography.fernet import Fernet
 import os
 import logging
 
@@ -18,6 +19,10 @@ csrf = CSRFProtect()
 PLACEHOLDER_SECRET_KEYS = {
     "replace_with_a_generated_secret_key",
     "generate_with_python3_-c_import_secrets_print_secrets.token_hex_32",
+}
+# CONFIG_ENCRYPTION_KEY value shipped in .env.sample.
+PLACEHOLDER_CONFIG_ENCRYPTION_KEYS = {
+    "replace_with_a_generated_encryption_key",
 }
 
 
@@ -41,6 +46,21 @@ def create_app():
             "and put it in .env"
         )
     app.config["SECRET_KEY"] = secret_key
+
+    # Saved API keys are encrypted with CONFIG_ENCRYPTION_KEY and nothing else,
+    # so a placeholder or malformed key is refused here, not at the first save.
+    config_key = os.environ.get("CONFIG_ENCRYPTION_KEY", "").strip()
+    if config_key in PLACEHOLDER_CONFIG_ENCRYPTION_KEYS:
+        raise RuntimeError(
+            "CONFIG_ENCRYPTION_KEY is still the .env.sample placeholder. Generate one with "
+            "python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\" "
+            "and put it in .env"
+        )
+    if config_key:
+        try:
+            Fernet(config_key.encode())
+        except ValueError:
+            raise RuntimeError("CONFIG_ENCRYPTION_KEY is not a valid Fernet key (see .env.sample)")
 
     from aggregator.display_time import configured_timezone_name
     app.config["DISPLAY_TIMEZONE"] = configured_timezone_name()
@@ -90,6 +110,9 @@ def create_app():
     app.register_blueprint(public)
     app.register_blueprint(admin,  url_prefix='/admin')
     app.register_blueprint(auth,   url_prefix='/auth')
+
+    from aggregator import config_store
+    config_store.install()
 
     return app
 

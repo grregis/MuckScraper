@@ -41,6 +41,20 @@ if grep -Eq '^SECRET_KEY=(replace_with_a_generated_secret_key|generate_with_pyth
     sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=$(random_hex)/" .env && rm -f .env.bak
     ok "SECRET_KEY set"
 fi
+# Saved API keys are encrypted with CONFIG_ENCRYPTION_KEY, a Fernet key: 32
+# url-safe base64 bytes, the same as Fernet.generate_key() produces.
+random_fernet_key() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -base64 32 | tr -d '\n' | tr '+/' '-_'
+    else
+        python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    fi
+}
+if grep -Eq '^CONFIG_ENCRYPTION_KEY=(replace_with_a_generated_encryption_key)?$' .env; then
+    info "Generating a CONFIG_ENCRYPTION_KEY for saved API keys"
+    sed -i.bak "s/^CONFIG_ENCRYPTION_KEY=.*/CONFIG_ENCRYPTION_KEY=$(random_fernet_key)/" .env && rm -f .env.bak
+    ok "CONFIG_ENCRYPTION_KEY set (back it up with your .env)"
+fi
 
 if [ "$first_run" = true ]; then
     warn "Now edit .env with your Ollama host and models and an admin password"

@@ -18,6 +18,7 @@ SETTINGS_SECTIONS = [
         ("users", "Users", "admin.users_page", User, False),
     ]),
     ("Sources", [
+        ("source_keys", "Source API keys", "admin.source_keys_page", None, True),
         ("topics", "Topics", "admin.topics_page", Topic, False),
         ("rss", "RSS feeds", "admin.rss_feeds_page", RssFeed, False),
         ("fetches", "Scheduled fetches", "admin.scheduled_fetches_page", ScheduledFetch, False),

@@ -29,6 +29,7 @@ tzdata
 Pillow
 pytest
 
+cryptography>=42
 # Optional OpenID Connect verification.
 Authlib==1.9.1
 joserfc==1.7.7

@@ -190,7 +190,7 @@ cd muckscraper
 ```
 
 The first run creates `.env` from `.env.sample`, fills in `SECRET_KEY`
-for you, and stops so you can fill in the rest. At
+and `CONFIG_ENCRYPTION_KEY` for you, and stops so you can fill in the rest. At
 minimum set `OLLAMA_HOST`, `OLLAMA_MODEL`, `EMBEDDING_MODEL`
 (`nomic-embed-text`) and `ADMIN_PASSWORD`; pull both models on your Ollama
 box first (`ollama pull ...`). Change the Postgres password too. News API

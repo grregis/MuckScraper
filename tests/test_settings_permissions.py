@@ -29,9 +29,9 @@ def test_settings_entry_rejects_non_admin(app, endpoint, role):
 
 def test_provider_secrets_never_render_in_cleartext(app):
     from aggregator.blueprints.admin.llm_settings import _provider_rows
-    from news_fetcher import llm_client
-    with patch.object(llm_client, 'GEMINI_API_KEY', 'fixture-private-provider-token'):
-        text = repr(_provider_rows())
+    from aggregator import config_store
+    with patch.dict('os.environ', GEMINI_API_KEY='fixture-private-provider-token'):
+        text = repr(_provider_rows(config_store.field_states(rows={})))
     assert 'fixture-private-provider-token' not in text
     assert 'oken' in text
 

@@ -191,7 +191,11 @@ def test_additive_migration_preserves_existing_accounts(app):
     path = Path(__file__).resolve().parents[1] / 'migrations'
     config = Config(str(path / 'alembic.ini'))
     config.set_main_option('script_location', str(path))
-    assert ScriptDirectory.from_config(config).get_heads() == ['b8d2e4f6a901']
+    # One head, with the logout-token migration on its chain (later
+    # migrations, such as config_settings, follow it).
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1
+    assert 'b8d2e4f6a901' in {rev.revision for rev in script.walk_revisions()}
     spec = importlib.util.spec_from_file_location('logout_migration', path / 'versions/b8d2e4f6a901_add_oidc_logout_tokens.py')
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
