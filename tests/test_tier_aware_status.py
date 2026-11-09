@@ -22,6 +22,9 @@ def _split(quality="openrouter", fast="ollama"):
         mock.patch.object(llm_client, "OLLAMA_HOST", "http://ollama:11434"),
         mock.patch.object(llm_client, "OLLAMA_FALLBACK_HOST", ""),
         mock.patch.object(llm_client, "OLLAMA_MODEL", "local"),
+        # The endpoint answers; tests/test_openai_compatible_probe.py covers
+        # the probe itself.
+        mock.patch.object(llm_client, "_probe_openai_compatible", return_value=True),
     ]
 
 

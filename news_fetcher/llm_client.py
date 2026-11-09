@@ -881,16 +881,55 @@ def _get_embedding_gemini(text):
         return None
 
 
+# How long an OpenAI-compatible probe result is reused. The summarizer checks
+# status before every call, so without this a run would add a GET per call.
+_OPENAI_COMPATIBLE_PROBE_TTL = 30
+_openai_compatible_probe_cache = {}
+
+
+def _probe_openai_compatible(provider):
+    """Whether an OpenAI-compatible endpoint actually answers (GET {base}/models).
+
+    A configured key used to be taken as "up", but OPENROUTER_HOST can point at
+    a server on the LAN (llama-server, vLLM) that is simply not running: on
+    2026-11-08 the analyse-all step passed its status check while llama-server
+    refused every call. Any HTTP answer except an auth refusal or a 5xx counts
+    as up, so an endpoint without /models (404) or one rate-limiting us (429)
+    is not reported down; a refused or timed-out connection is down.
+    """
+    config = _openai_compatible_config(provider)
+    base = (config["base_url"] or "").rstrip("/")
+    if not base:
+        return False
+    key = (base, config["api_key"])
+    now = time.monotonic()
+    cached = _openai_compatible_probe_cache.get(provider)
+    if cached and cached[0] == key and now - cached[1] < _OPENAI_COMPATIBLE_PROBE_TTL:
+        return cached[2]
+    headers = dict(config["headers"] or {})
+    if config["api_key"]:
+        headers["Authorization"] = f"Bearer {config['api_key']}"
+    try:
+        response = requests.get(f"{base}/models", headers=headers, timeout=_OLLAMA_PROBE_TIMEOUT)
+        online = response.status_code < 500 and response.status_code not in (401, 403)
+    except Exception:
+        online = False
+    _openai_compatible_probe_cache[provider] = (key, now, online)
+    return online
+
+
 def _check_provider_status(provider):
-    """Liveness for one named provider. Ollama is probed over the network;
-    the cloud providers have no cheap health endpoint, so a configured key is
-    the best available signal."""
+    """Liveness for one named provider. Ollama and the OpenAI-compatible
+    endpoints are probed over the network; Gemini and Anthropic have no cheap
+    health endpoint, so a configured key is the best available signal."""
     if provider == "gemini":
         return bool(GEMINI_API_KEY)
     if provider == "anthropic":
         return bool(ANTHROPIC_API_KEY)
     if provider in OPENAI_COMPATIBLE_PROVIDERS:
-        return bool(_openai_compatible_config(provider)["api_key"])
+        if not _openai_compatible_config(provider)["api_key"]:
+            return False
+        return _probe_openai_compatible(provider)
     return _check_ollama_status()
 
 

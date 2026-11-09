@@ -127,11 +127,12 @@ def _fill_story_content(story, metrics, analyse_articles=None, stale_threshold=S
                     f"  [Processor] Story stale ({new_article_count} new articles "
                     f"since last analysis): {story.title[:60]}"
                 )
-                story.summary = None
-                story.deep_report = None
+                # The old summary and deep report stay until their
+                # replacements are written. Clearing them first meant a
+                # failed rewrite (LLM down) saved blanks: 48 stories lost
+                # their text in the 2026-11-08 22:00 ET outage.
                 story_is_stale = True
                 metrics["stale_stories_reset"] += 1
-                changed = True
 
         if article_count >= 2:
             story_outputs_ready = bool(story.summary) and bool(story.deep_report)
@@ -188,22 +189,37 @@ def _fill_story_content(story, metrics, analyse_articles=None, stale_threshold=S
 
         # 1. Process Story-level Summaries
         if article_count >= 2:
-            if not story.summary:
+            summary = report = None
+            if story_is_stale or not story.summary:
                 summary = summarize_story(story)
                 if summary:
                     story.summary = summary
-                    story.summary_generated_at = datetime.utcnow()
                     metrics["story_summaries_generated"] += 1
                     changed = True
                     logger.info(f"  [Processor] Story summary: {story.title[:60]}")
 
-            if not story.deep_report:
+            if story_is_stale or not story.deep_report:
                 report = generate_deep_report(story)
                 if report:
                     story.deep_report = report
                     metrics["deep_reports_generated"] += 1
                     changed = True
                     logger.info(f"  [Processor] Deep report: {story.title[:60]}")
+
+            # summary_generated_at is what marks the story fresh, so a stale
+            # story only gets it when BOTH rewrites landed; otherwise the next
+            # run retries (a fresh summary beside a deep report that missed
+            # the new articles would never be redone).
+            if story_is_stale:
+                if summary and report:
+                    story.summary_generated_at = datetime.utcnow()
+                else:
+                    logger.info(
+                        f"  [Processor] Kept previous story text (rewrite failed; "
+                        f"retrying next run): {story.title[:60]}"
+                    )
+            elif summary:
+                story.summary_generated_at = datetime.utcnow()
         else:
             # Single-article story: Ensure story summary exists
             story.headline = None

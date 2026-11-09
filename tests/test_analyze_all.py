@@ -94,6 +94,35 @@ def test_one_new_article_rewrites_story_only_in_analyze_all_mode(app):
         assert m["stale_stories_reset"] == 1 and m["deep_reports_generated"] == 1
 
 
+def test_failed_rewrite_keeps_the_old_text_and_retries(app):
+    """2026-11-08: llama-server was down, the stale reset blanked 48 stories
+    and the blanks were saved. Old text now stays until a rewrite lands."""
+    then = datetime.utcnow() - timedelta(hours=3)
+    story = _story(2, [then - timedelta(hours=1), datetime.utcnow()], summary_at=then)
+    with patch("news_fetcher.summarizer.summarize_story", return_value=None), \
+         patch("news_fetcher.summarizer.generate_deep_report", return_value=None):
+        changed = ec._fill_story_content(story, _metrics(), analyse_articles=True, stale_threshold=1)
+    from aggregator import db
+    db.session.expire_all()
+    assert story.summary == "Old summary." and story.deep_report == "Old report."
+    assert story.summary_generated_at == then  # still stale: the next run retries
+    assert changed is False
+
+
+def test_partial_rewrite_stays_stale_so_the_report_is_retried(app):
+    then = datetime.utcnow() - timedelta(hours=3)
+    story = _story(2, [then - timedelta(hours=1), datetime.utcnow()], summary_at=then)
+    with patch("news_fetcher.summarizer.summarize_story", return_value="New summary."), \
+         patch("news_fetcher.summarizer.generate_deep_report", return_value=None):
+        ec._fill_story_content(story, _metrics(), analyse_articles=True, stale_threshold=1)
+    assert story.summary == "New summary." and story.deep_report == "Old report."
+    assert story.summary_generated_at == then
+    with patch("news_fetcher.summarizer.summarize_story", return_value="Newer summary."), \
+         patch("news_fetcher.summarizer.generate_deep_report", return_value="New report."):
+        ec._fill_story_content(story, _metrics(), analyse_articles=True, stale_threshold=1)
+    assert story.deep_report == "New report." and story.summary_generated_at > then
+
+
 def test_missing_article_analysis_is_written_in_analyze_all_mode(app):
     from aggregator import db
     story = _story(2, datetime.utcnow() - timedelta(hours=1), summary_at=datetime.utcnow())

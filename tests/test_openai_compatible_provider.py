@@ -198,7 +198,8 @@ class ProviderDispatchTests(unittest.TestCase):
         # detail also reports the fast tier's provider, which is still the
         # import-time default (ollama) unless it is patched too.
         with mock.patch.object(llm_client, "LLM_PROVIDER", "openrouter"), \
-             mock.patch.object(llm_client, "LLM_FAST_PROVIDER", "openrouter"):
+             mock.patch.object(llm_client, "LLM_FAST_PROVIDER", "openrouter"), \
+             mock.patch.object(llm_client, "_probe_openai_compatible", return_value=True):
             self.assertTrue(llm_client.check_llm_status())
             detail = llm_client.llm_status_detail()
 
