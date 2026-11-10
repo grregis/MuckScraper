@@ -11,7 +11,7 @@
 /* The same reset the feed pages carry inline, so the sidebar and top bar
    measure the same on every page. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-.app-page { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+.app-page { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
 /* ── A plain page's content column ── */
 .app-main { max-width: var(--width-list); margin: 0 auto; padding: 24px 32px 48px; }
