@@ -13,9 +13,10 @@ from news_fetcher import llm_client
 
 
 class _FakeResponse:
-    def __init__(self, status_code=200, json_data=None):
+    def __init__(self, status_code=200, json_data=None, headers=None):
         self.status_code = status_code
         self._json = json_data or {}
+        self.headers = headers or {}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -238,6 +239,47 @@ class OllamaFallbackTests(unittest.TestCase):
         self.assertEqual(detail["provider"], "ollama")
         self.assertEqual(detail["role"], "primary")
 
+    def test_openai_compatible_retries_transient_503(self):
+        """Transient 503/502/504 errors should be retried up to OPENAI_COMPATIBLE_MAX_RETRIES."""
+        call_count = 0
+        def fake_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _FakeResponse(503, json_data={"error": "Service Unavailable"})
+            return _FakeResponse(200, {
+                "choices": [{"message": {"content": "Generated Headline"}}]
+            })
+
+        with mock.patch("requests.post", side_effect=fake_post), \
+             mock.patch("time.sleep") as mock_sleep, \
+             mock.patch.object(llm_client, "GROQ_API_KEY", "gsk_test"), \
+             mock.patch.object(llm_client, "LLM_PROVIDER", "groq"):
+            result = llm_client.generate_text("Prompt")
+            self.assertEqual(result, "Generated Headline")
+            self.assertEqual(call_count, 2)
+            mock_sleep.assert_called_once_with(3.0)
+
+    def test_openai_compatible_retries_429_default_wait(self):
+        """A 429 without Retry-After header should wait 16s (15s default + 1s)."""
+        call_count = 0
+        def fake_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _FakeResponse(429, json_data={"error": "Rate limit reached"})
+            return _FakeResponse(200, {
+                "choices": [{"message": {"content": "Generated Headline"}}]
+            })
+
+        with mock.patch("requests.post", side_effect=fake_post), \
+             mock.patch("time.sleep") as mock_sleep, \
+             mock.patch.object(llm_client, "GROQ_API_KEY", "gsk_test"), \
+             mock.patch.object(llm_client, "LLM_PROVIDER", "groq"):
+            result = llm_client.generate_text("Prompt")
+            self.assertEqual(result, "Generated Headline")
+            self.assertEqual(call_count, 2)
+            mock_sleep.assert_called_once_with(16.0)
 
 if __name__ == "__main__":
     unittest.main()
