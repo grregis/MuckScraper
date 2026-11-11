@@ -5,6 +5,7 @@ from flask_login import current_user
 from aggregator.permissions import ROLE_ADMIN, ROLE_SCRAPER, public_or_login, role_required
 from sqlalchemy import case, func, or_
 from aggregator import db, feed_prefs
+from aggregator.feed_export import render_feed_or_template
 from aggregator.models import Article, Outlet, Story, Topic
 from aggregator.search import SearchUnavailableError, search_story_ids
 from aggregator.story_view import apply_aggregator_filter
@@ -42,6 +43,9 @@ def fetch_page():
 # All Stories and Grouped Stories are open to signed-out visitors when
 # PUBLIC_READ_ACCESS is on (Regis, 2026-10-04), like Headlines. They get no
 # scrape-status filter and no scrape details (see articles.html).
+@admin.route("/articles.rss")
+@admin.route("/articles/feed.xml")
+@admin.route("/articles.json")
 @admin.route("/articles")
 @public_or_login
 def list_articles(per_page=25, force_multi=False):
@@ -159,9 +163,14 @@ def list_articles(per_page=25, force_multi=False):
     else:
         active_nav = "all"
 
-    return render_template(
+    feed_title = f"MuckScraper — {active_label}" if active_label else "MuckScraper — All Stories"
+    feed_desc = f"{active_label} coverage and balanced news analysis from MuckScraper" if active_label else "All stories and balanced news analysis from MuckScraper"
+
+    return render_feed_or_template(
         "articles.html",
         stories=stories,
+        feed_title=feed_title,
+        feed_description=feed_desc,
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_label=active_label,
         active_scrape_status=active_scrape_status,
@@ -182,6 +191,9 @@ def list_articles(per_page=25, force_multi=False):
     )
 
 
+@admin.route("/multi-stories.rss")
+@admin.route("/multi-stories/feed.xml")
+@admin.route("/multi-stories.json")
 @admin.route("/multi-stories")
 @public_or_login
 def multi_article_stories():
