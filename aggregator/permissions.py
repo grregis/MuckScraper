@@ -43,10 +43,13 @@ def role_required(minimum):
 
 
 def public_or_login(view):
-    """Open to everyone when PUBLIC_READ_ACCESS is on, otherwise needs an account."""
+    """Open to everyone when PUBLIC_READ_ACCESS is on, or when requesting an authorized feed export, otherwise needs an account."""
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not current_user.is_authenticated and not public_read_enabled():
+            from aggregator.feed_export import is_feed_export_enabled, request_wants_feed, is_feed_token_authorized
+            if is_feed_export_enabled() and request_wants_feed() and is_feed_token_authorized():
+                return view(*args, **kwargs)
             return current_app.login_manager.unauthorized()
         return view(*args, **kwargs)
     return wrapped

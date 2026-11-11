@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from flask_login import current_user
 from aggregator import feed_prefs
 from aggregator import story_analysis
+from aggregator.feed_export import render_feed_or_template
 from aggregator.blueprints.admin._shared import story_bias_totals
 from aggregator.permissions import public_or_login, public_read_enabled
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
@@ -41,6 +42,9 @@ def index():
     return redirect(url_for("auth.login", next=url_for("public.headlines_feed")))
 
 
+@public.route("/headlines.rss")
+@public.route("/headlines/feed.xml")
+@public.route("/headlines.json")
 @public.route("/headlines")
 @public_or_login
 def headlines_feed():
@@ -90,9 +94,11 @@ def headlines_feed():
 
     total_pages = max(1, (total_stories + per_page - 1) // per_page)
 
-    return render_template(
+    return render_feed_or_template(
         "headlines_feed.html",
         stories=stories,
+        feed_title=f"MuckScraper — {edition_label}",
+        feed_description="Curated top stories and balanced coverage from MuckScraper",
         edition_label=edition_label,
         edition=latest_edition,
         is_past_edition=bool(newest_edition and latest_edition and latest_edition.id != newest_edition.id),
@@ -102,6 +108,26 @@ def headlines_feed():
         topics=Topic.query.filter_by(is_active=True).order_by(Topic.sort_order).all(),
         active_nav="headlines",
     )
+
+
+@public.route("/articles.rss")
+@public.route("/articles/feed.xml")
+@public.route("/articles.json")
+@public.route("/articles")
+@public_or_login
+def public_articles():
+    from aggregator.blueprints.admin.articles import list_articles
+    return list_articles()
+
+
+@public.route("/multi-stories.rss")
+@public.route("/multi-stories/feed.xml")
+@public.route("/multi-stories.json")
+@public.route("/multi-stories")
+@public_or_login
+def public_multi_stories():
+    from aggregator.blueprints.admin.articles import multi_article_stories
+    return multi_article_stories()
 
 
 @public.route("/headlines/opinion")
