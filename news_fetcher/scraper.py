@@ -798,7 +798,16 @@ def scrape_article(url, fallback_content=None, force=False):
     Returns a ScrapeResult with content and telemetry.
     """
     if is_domain_blocked(url):
-        logger.info(f"  [Scraper] Domain blocked, skipping: {url[:60]}")
+        logger.info(f"  [Scraper] Domain blocked, checking fallback plugins: {url[:60]}")
+        from news_fetcher.scraper_plugins import run_fallback_plugins
+        plugin_content, plugin_method = run_fallback_plugins(url)
+        if plugin_content:
+            logger.info(f"  [Scraper] Recovered blocked domain article via {plugin_method}: {url[:60]}")
+            return ScrapeResult(
+                content=plugin_content,
+                status=SCRAPE_STATUS_FALLBACK,
+                method=f"plugin_{plugin_method}",
+            )
         return ScrapeResult(
             content=None,
             status=SCRAPE_STATUS_BLOCKED,
@@ -849,6 +858,18 @@ def scrape_article(url, fallback_content=None, force=False):
         if content:
             is_bad, reason = detect_bad_scrape(content)
             if is_bad:
+                from news_fetcher.scraper_plugins import run_fallback_plugins
+                plugin_content, plugin_method = run_fallback_plugins(url, initial_html=initial_html)
+                if plugin_content:
+                    logger.info(f"  [Scraper] {reason} on direct scrape, but recovered via {plugin_method} for {url[:60]}")
+                    result = ScrapeResult(
+                        content=plugin_content,
+                        status=SCRAPE_STATUS_FALLBACK,
+                        method=f"plugin_{plugin_method}",
+                        http_status=http_status_override if http_status_override is not None else http_status,
+                    )
+                    update_retry_cache(url, result)
+                    return result
                 if blocklist_hit_recorded:
                     logger.info(f"  [Scraper] {reason} on a variant of {url[:60]} -- already counted for this article")
                 else:
@@ -927,6 +948,13 @@ def scrape_article(url, fallback_content=None, force=False):
         content = extract_structured_metadata(initial_html, url)
         if content:
             return with_author(finalize_content(content, "metadata", SCRAPE_STATUS_FALLBACK))
+
+    # Pluggable fallback before falling back to feed description
+    from news_fetcher.scraper_plugins import run_fallback_plugins
+    plugin_content, plugin_method = run_fallback_plugins(url, initial_html=initial_html)
+    if plugin_content:
+        logger.info(f"  [Scraper] Recovered article via {plugin_method} for {url[:60]}")
+        return with_author(finalize_content(plugin_content, f"plugin_{plugin_method}", status=SCRAPE_STATUS_FALLBACK))
 
     if fallback_content:
         logger.info(f"  [Scraper] Falling back to feed/API description for {url[:60]}")
