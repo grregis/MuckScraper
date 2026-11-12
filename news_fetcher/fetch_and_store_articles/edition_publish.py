@@ -14,6 +14,40 @@ from news_fetcher.story_grouper import COUNTRY_TOKENS, normalize_title_tokens, t
 
 logger = logging.getLogger(__name__)
 
+# Which stories can go into an edition (2026-11-12, Regis). A story qualifies
+# when it gained an article in the last EDITION_RECENT_ARTICLE_DAYS, as long as
+# it started within EDITION_STORY_MAX_AGE_DAYS (the grouping window, so a story
+# can't keep collecting coverage forever). Before this the test was the story's
+# own created_at within 3 days, so a long-running story dropped out of every
+# edition on day 4 however much new coverage it got (Nvidia/Huang, 11-09: 142
+# articles and in no edition), and the event only came back through newer
+# split-off stories. Repeats are still limited elsewhere: a story in the
+# previous edition needs new articles, and the ranker's staleness penalty.
+EDITION_RECENT_ARTICLE_DAYS = 3
+EDITION_STORY_MAX_AGE_DAYS = 7
+
+
+def edition_candidate_query(now=None):
+    """Stories eligible for an edition: started within
+    EDITION_STORY_MAX_AGE_DAYS and with an article fetched within
+    EDITION_RECENT_ARTICLE_DAYS. Returns (query, newest-article column) so
+    callers can order by either score or recency."""
+    from aggregator.models import Article, Story
+
+    now = now or datetime.utcnow()
+    latest = (
+        db.session.query(Article.story_id.label("story_id"),
+                         db.func.max(Article.fetched_at).label("latest_fetched_at"))
+        .group_by(Article.story_id)
+        .subquery()
+    )
+    query = (
+        Story.query.join(latest, latest.c.story_id == Story.id)
+        .filter(Story.created_at >= now - timedelta(days=EDITION_STORY_MAX_AGE_DAYS))
+        .filter(latest.c.latest_fetched_at >= now - timedelta(days=EDITION_RECENT_ARTICLE_DAYS))
+    )
+    return query, latest.c.latest_fetched_at
+
 
 def is_generic_roundup_title(title):
     normalized = (title or "").strip()
@@ -366,10 +400,9 @@ def publish_edition():
 
     # Get top scored stories as candidates. Pull extra depth so suppressing
     # unchanged previous-edition stories does not leave the edition short.
-    story_cutoff = datetime.utcnow() - timedelta(days=3)
-    candidates = Story.query.filter(
-        Story.headline_score > 0,
-        Story.created_at >= story_cutoff
+    eligible_query, latest_fetched_at = edition_candidate_query()
+    candidates = eligible_query.filter(
+        Story.headline_score > 0
     ).order_by(Story.headline_score.desc()).limit(100).all()
 
     # Fallback for deployments running without the private headline-ranking
@@ -383,14 +416,12 @@ def publish_edition():
     # plugin IS active, at least one story scores > 0 and this branch is skipped,
     # leaving the scored behavior unchanged.
     if not candidates:
-        candidates = Story.query.filter(
-            Story.created_at >= story_cutoff
-        ).order_by(Story.created_at.desc()).limit(100).all()
+        candidates = eligible_query.order_by(latest_fetched_at.desc()).limit(100).all()
         if candidates:
             logger.info(
                 "[Edition] No stories have a positive headline_score "
                 "(headline-ranking plugin inactive); falling back to %d recent "
-                "stories ordered by recency.",
+                "stories ordered by their newest article.",
                 len(candidates),
             )
 
