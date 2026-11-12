@@ -122,7 +122,7 @@ def test_generate_json_feed():
         id=99,
         headline="New Open-Source AI Breakthrough",
         title="New Open-Source AI Breakthrough",
-        summary="Researchers release efficient model weights.",
+        summary="Researchers release <script>alert('xss')</script><b>efficient</b> model weights.",
         created_at=datetime(2026, 11, 5, 15, 0, 0, tzinfo=timezone.utc),
         summary_generated_at=None,
         topics=[mock_topic],
@@ -145,7 +145,10 @@ def test_generate_json_feed():
     item = data["items"][0]
     assert item["title"] == "New Open-Source AI Breakthrough"
     assert item["tags"] == ["Technology"]
-    assert "Researchers release efficient model" in item["summary"]
+    # summary is cleaned text without HTML tags
+    assert item["summary"] == "Researchers release alert('xss')efficient model weights."
+    assert "<script>" not in item["content_html"]
+    assert "<b>efficient</b>" in item["content_html"]
 
 
 # ============================================================================
@@ -302,6 +305,15 @@ def test_headlines_html_page_contains_autodiscovery_link(app_with_db):
     assert '<link rel="alternate" type="application/rss+xml"' in html
     assert 'format=rss' in html
 
+    # Configured FEED_ACCESS_TOKEN must NOT leak into HTML page source
+    with patch.dict(os.environ, {"FEED_ACCESS_TOKEN": "super-secret-token"}):
+        resp_with_env = client.get("/headlines")
+        assert "super-secret-token" not in resp_with_env.data.decode("utf-8")
+
+        # But if the request explicitly arrived with ?token=..., it is preserved
+        resp_with_param = client.get("/headlines?token=super-secret-token")
+        assert "token=super-secret-token" in resp_with_param.data.decode("utf-8")
+
 
 def test_articles_topic_filter_preserves_selection_in_rss(app_with_db):
     client = app_with_db.test_client()
@@ -357,7 +369,7 @@ def test_admin_articles_rss(app_with_db):
     assert "application/rss+xml" in resp2.headers["Content-Type"]
 
 
-def test_feeds_allowed_when_public_read_access_is_false(app_with_db):
+def test_feeds_require_login_when_public_read_access_is_false_without_token(app_with_db):
     app_with_db.config["PUBLIC_READ_ACCESS"] = False
     client = app_with_db.test_client()
 
@@ -366,16 +378,22 @@ def test_feeds_allowed_when_public_read_access_is_false(app_with_db):
     assert html_resp.status_code == 302
     assert "/auth/login" in html_resp.headers["Location"]
 
-    # Feed request should be allowed without login (200)
+    # Without token configured or provided, feeds require login (302) like web pages
     rss_resp = client.get("/headlines.rss")
-    assert rss_resp.status_code == 200
-    assert "application/rss+xml" in rss_resp.headers["Content-Type"]
+    assert rss_resp.status_code == 302
+    assert "/auth/login" in rss_resp.headers["Location"]
 
     rss_query_resp = client.get("/headlines?format=rss")
-    assert rss_query_resp.status_code == 200
+    assert rss_query_resp.status_code == 302
+    assert "/auth/login" in rss_query_resp.headers["Location"]
 
     topic_rss_resp = client.get("/articles.rss?topic=US+Politics")
-    assert topic_rss_resp.status_code == 200
+    assert topic_rss_resp.status_code == 302
+    assert "/auth/login" in topic_rss_resp.headers["Location"]
+
+    json_resp = client.get("/headlines.json")
+    assert json_resp.status_code == 302
+    assert "/auth/login" in json_resp.headers["Location"]
 
 
 def test_feed_access_token_enforcement(app_with_db):
@@ -386,15 +404,21 @@ def test_feed_access_token_enforcement(app_with_db):
         # Without token, should be rejected / redirected to login
         unauth_resp = client.get("/headlines.rss")
         assert unauth_resp.status_code == 302
+        assert "/auth/login" in unauth_resp.headers["Location"]
 
         # With wrong token, should be rejected
         wrong_resp = client.get("/headlines.rss?token=bad-token")
         assert wrong_resp.status_code == 302
+        assert "/auth/login" in wrong_resp.headers["Location"]
 
         # With correct query token, succeeds
         auth_resp = client.get("/headlines.rss?token=secret-reader-token")
         assert auth_resp.status_code == 200
         assert "application/rss+xml" in auth_resp.headers["Content-Type"]
+
+        # Topic filter with token succeeds
+        topic_auth_resp = client.get("/articles.rss?topic=US+Politics&token=secret-reader-token")
+        assert topic_auth_resp.status_code == 200
 
         # With Bearer header, succeeds
         header_resp = client.get("/headlines.rss", headers={"Authorization": "Bearer secret-reader-token"})

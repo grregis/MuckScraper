@@ -18,6 +18,7 @@ ALWAYS_OPEN = {"auth.login", "auth.logout", "static",
 # Open to signed-out visitors only when PUBLIC_READ_ACCESS is on (2026-10-04).
 PUBLIC_WHEN_ON = {
     "public.index", "public.headlines_feed", "public.view_story", "public.view_article",
+    "public.public_articles", "public.public_multi_stories",  # feeds and stories aliases (2026-11-11)
     "admin.list_articles", "admin.multi_article_stories",
     "admin.oped_list",  # Op/Ed (2026-10-08), public like All Stories
     "admin.oped_piece",  # one Op/Ed piece (2026-10-16), no text signed out
