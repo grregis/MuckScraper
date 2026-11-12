@@ -6,7 +6,27 @@ All notable changes to MuckScraper are documented here.
 
 ## [Unreleased]
 
+### Upgrading
+- **Run `./install.sh` between fetches.** It applies one migration, which only
+  adds the `config_settings` table, and generates `CONFIG_ENCRYPTION_KEY` in
+  `.env` if it's missing.
+- **Back up `CONFIG_ENCRYPTION_KEY` separately from the database.** It
+  encrypts API keys saved in Settings; without the same key they can't be read
+  and have to be entered again. Installs that keep their keys in `.env` are
+  unaffected.
+
 ### Added
+- **API keys can be saved in Settings** (#38, thanks @bballdavis). Provider and
+  source keys (NewsAPI, GNews, the LLM providers) entered by an admin are
+  encrypted with `CONFIG_ENCRYPTION_KEY` before they're stored, and pages only
+  ever show the last four characters. Keys in `.env` keep working, and nothing
+  is imported from it automatically. Recovery notes in
+  `docs/SAVED_SECRETS.md`.
+- **Compact story cards and one place for feed filters** (#34, thanks
+  @bballdavis). Filters sit beside the search box as removable chips, and
+  "Save as my default" keeps them per account (signed-out visitors get the
+  built-in defaults). Cards without a photo show the outlet name, and the less
+  common card actions are in a ⋯ menu.
 - **Backfill summaries and analysis** for stories already in the database
   (Settings > LLM providers, or `docker compose exec scheduler python -m
   news_fetcher.backfill start [--oldest]`). Newest or oldest stories first;
@@ -16,6 +36,32 @@ All notable changes to MuckScraper are documented here.
   losing work. A hosted provider (Gemini, Groq, a non-local OpenAI-compatible
   endpoint) needs a confirmation first, since it makes several calls per
   story.
+
+### Changed
+- **Editions pick from stories that are still being covered.** A story used to
+  qualify only if it was created in the last 3 days, so a long-running story
+  dropped out on day 4 however much new coverage it got. Now a story qualifies
+  when it gained an article in the last 3 days and started within 7. A story
+  from the previous edition still needs new articles to run again. Without the
+  headline-ranking plugin, candidates are ordered by their newest article.
+- **Western system fonts first, with kerning on** (#44, thanks @parkfour), which
+  fixes the odd spacing around curly quotes on some systems.
+- **The test suite is in the repository** and runs with `DATABASE_URL=sqlite://`
+  in a throwaway container; no test touches your database.
+
+### Fixed
+- **A failed rewrite no longer blanks a story.** When the LLM was down partway
+  through a run, a story due for a new summary lost its old summary and deep
+  report. They now stay until the replacements are written, and the story is
+  retried next run.
+- **OpenAI-compatible endpoints are actually checked.** One with an API key
+  set counted as up even when the server was down. It's now probed
+  (`GET /models`, 5 s timeout), so a dead server skips the LLM steps cleanly.
+- **Brief 502/503/504 errors from OpenAI-compatible endpoints are retried**
+  (#45, thanks @parkfour) instead of failing the call.
+- **A stalled RSS feed no longer hangs the run.** Feeds are downloaded with a
+  timeout (10 s to connect, 20 s of silence); a stall fails like any other
+  error and the feed's fallback is used.
 
 ## [1.1.0] - 2026-11-05
 
