@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import List, Optional
 from urllib.parse import urlencode
+import hmac
 import logging
 import os
 import xml.etree.ElementTree as ET
@@ -45,24 +46,25 @@ def is_feed_export_enabled() -> bool:
 
 def is_feed_token_authorized() -> bool:
     """
-    Check if feed access is authorized.
-    If FEED_ACCESS_TOKEN is configured in environment, require matching query param '?token=...' or Bearer header.
-    If FEED_ACCESS_TOKEN is not configured, feed access is permitted by default when feed export is enabled.
+    Check if feed access is authorized via FEED_ACCESS_TOKEN.
+    Requires FEED_ACCESS_TOKEN to be configured in the environment AND
+    presented in the request (via '?token=...' query param or Authorization header).
+    Returns False if FEED_ACCESS_TOKEN is not configured or token does not match.
     """
     token_configured = os.environ.get("FEED_ACCESS_TOKEN", "").strip()
     if not token_configured:
-        return True
+        return False
 
     # Check query param ?token=...
     req_token = (request.args.get("token") or "").strip()
-    if req_token and req_token == token_configured:
+    if req_token and hmac.compare_digest(req_token, token_configured):
         return True
 
     # Check Authorization header (Bearer <token> or Token <token>)
     auth_header = request.headers.get("Authorization", "").strip()
     if auth_header:
         parts = auth_header.split(None, 1)
-        if len(parts) == 2 and parts[0].lower() in ("bearer", "token") and parts[1] == token_configured:
+        if len(parts) == 2 and parts[0].lower() in ("bearer", "token") and hmac.compare_digest(parts[1], token_configured):
             return True
 
     return False
@@ -117,11 +119,6 @@ def build_feed_url(feed_format: str = "rss") -> str:
     query["format"] = feed_format
     # Clean out web page pagination for feeds (feed readers expect the top/first window)
     query.pop("page", None)
-
-    # If FEED_ACCESS_TOKEN is configured, propagate token if present in query or environment
-    configured_token = os.environ.get("FEED_ACCESS_TOKEN", "").strip()
-    if configured_token and "token" not in query:
-        query["token"] = configured_token
 
     return f"{request.path}?{urlencode(query)}"
 
@@ -260,12 +257,19 @@ def generate_json_feed(
         pub_date = getattr(story, "summary_generated_at", None) or getattr(story, "created_at", None)
         tags = [t.name for t in getattr(story, "topics", []) if getattr(t, "name", None)]
 
+        raw_summary = getattr(story, "summary", "") or ""
+        clean_summary = bleach.clean(
+            raw_summary,
+            tags=["p", "br", "ul", "ol", "li", "strong", "em", "b", "i"],
+            strip=True,
+        ) if raw_summary else ""
+
         items.append({
             "id": story_url,
             "url": story_url,
             "title": getattr(story, "headline", None) or getattr(story, "title", None) or f"Story #{story_id}",
-            "summary": getattr(story, "summary", "") or "",
-            "content_html": getattr(story, "summary", "") or "",
+            "summary": bleach.clean(raw_summary, tags=[], strip=True) if raw_summary else "",
+            "content_html": f"<div>{clean_summary}</div>" if clean_summary else "",
             "date_published": format_rfc822(pub_date),
             "tags": tags,
         })
