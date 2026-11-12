@@ -4,7 +4,7 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
-## [Unreleased]
+## [1.2.0] - 2026-11-12
 
 ### Upgrading
 - **Run `./install.sh` between fetches.** It applies one migration, which only
@@ -14,6 +14,8 @@ All notable changes to MuckScraper are documented here.
   encrypts API keys saved in Settings; without the same key they can't be read
   and have to be entered again. Installs that keep their keys in `.env` are
   unaffected.
+- Nothing you configured is changed or discarded. Saving keys in Settings is
+  optional.
 
 ### Added
 - **API keys can be saved in Settings** (#38, thanks @bballdavis). Provider and
