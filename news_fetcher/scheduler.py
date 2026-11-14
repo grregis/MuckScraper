@@ -173,7 +173,8 @@ _QUALITY_STEP_COUNTERS = {
     "edition_publish": (
         "publish_edition",
         (
-            "story_count", "dedupe_skip_count", "mixed_coverage_count",
+            "story_count", "dedupe_skip_count", "running_story_skip_count",
+            "mixed_coverage_count",
             "caps_skipped_bias", "balance_bucket_counts",
         ),
     ),
