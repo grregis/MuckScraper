@@ -4,6 +4,14 @@ All notable changes to MuckScraper are documented here.
  
 ---
 
+## [Unreleased]
+
+### Changed
+- An edition carries at most two stories from one running story. Stories
+  count as one running story when their headlines share a name (a person,
+  company or place, not a party, institution or US state) and their articles
+  are alike. One scandal had taken five of an edition's 20 places.
+
 ## [1.2.0] - 2026-11-12
 
 ### Upgrading
