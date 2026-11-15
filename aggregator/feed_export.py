@@ -1,32 +1,41 @@
 """
 Feed export plugin system for MuckScraper.
 
-Enables article and headline list views (such as /headlines and /articles)
+Enables article and headline list views (such as /headlines and /admin/articles)
 to export their filtered results as RSS 2.0 XML (and JSON Feed) without
 interfering with topic, time range, search, or pagination filters.
 
 Usage in routes:
-    from aggregator.feed_export import render_feed_or_template
+    from aggregator.feed_export import render_feed_or_template, feed_or_public_or_login
 
-    return render_feed_or_template(
-        "headlines_feed.html",
-        stories=stories,
-        feed_title=f"MuckScraper — {edition_label}",
-        feed_description="Curated top stories and balanced coverage from MuckScraper",
-        **template_context
-    )
+    @public.route("/headlines.rss")
+    @public.route("/headlines")
+    @feed_or_public_or_login
+    def headlines_feed():
+        ...
+        return render_feed_or_template(
+            "headlines_feed.html",
+            stories=stories,
+            feed_title=f"MuckScraper — {edition_label}",
+            feed_description="Curated top stories and balanced coverage from MuckScraper",
+            **template_context
+        )
 """
 
 from datetime import datetime, timezone
 from email.utils import format_datetime
+from functools import wraps
 from typing import List, Optional
 from urllib.parse import urlencode
+import html
 import hmac
 import logging
 import os
 import xml.etree.ElementTree as ET
 import bleach
-from flask import request, url_for, Response, jsonify, render_template
+from flask import request, url_for, Response, jsonify, render_template, current_app
+from flask_login import current_user
+from aggregator.permissions import public_read_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -50,24 +59,53 @@ def is_feed_token_authorized() -> bool:
     Requires FEED_ACCESS_TOKEN to be configured in the environment AND
     presented in the request (via '?token=...' query param or Authorization header).
     Returns False if FEED_ACCESS_TOKEN is not configured or token does not match.
+    Uses constant-time comparison on UTF-8 bytes to prevent timing attacks and handle non-ASCII.
     """
     token_configured = os.environ.get("FEED_ACCESS_TOKEN", "").strip()
     if not token_configured:
         return False
 
+    configured_bytes = token_configured.encode("utf-8")
+
     # Check query param ?token=...
     req_token = (request.args.get("token") or "").strip()
-    if req_token and hmac.compare_digest(req_token, token_configured):
-        return True
+    if req_token:
+        try:
+            if hmac.compare_digest(req_token.encode("utf-8"), configured_bytes):
+                return True
+        except Exception:
+            pass
 
     # Check Authorization header (Bearer <token> or Token <token>)
     auth_header = request.headers.get("Authorization", "").strip()
     if auth_header:
         parts = auth_header.split(None, 1)
-        if len(parts) == 2 and parts[0].lower() in ("bearer", "token") and hmac.compare_digest(parts[1], token_configured):
-            return True
+        if len(parts) == 2 and parts[0].lower() in ("bearer", "token"):
+            try:
+                if hmac.compare_digest(parts[1].strip().encode("utf-8"), configured_bytes):
+                    return True
+            except Exception:
+                pass
 
     return False
+
+
+def feed_or_public_or_login(view):
+    """
+    Access control decorator for views that render a feed.
+    - Open to anyone when PUBLIC_READ_ACCESS is on, or when signed in.
+    - When PUBLIC_READ_ACCESS is off:
+        * Feed requests are allowed if FEED_ACCESS_TOKEN is configured and presented.
+        * HTML page requests require an account (redirects to login).
+    """
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not current_user.is_authenticated and not public_read_enabled():
+            if is_feed_export_enabled() and request_wants_feed() and is_feed_token_authorized():
+                return view(*args, **kwargs)
+            return current_app.login_manager.unauthorized()
+        return view(*args, **kwargs)
+    return wrapped
 
 
 def request_wants_feed() -> bool:
@@ -114,13 +152,19 @@ def get_requested_feed_format() -> str:
 
 
 def build_feed_url(feed_format: str = "rss") -> str:
-    """Build the RSS or JSON feed URL for the current request, preserving existing query filters."""
+    """Build the absolute RSS or JSON feed URL for the current request, preserving existing query filters."""
     query = dict(request.args)
-    query["format"] = feed_format
+    path = request.path.lower()
+    if path.endswith((".rss", "/feed.xml", "/rss.xml", ".json")):
+        query.pop("format", None)
+    else:
+        query["format"] = feed_format
+
     # Clean out web page pagination for feeds (feed readers expect the top/first window)
     query.pop("page", None)
 
-    return f"{request.path}?{urlencode(query)}"
+    base_url = request.base_url
+    return f"{base_url}?{urlencode(query)}" if query else base_url
 
 
 def format_rfc822(dt: Optional[datetime]) -> str:
@@ -130,6 +174,15 @@ def format_rfc822(dt: Optional[datetime]) -> str:
     elif dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return format_datetime(dt)
+
+
+def format_rfc3339(dt: Optional[datetime]) -> str:
+    """Format a naive or aware datetime as an RFC 3339 string for JSON Feed 1.1."""
+    if not dt:
+        dt = datetime.now(timezone.utc)
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
 
 
 def generate_rss_xml(
@@ -193,7 +246,7 @@ def generate_rss_xml(
         story_title_orig = getattr(story, "title", None)
         story_summary = getattr(story, "summary", None)
         if story_headline and story_title_orig and story_headline != story_title_orig:
-            desc_parts.append(f"<p><em>{bleach.clean(story_title_orig, strip=True)}</em></p>")
+            desc_parts.append(f"<p><em>{html.escape(story_title_orig)}</em></p>")
 
         if story_summary:
             clean_sum = bleach.clean(
@@ -218,19 +271,26 @@ def generate_rss_xml(
         if hasattr(story, "articles") and story.articles:
             desc_parts.append("<p><strong>Reporting sources:</strong></p><ul>")
             for art in story.articles[:8]:
-                art_outlet = art.outlet.name if getattr(art, "outlet", None) else (art.source or "Source")
+                raw_outlet = art.outlet.name if getattr(art, "outlet", None) else (art.source or "Source")
+                art_outlet = html.escape(raw_outlet)
                 art_score = getattr(art, "bias_score", None)
                 if art_score is None and getattr(art, "outlet", None):
                     art_score = getattr(art.outlet, "bias_score", None)
                 art_bias = BIAS_LABELS.get(int(round(art_score))) if art_score else "Unrated"
-                art_title = bleach.clean(art.title or "Article", strip=True)
-                art_link = art.url or "#"
+                art_title = html.escape(art.title or "Article")
+                raw_url = (art.url or "").strip()
+                if raw_url.startswith(("http://", "https://")):
+                    safe_href = html.escape(raw_url, quote=True)
+                    link_html = f'<a href="{safe_href}">{art_title}</a>'
+                else:
+                    link_html = art_title
                 desc_parts.append(
-                    f'<li><a href="{art_link}">{art_title}</a> — {art_outlet} ({art_bias})</li>'
+                    f"<li>{link_html} — {art_outlet} ({art_bias})</li>"
                 )
             desc_parts.append("</ul>")
 
-        desc_parts.append(f'<p><a href="{story_url}">View full story and analysis on MuckScraper</a></p>')
+        safe_story_url = html.escape(story_url, quote=True)
+        desc_parts.append(f'<p><a href="{safe_story_url}">View full story and analysis on MuckScraper</a></p>')
 
         desc_elem = ET.SubElement(item, "description")
         desc_elem.text = "".join(desc_parts)
@@ -270,7 +330,7 @@ def generate_json_feed(
             "title": getattr(story, "headline", None) or getattr(story, "title", None) or f"Story #{story_id}",
             "summary": bleach.clean(raw_summary, tags=[], strip=True) if raw_summary else "",
             "content_html": f"<div>{clean_summary}</div>" if clean_summary else "",
-            "date_published": format_rfc822(pub_date),
+            "date_published": format_rfc3339(pub_date),
             "tags": tags,
         })
 
@@ -300,6 +360,11 @@ def render_feed_or_template(
     if is_feed_export_enabled() and request_wants_feed():
         feed_format = get_requested_feed_format()
         channel_link = request.base_url
+        for ext in (".rss", ".json", "/feed.xml", "/rss.xml"):
+            if channel_link.lower().endswith(ext):
+                channel_link = channel_link[:-len(ext)]
+                break
+
         feed_url = build_feed_url(feed_format=feed_format)
 
         if feed_format == "json":

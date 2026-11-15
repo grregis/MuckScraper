@@ -2,7 +2,7 @@
 Tests for the feed export plugin system in MuckScraper.
 
 Tests both the standalone XML / JSON generation and integration with
-the public and admin blueprints (/headlines, /articles, /multi-stories).
+the public and admin blueprints (/headlines, /admin/articles, /admin/multi-stories).
 """
 
 from datetime import datetime, timezone
@@ -14,10 +14,12 @@ import pytest
 
 from aggregator.feed_export import (
     is_feed_export_enabled,
+    is_feed_token_authorized,
     request_wants_feed,
     get_requested_feed_format,
     build_feed_url,
     format_rfc822,
+    format_rfc3339,
     generate_rss_xml,
     generate_json_feed,
     render_feed_or_template,
@@ -51,6 +53,16 @@ def test_format_rfc822():
     # None falls back to current time
     now_res = format_rfc822(None)
     assert str(datetime.now().year) in now_res
+
+
+def test_format_rfc3339():
+    dt = datetime(2026, 11, 5, 15, 30, 0, tzinfo=timezone.utc)
+    res = format_rfc3339(dt)
+    assert res == "2026-11-05T15:30:00+00:00"
+
+    # Naive datetime is treated as UTC
+    naive_dt = datetime(2026, 11, 5, 15, 30, 0)
+    assert format_rfc3339(naive_dt) == "2026-11-05T15:30:00+00:00"
 
 
 def test_generate_rss_xml_structure():
@@ -97,6 +109,11 @@ def test_generate_rss_xml_structure():
     assert channel.find("link").text == "https://example.com/headlines"
     assert channel.find("description").text == "Curated top stories"
 
+    atom_link = channel.find("{http://www.w3.org/2005/Atom}link")
+    assert atom_link is not None
+    assert atom_link.attrib.get("href") == "https://example.com/headlines?format=rss"
+    assert atom_link.attrib.get("rel") == "self"
+
     items = channel.findall("item")
     assert len(items) == 1
     item = items[0]
@@ -112,6 +129,57 @@ def test_generate_rss_xml_structure():
     assert "Coverage balance (4 sources)" in desc
     assert "Associated Press" in desc
     assert "Center" in desc
+
+
+def test_generate_rss_xml_escapes_html_and_untrusted_urls():
+    mock_outlet = SimpleNamespace(name='<img src=x onerror="alert(1)">Outlet', bias_score=3.0)
+    mock_art_xss = SimpleNamespace(
+        id=1,
+        title='Evil <script>alert("title")</script>',
+        url='"><script>alert("url")</script>',
+        outlet=mock_outlet,
+        source=None,
+        bias_score=3.0,
+    )
+    mock_art_js = SimpleNamespace(
+        id=2,
+        title="JavaScript URL",
+        url="javascript:alert(1)",
+        outlet=SimpleNamespace(name="Safe News", bias_score=3.0),
+        source=None,
+        bias_score=3.0,
+    )
+    mock_story = SimpleNamespace(
+        id=43,
+        headline="Security Test",
+        title='Story <script>alert("heading")</script>',
+        summary="Safe summary",
+        created_at=datetime(2026, 11, 5, 10, 0, 0, tzinfo=timezone.utc),
+        summary_generated_at=None,
+        topics=[],
+        articles=[mock_art_xss, mock_art_js],
+        left_bias_count=None,
+        center_bias_count=None,
+        right_bias_count=None,
+    )
+
+    xml_text = generate_rss_xml(
+        stories=[mock_story],
+        channel_title="Security Feed",
+        channel_description="Desc",
+        channel_link="https://example.com/headlines",
+    )
+    root = ET.fromstring(xml_text)
+    desc = root.find(".//item/description").text
+
+    # Verify no live unescaped script or img tags in description
+    assert "<img" not in desc
+    assert "&lt;img" in desc
+    assert '<script>alert("url")' not in desc
+    assert "<script>" not in desc
+    # javascript: scheme URL must not be emitted as an active href link
+    assert 'href="javascript:' not in desc
+    assert "JavaScript URL" in desc
 
 
 def test_generate_json_feed():
@@ -141,6 +209,7 @@ def test_generate_json_feed():
 
     assert data["version"] == "https://jsonfeed.org/version/1.1"
     assert data["title"] == "Tech Headlines"
+    assert data["feed_url"] == "https://example.com/tech.json"
     assert len(data["items"]) == 1
     item = data["items"][0]
     assert item["title"] == "New Open-Source AI Breakthrough"
@@ -149,6 +218,8 @@ def test_generate_json_feed():
     assert item["summary"] == "Researchers release alert('xss')efficient model weights."
     assert "<script>" not in item["content_html"]
     assert "<b>efficient</b>" in item["content_html"]
+    # RFC 3339 date format for JSON Feed
+    assert item["date_published"] == "2026-11-05T15:00:00+00:00"
 
 
 # ============================================================================
@@ -156,10 +227,10 @@ def test_generate_json_feed():
 # ============================================================================
 
 @pytest.fixture
-def app_with_db():
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    os.environ["SECRET_KEY"] = "test-secret-key-1234567890abcdef1234567890abcdef"
-    os.environ["PUBLIC_READ_ACCESS"] = "true"
+def app_with_db(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-1234567890abcdef1234567890abcdef")
+    monkeypatch.setenv("PUBLIC_READ_ACCESS", "true")
 
     from aggregator import create_app, db
     from aggregator.models import Topic, Outlet, Story, Article
@@ -167,6 +238,7 @@ def app_with_db():
     app = create_app()
     app.config.update(
         TESTING=True,
+        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
         WTF_CSRF_ENABLED=False,
         PUBLIC_READ_ACCESS=True,
     )
@@ -174,72 +246,69 @@ def app_with_db():
     with app.app_context():
         db.create_all()
 
-        outlet = Outlet(name="Global Gazette", url="https://example.com", description="N/A", bias_score=3.0)
-        db.session.add(outlet)
+        t_politics = Topic(name="US Politics", sort_order=1, is_active=True)
+        t_science = Topic(name="Science", sort_order=2, is_active=True)
+        db.session.add_all([t_politics, t_science])
 
-        topic_politics = Topic(name="US Politics", is_active=True, sort_order=1)
-        topic_science = Topic(name="Science", is_active=True, sort_order=2)
-        db.session.add_all([topic_politics, topic_science])
-        db.session.commit()
+        o1 = Outlet(name="AP News", bias_score=3.0)
+        o2 = Outlet(name="Reuters", bias_score=3.0)
+        db.session.add_all([o1, o2])
+        db.session.flush()
 
-        # Story 1: Politics
-        story1 = Story(
+        s1 = Story(
             headline="Senate Reaches Bipartisan Accord",
-            title="Senate Agreement",
-            summary="Key legislative breakthrough reached on budget.",
-            headline_score=10.0,
-            topics=[topic_politics],
+            title="Raw Senate Accord Title",
+            summary="Negotiators agreed on a $1.2T federal framework after late-night talks.",
+            created_at=datetime.now(timezone.utc),
+            headline_score=9.5,
         )
-        db.session.add(story1)
-        db.session.flush()
+        s1.topics.append(t_politics)
 
-        art1a = Article(
-            story_id=story1.id,
-            outlet_id=outlet.id,
-            title="Senate Agreement In Detail",
-            url="https://example.com/senate-1",
-            content="Full article body content",
-            date=datetime.utcnow(),
-        )
-        art1b = Article(
-            story_id=story1.id,
-            outlet_id=outlet.id,
-            title="Reactions to Senate Agreement",
-            url="https://example.com/senate-2",
-            content="Reaction details",
-            date=datetime.utcnow(),
-        )
-        db.session.add_all([art1a, art1b])
-
-        # Story 2: Science
-        story2 = Story(
+        s2 = Story(
             headline="Deep Ocean Biodiversity Mapping Completed",
-            title="Deep Ocean Biodiversity",
-            summary="Submersible expedition catalogs rare hydrothermal vent species.",
+            title="Ocean Biodiversity",
+            summary="Scientists catalogued 5,000 new species in the abyssal zone.",
+            created_at=datetime.now(timezone.utc),
             headline_score=8.0,
-            topics=[topic_science],
         )
-        db.session.add(story2)
+        s2.topics.append(t_science)
+
+        db.session.add_all([s1, s2])
         db.session.flush()
 
-        art2a = Article(
-            story_id=story2.id,
-            outlet_id=outlet.id,
-            title="Ocean Mission Success",
-            url="https://example.com/ocean-1",
-            content="Ocean mission article body",
-            date=datetime.utcnow(),
+        a1 = Article(
+            story_id=s1.id,
+            outlet_id=o1.id,
+            title="Senate passes bipartisan framework",
+            url="https://example.com/senate",
+            content="Full text",
+            scrape_status="success",
         )
-        art2b = Article(
-            story_id=story2.id,
-            outlet_id=outlet.id,
-            title="New Marine Species Found",
-            url="https://example.com/ocean-2",
-            content="Marine biology details",
-            date=datetime.utcnow(),
+        a1b = Article(
+            story_id=s1.id,
+            outlet_id=o2.id,
+            title="Reactions to Senate agreement",
+            url="https://example.com/senate-reactions",
+            content="Full reaction text",
+            scrape_status="success",
         )
-        db.session.add_all([art2a, art2b])
-
+        a2 = Article(
+            story_id=s2.id,
+            outlet_id=o2.id,
+            title="Ocean research voyage returns",
+            url="https://example.com/ocean",
+            content="Full text",
+            scrape_status="success",
+        )
+        a2b = Article(
+            story_id=s2.id,
+            outlet_id=o1.id,
+            title="Marine biologists catalog species",
+            url="https://example.com/ocean-species",
+            content="Full marine text",
+            scrape_status="success",
+        )
+        db.session.add_all([a1, a1b, a2, a2b])
         db.session.commit()
 
         yield app
@@ -248,17 +317,14 @@ def app_with_db():
         db.drop_all()
 
 
-def test_headlines_feed_rss_format_param(app_with_db):
+def test_headlines_feed_rss_format_query(app_with_db):
     client = app_with_db.test_client()
     resp = client.get("/headlines?format=rss")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.headers["Content-Type"]
-
-    root = ET.fromstring(resp.data)
-    assert root.tag == "rss"
-    titles = [item.find("title").text for item in root.findall(".//item")]
-    assert "Senate Reaches Bipartisan Accord" in titles
-    assert "Deep Ocean Biodiversity Mapping Completed" in titles
+    assert b"<rss " in resp.data
+    assert b'version="2.0"' in resp.data
+    assert b"Senate Reaches Bipartisan Accord" in resp.data
 
 
 def test_headlines_feed_rss_extension(app_with_db):
@@ -266,8 +332,15 @@ def test_headlines_feed_rss_extension(app_with_db):
     resp = client.get("/headlines.rss")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.headers["Content-Type"]
-    assert b"<channel>" in resp.data
+    assert b"<rss " in resp.data
+    assert b'version="2.0"' in resp.data
     assert b"Senate Reaches Bipartisan Accord" in resp.data
+
+    # Verify self-link is absolute
+    root = ET.fromstring(resp.data)
+    atom_link = root.find(".//channel/{http://www.w3.org/2005/Atom}link")
+    assert atom_link is not None
+    assert atom_link.attrib["href"].startswith("http://") or atom_link.attrib["href"].startswith("https://")
 
 
 def test_headlines_feed_feed_xml(app_with_db):
@@ -285,6 +358,7 @@ def test_headlines_feed_json_format(app_with_db):
     assert "application/json" in resp.headers["Content-Type"]
     data = resp.get_json()
     assert data["version"] == "https://jsonfeed.org/version/1.1"
+    assert data["feed_url"].startswith("http://") or data["feed_url"].startswith("https://")
     titles = [it["title"] for it in data["items"]]
     assert "Senate Reaches Bipartisan Accord" in titles
 
@@ -301,9 +375,10 @@ def test_headlines_html_page_contains_autodiscovery_link(app_with_db):
     assert resp.status_code == 200
     assert "text/html" in resp.headers["Content-Type"]
     # Check for RSS auto-discovery link tag in HTML
-    html = resp.data.decode("utf-8")
-    assert '<link rel="alternate" type="application/rss+xml"' in html
-    assert 'format=rss' in html
+    html_text = resp.data.decode("utf-8")
+    assert '<link rel="alternate" type="application/rss+xml"' in html_text
+    assert 'format=rss' in html_text
+    assert 'href="http://' in html_text or 'href="https://' in html_text
 
     # Configured FEED_ACCESS_TOKEN must NOT leak into HTML page source
     with patch.dict(os.environ, {"FEED_ACCESS_TOKEN": "super-secret-token"}):
@@ -315,11 +390,11 @@ def test_headlines_html_page_contains_autodiscovery_link(app_with_db):
         assert "token=super-secret-token" in resp_with_param.data.decode("utf-8")
 
 
-def test_articles_topic_filter_preserves_selection_in_rss(app_with_db):
+def test_admin_articles_topic_filter_preserves_selection_in_rss(app_with_db):
     client = app_with_db.test_client()
 
     # Request politics topic feed
-    resp = client.get("/articles?topic=US+Politics&format=rss")
+    resp = client.get("/admin/articles?topic=US+Politics&format=rss")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.headers["Content-Type"]
 
@@ -332,7 +407,7 @@ def test_articles_topic_filter_preserves_selection_in_rss(app_with_db):
     assert items[0].find("title").text == "Senate Reaches Bipartisan Accord"
 
     # Request science topic feed
-    resp_sci = client.get("/articles?topic=Science&format=rss")
+    resp_sci = client.get("/admin/articles?topic=Science&format=rss")
     assert resp_sci.status_code == 200
     root_sci = ET.fromstring(resp_sci.data)
     items_sci = root_sci.findall(".//item")
@@ -340,33 +415,21 @@ def test_articles_topic_filter_preserves_selection_in_rss(app_with_db):
     assert items_sci[0].find("title").text == "Deep Ocean Biodiversity Mapping Completed"
 
 
-def test_articles_rss_extension_with_topic_param(app_with_db):
+def test_admin_articles_rss_extension_with_topic_param(app_with_db):
     client = app_with_db.test_client()
-    resp = client.get("/articles.rss?topic=US+Politics")
+    resp = client.get("/admin/articles.rss?topic=US+Politics")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.headers["Content-Type"]
     assert b"Senate Reaches Bipartisan Accord" in resp.data
     assert b"Deep Ocean Biodiversity" not in resp.data
 
 
-def test_multi_stories_rss(app_with_db):
+def test_admin_multi_stories_rss(app_with_db):
     client = app_with_db.test_client()
-    resp = client.get("/multi-stories.rss")
+    resp = client.get("/admin/multi-stories.rss")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.headers["Content-Type"]
     assert b"<channel>" in resp.data
-
-
-def test_admin_articles_rss(app_with_db):
-    client = app_with_db.test_client()
-    resp = client.get("/admin/articles?format=rss")
-    assert resp.status_code == 200
-    assert "application/rss+xml" in resp.headers["Content-Type"]
-    assert b"<channel>" in resp.data
-
-    resp2 = client.get("/admin/articles.rss")
-    assert resp2.status_code == 200
-    assert "application/rss+xml" in resp2.headers["Content-Type"]
 
 
 def test_feeds_require_login_when_public_read_access_is_false_without_token(app_with_db):
@@ -387,7 +450,7 @@ def test_feeds_require_login_when_public_read_access_is_false_without_token(app_
     assert rss_query_resp.status_code == 302
     assert "/auth/login" in rss_query_resp.headers["Location"]
 
-    topic_rss_resp = client.get("/articles.rss?topic=US+Politics")
+    topic_rss_resp = client.get("/admin/articles.rss?topic=US+Politics")
     assert topic_rss_resp.status_code == 302
     assert "/auth/login" in topic_rss_resp.headers["Location"]
 
@@ -417,7 +480,7 @@ def test_feed_access_token_enforcement(app_with_db):
         assert "application/rss+xml" in auth_resp.headers["Content-Type"]
 
         # Topic filter with token succeeds
-        topic_auth_resp = client.get("/articles.rss?topic=US+Politics&token=secret-reader-token")
+        topic_auth_resp = client.get("/admin/articles.rss?topic=US+Politics&token=secret-reader-token")
         assert topic_auth_resp.status_code == 200
 
         # With Bearer header, succeeds
@@ -425,3 +488,35 @@ def test_feed_access_token_enforcement(app_with_db):
         assert header_resp.status_code == 200
 
 
+def test_token_does_not_open_non_feed_pages_when_public_read_off(app_with_db):
+    app_with_db.config["PUBLIC_READ_ACCESS"] = False
+    client = app_with_db.test_client()
+
+    with patch.dict(os.environ, {"FEED_ACCESS_TOKEN": "secret-reader-token"}):
+        # Attempting to access HTML story, article, or oped pages using ?format=rss&token=...
+        # must still redirect to login (302) and NOT disclose HTML content.
+        resp_story = client.get("/story/1?format=rss&token=secret-reader-token")
+        assert resp_story.status_code == 302
+        assert "/auth/login" in resp_story.headers["Location"]
+
+        resp_article = client.get("/article/1?format=rss&token=secret-reader-token")
+        assert resp_article.status_code == 302
+        assert "/auth/login" in resp_article.headers["Location"]
+
+        resp_oped = client.get("/admin/oped?format=rss&token=secret-reader-token")
+        assert resp_oped.status_code == 302
+        assert "/auth/login" in resp_oped.headers["Location"]
+
+
+def test_non_ascii_token_does_not_raise_500(app_with_db):
+    app_with_db.config["PUBLIC_READ_ACCESS"] = False
+    client = app_with_db.test_client()
+
+    with patch.dict(os.environ, {"FEED_ACCESS_TOKEN": "secret-reader-token"}):
+        # Non-ASCII token in query parameter or Bearer header should be rejected safely without 500
+        resp = client.get("/headlines.rss?token=t\u00e9")
+        assert resp.status_code == 302
+        assert "/auth/login" in resp.headers["Location"]
+
+        header_resp = client.get("/headlines.rss", headers={"Authorization": "Bearer t\u00e9"})
+        assert header_resp.status_code == 302
