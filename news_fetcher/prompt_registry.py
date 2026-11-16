@@ -33,7 +33,7 @@ KNOWN_VARS = {
     "topic_classifier": {"text", "categories_list"},
     "outlet_bias.by_name": {"outlet_name"},
     "outlet_bias.by_article": {"article_text"},
-    "headline_generator": {"titles"},
+    "headline_generator": {"titles", "dated_titles"},
     "opinion_link_check": {"title", "teaser", "headline", "summary"},
     "opinion_roundup": {"headline", "summary", "columns"},
     "opinion_stance": {"headline", "summary", "column"},
