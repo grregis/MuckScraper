@@ -6,6 +6,9 @@
 <head>
 {% block head %}{% endblock %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app_page.css') }}">
+{% if feed_url %}
+<link rel="alternate" type="application/rss+xml" title="{{ feed_title or 'RSS Feed' }}" href="{{ feed_url }}">
+{% endif %}
 {% block styles %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
