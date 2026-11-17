@@ -20,6 +20,11 @@ All notable changes to MuckScraper are documented here.
 - Headlines can be written from titles with their publication dates
   (`{dated_titles}` in the headline prompt), and a headline that copies the
   prompt's own example wording is rejected. The default prompt is unchanged.
+- Topics: an article keeps its own topics instead of inheriting its story's
+  whole list, and a story's topics are the ones at least a quarter of its
+  articles share (small stories keep them all). Before, big stories collected
+  every topic any article had and passed them on, so a story about a
+  nationwide flight ground stop ended up under Sports.
 - An edition carries at most two stories from one running story. Stories
   count as one running story when their headlines share a name (a person,
   company or place, not a party, institution or US state) and their articles

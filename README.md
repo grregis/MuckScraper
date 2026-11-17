@@ -91,6 +91,7 @@ muckscraper/
 │   ├── app.py                      # Main Flask entry point
 │   ├── models.py                   # SQLAlchemy models
 │   ├── permissions.py              # Roles (reader, scraper, admin) and public read access
+│   ├── feed_export.py              # RSS 2.0 / JSON Feed output for the story lists
 │   ├── accounts.py                 # Account form validation (profile page, user admin)
 │   ├── oidc.py                     # Optional OpenID Connect sign-in (docs/OIDC.md)
 │   ├── navigation.py               # "Back to Feed" links that return to the list you came from
@@ -241,7 +242,7 @@ Add accounts at **Users** in the account menu (top right). Each has one of three
 
 Everyone can change their own email and password on their **Profile**.
 
-Set `PUBLIC_READ_ACCESS=true` in `.env` to let signed-out visitors read Headlines, All Stories, Grouped Stories (with the topic filters), story pages and article summaries. Search and Fetch still need an account. Signed-out visitors never see scraped full text, scrape details or any button that runs work. It is off by default; after changing it, run `docker compose up -d app`.
+Set `PUBLIC_READ_ACCESS=true` in `.env` to let signed-out visitors read Headlines, All Stories, Grouped Stories (with the topic filters), story pages and article summaries. Search and Fetch still need an account. Signed-out visitors never see scraped full text, scrape details or any button that runs work. It is off by default; after changing it, run `docker compose up -d app`. The RSS and JSON feeds follow the same rule; with public access off, a feed reader can use `FEED_ACCESS_TOKEN` instead (see `.env.sample`).
 
 Dates are shown in the time zone set by `DISPLAY_TIMEZONE` in `.env` (an IANA name such as `America/New_York`; default `UTC`). After changing it, run `docker compose up -d app`; a plain restart doesn't re-read `.env`.
 
@@ -283,6 +284,7 @@ An optional, read-only [MCP](https://modelcontextprotocol.io) server lets an AI 
 - Repeats held back unless there is meaningful new coverage
 - Carry-over logic for underfilled editions
 - Publish-time duplicate-story filtering for same-event headline candidates
+- At most two stories from one running story per edition, so one big scandal can't fill the page
 
 ### News fetching
 - Scheduled multi-topic fetches
@@ -320,10 +322,11 @@ An optional, read-only [MCP](https://modelcontextprotocol.io) server lets an AI 
 - Relative timestamps ("3 hours ago") with the exact local time on hover
 - Light and dark themes
 - Reader, Scraper and Admin accounts, and optional public read-only access
+- RSS 2.0 and JSON Feed for Headlines, All Stories and Grouped Stories (add `.rss` or `.json` to the page address); feeds keep the page's topic, time range and search filters
 
 ### Bias and metadata
 - Outlet bias labels with AllSides or model-based sourcing
-- Topic classification
+- Topic classification; a story's topics are the ones most of its articles share
 - Image capture from upstream feeds
 - Archived edition-story image support for stable published output
 
