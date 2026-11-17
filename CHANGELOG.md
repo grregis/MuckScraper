@@ -6,7 +6,20 @@ All notable changes to MuckScraper are documented here.
 
 ## [Unreleased]
 
+### Added
+- RSS 2.0 and JSON Feed 1.1 feeds for Headlines, All Stories and Grouped
+  Stories (#46, thanks @parkfour): add `.rss` or `.json` to the page address,
+  or `?format=rss`, and the feed keeps the page's topic, time range and search
+  filters. Pages link their feed for feed readers to find. Feeds follow the
+  same access rule as the pages: open when `PUBLIC_READ_ACCESS` is on;
+  otherwise they need an account or a `FEED_ACCESS_TOKEN` (sent as
+  `Authorization: Bearer <token>`, or `?token=`). `ENABLE_FEED_EXPORT=false`
+  turns them off.
+
 ### Changed
+- Headlines can be written from titles with their publication dates
+  (`{dated_titles}` in the headline prompt), and a headline that copies the
+  prompt's own example wording is rejected. The default prompt is unchanged.
 - An edition carries at most two stories from one running story. Stories
   count as one running story when their headlines share a name (a person,
   company or place, not a party, institution or US state) and their articles
