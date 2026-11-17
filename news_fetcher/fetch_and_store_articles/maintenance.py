@@ -225,16 +225,21 @@ def reclassify_all_articles(batch_size=50):
             
             if topic not in article.topics:
                 article.topics.append(topic)
-            
-            if article.story:
-                if topic not in article.story.topics:
-                    article.story.topics.append(topic)
 
         # Commit in batches
         if (i + 1) % batch_size == 0:
             db.session.commit()
             logger.info(f"  Progress: {i + 1}/{total}")
 
+    db.session.commit()
+
+    # Story topics come from their articles (story_topics, 2026-11-17).
+    from aggregator.models import Story
+    from .story_topics import refresh_story_topics
+    for i, story in enumerate(Story.query.all()):
+        refresh_story_topics(story)
+        if (i + 1) % batch_size == 0:
+            db.session.commit()
     db.session.commit()
     logger.info(f"Reclassification complete. Processed {total} articles.")
 

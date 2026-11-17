@@ -24,6 +24,7 @@ from news_fetcher.outlet_bias_llm import get_outlet_bias_from_llm
 from news_fetcher.scraper import scrape_article
 from news_fetcher.story_grouper import find_or_create_story, get_embedding
 from news_fetcher.topic_classifier import classify_article
+from .story_topics import refresh_story_topics
 from .outlets import normalize_source_name, source_name_from_url
 
 logger = logging.getLogger(__name__)
@@ -458,8 +459,11 @@ def store_articles(articles_data, topic_name, provider=None, assign_topic=None):
         if story not in recent_stories:
             recent_stories.append(story)
 
-        # Classify article into topics via Ollama
+        # Classify article into topics via Ollama. These are the article's own
+        # topics; the story's are recomputed from its articles once it joins
+        # (story_topics.refresh_story_topics, 2026-11-17).
         from aggregator.models import Topic as TopicModel
+        article_topics = []
         classified_topic_names = classify_article(title, content)
         for classified_name in classified_topic_names:
             classified_topic = TopicModel.query.filter_by(name=classified_name).first()
@@ -467,15 +471,15 @@ def store_articles(articles_data, topic_name, provider=None, assign_topic=None):
                 classified_topic = TopicModel(name=classified_name)
                 db.session.add(classified_topic)
                 db.session.flush()
-            if classified_topic not in story.topics:
-                story.topics.append(classified_topic)
+            if classified_topic not in article_topics:
+                article_topics.append(classified_topic)
 
         # If this article was fetched from an opted-in feed whose label matches
-        # an active topic, associate that topic directly with the story as well.
+        # an active topic, the article carries that topic too.
         if assign_topic:
             feed_topic = TopicModel.query.filter_by(name=assign_topic, is_active=True).first()
-            if feed_topic and feed_topic not in story.topics:
-                story.topics.append(feed_topic)
+            if feed_topic and feed_topic not in article_topics:
+                article_topics.append(feed_topic)
 
         scrape_result = scrape_article(url, fallback_content=content)
         scraped_content = scrape_result.content
@@ -539,10 +543,10 @@ def store_articles(articles_data, topic_name, provider=None, assign_topic=None):
         story.articles.append(new_article)
         db.session.add(new_article)
 
-        # Tag article with same topics as story
-        for t in story.topics:
-            if t not in new_article.topics:
-                new_article.topics.append(t)
+        # The article keeps its own topics; it no longer inherits the
+        # story's whole list (that snowballed big stories into every topic).
+        new_article.topics = list(article_topics)
+        refresh_story_topics(story)
 
         # Headlines are no longer generated here. They run in one batch pass
         # (generate_headlines_for_stale_stories) after grouping settles, so the

@@ -11,6 +11,7 @@ from aggregator import db
 from aggregator.models import Article, EditionStory, Story
 from news_fetcher import llm_client as _llm
 from news_fetcher.summarizer import check_ollama_status
+from .story_topics import refresh_story_topics
 from .ingestion import deserialize_grouping_candidate_ids, serialize_grouping_candidate_ids, truncate_db_string
 
 logger = logging.getLogger(__name__)
@@ -172,9 +173,11 @@ def review_ambiguous_grouping_matches(max_articles=300):
             db.session.flush()
             reassigned += 1
 
-            for topic in list(original_story.topics) if original_story else []:
-                if topic not in matched_story.topics:
-                    matched_story.topics.append(topic)
+            # Topics follow the articles: recompute both stories rather than
+            # copying the whole original list (which snowballed big stories).
+            refresh_story_topics(matched_story)
+            if original_story and original_story.articles:
+                refresh_story_topics(original_story)
 
             if original_story:
                 clear_story_headline_after_article_departs(original_story)
@@ -254,10 +257,8 @@ def regroup_ungrouped_stories():
             article.story = matched
             db.session.flush()
 
-            # Merge topic tags
-            for topic in story.topics:
-                if topic not in matched.topics:
-                    matched.topics.append(topic)
+            # Topics follow the articles (story_topics, 2026-11-17).
+            refresh_story_topics(matched)
 
             # If this singleton is currently sitting in a published edition,
             # move its EditionStory row to the surviving story first -- see
