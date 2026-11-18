@@ -5,7 +5,12 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from flask_login import current_user
 from aggregator import feed_prefs
 from aggregator import story_analysis
-from aggregator.feed_export import render_feed_or_template, feed_or_public_or_login
+from aggregator.feed_export import (
+    render_feed_or_template,
+    feed_or_public_or_login,
+    is_feed_export_enabled,
+    request_wants_feed,
+)
 from aggregator.blueprints.admin._shared import story_bias_totals
 from aggregator.permissions import public_or_login, public_read_enabled
 from aggregator.models import Article, Story, Topic, RawArticlePayload, Edition, EditionStory
@@ -67,12 +72,17 @@ def headlines_feed():
     if edition_id:
         latest_edition = Edition.query.filter_by(id=edition_id, published=True).first_or_404()
 
+    wants_feed = is_feed_export_enabled() and request_wants_feed()
+
     if latest_edition:
         all_edition_stories = latest_edition.edition_stories.order_by(EditionStory.rank).all()
         total_stories = len(all_edition_stories)
-        page = min(page, max(1, (total_stories + per_page - 1) // per_page))
-        start = (page - 1) * per_page
-        stories = annotate_edition_story_flags(all_edition_stories[start:start + per_page])
+        if wants_feed:
+            stories = annotate_edition_story_flags(all_edition_stories)
+        else:
+            page = min(page, max(1, (total_stories + per_page - 1) // per_page))
+            start = (page - 1) * per_page
+            stories = annotate_edition_story_flags(all_edition_stories[start:start + per_page])
         edition_label = f"{latest_edition.edition_type.title()} Edition — {latest_edition.date.strftime('%B %d, %Y')}"
     else:
         from sqlalchemy import func
@@ -84,9 +94,12 @@ def headlines_feed():
             Story.headline_score > 0
         ).order_by(Story.headline_score.desc()).limit(20).all()
         total_stories = len(all_stories)
-        page = min(page, max(1, (total_stories + per_page - 1) // per_page))
-        start = (page - 1) * per_page
-        stories = all_stories[start:start + per_page]
+        if wants_feed:
+            stories = all_stories
+        else:
+            page = min(page, max(1, (total_stories + per_page - 1) // per_page))
+            start = (page - 1) * per_page
+            stories = all_stories[start:start + per_page]
         edition_label = "Latest Headlines"
 
     for story in stories:
