@@ -30,6 +30,12 @@ All notable changes to MuckScraper are documented here.
   company or place, not a party, institution or US state) and their articles
   are alike. One scandal had taken five of an edition's 20 places.
 
+### Fixed
+- An edition no longer drops a story as a "duplicate" of an unrelated one
+  because two of their article titles look alike (a newsletter title covering
+  two stories, or two events in one place); near-identical titles now also
+  need the stories' articles to be alike, as shared title words already did.
+
 ## [1.2.0] - 2026-11-12
 
 ### Upgrading

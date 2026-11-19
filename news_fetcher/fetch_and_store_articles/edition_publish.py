@@ -243,10 +243,18 @@ def stories_look_duplicate_for_edition(story_a, story_b):
     titles_a = _story_dedupe_titles(story_a)
     titles_b = _story_dedupe_titles(story_b)
 
+    # A near-identical title pair is strong evidence, but not proof: a
+    # newsletter title ("Mary Peltola flips Alaska's Senate seat. And, Nvidia
+    # won't reinstate Jensen Huang") or two events sharing one setting
+    # ("...as Xi meets Carney ahead of APEC summit" / "Trump arrives ...
+    # ahead of Xi Jinping summit") matches a title from an unrelated story.
+    # So this path gets the same embedding veto as the word match below
+    # (2026-11-18): those two pairs sat at 0.575 and 0.641; replaying 12
+    # days of logged skips, the other 37 near-title skips were all >= 0.80.
     for title_a in titles_a:
         for title_b in titles_b:
             if titles_are_near_duplicates(title_a, title_b):
-                return True
+                return not _stories_semantically_differ(story_a, story_b)
 
     tokens_a = _story_signature_tokens(story_a)
     tokens_b = _story_signature_tokens(story_b)

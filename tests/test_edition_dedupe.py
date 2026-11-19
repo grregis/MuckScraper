@@ -331,3 +331,29 @@ class EditionDedupeEmbeddingTests(unittest.TestCase):
         # Below the 500-char content floor the embeddings are not trusted.
         a, b = self._pair([1.0, 0.0, 0.0], [0.6, 0.8, 0.0], content_len=100)
         self.assertTrue(stories_look_duplicate_for_edition(a, b))
+
+    # Near-identical titles get the same veto (2026-11-18). NPR's newsletter
+    # title sat in the Peltola story and near-matched an Nvidia title; the
+    # stories' embeddings were 0.575 alike, and Peltola was dropped as a
+    # "duplicate" of the Nvidia SEC story.
+    def _near_title_pair(self, va, vb, content_len=800):
+        a = self._story("Democrat Mary Peltola unseats Republican Dan Sullivan in Alaska Senate race",
+                        ["Mary Peltola flips Alaska's Senate seat. And, Nvidia won't reinstate Jensen Huang"],
+                        va, content_len)
+        b = self._story("SEC probes Nvidia after Jensen Huang resigns",
+                        ["Nvidia won't reinstate Jensen Huang"], vb, content_len)
+        return a, b
+
+    def test_near_title_match_vetoed_when_embeddings_differ(self):
+        from news_fetcher.fetch_and_store_articles.edition_publish import titles_are_near_duplicates
+        a, b = self._near_title_pair([1.0, 0.0, 0.0], [0.6, 0.8, 0.0])
+        self.assertTrue(any(titles_are_near_duplicates(x.title, y.title) for x in a.articles for y in b.articles))
+        self.assertFalse(stories_look_duplicate_for_edition(a, b))
+
+    def test_near_title_match_kept_when_embeddings_agree(self):
+        a, b = self._near_title_pair([1.0, 0.0, 0.0], [0.95, 0.31, 0.0])
+        self.assertTrue(stories_look_duplicate_for_edition(a, b))
+
+    def test_near_title_match_without_usable_embeddings_still_counts(self):
+        a, b = self._near_title_pair([1.0, 0.0, 0.0], [0.6, 0.8, 0.0], content_len=100)
+        self.assertTrue(stories_look_duplicate_for_edition(a, b))
