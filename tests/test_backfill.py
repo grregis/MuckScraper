@@ -350,3 +350,27 @@ def test_admin_switch_for_continue_after_runs(app):
     assert bf.auto_resume_setting()[1] == "env"
     assert _client(app, "scraper").post("/admin/settings/llm/backfill/auto-resume",
                                         data={"enabled": "true"}, base_url="http://localhost").status_code in (302, 403)
+
+
+@pytest.mark.parametrize("status", [
+    None,                                                            # no backfill has ever run
+    {"status": "idle"},
+    {"status": "finished", "stop_reason": None},                     # done before the run
+    {"status": "stopped", "stop_reason": "the scheduler restarted"},
+    {"status": "failed", "stop_reason": "boom"},
+])
+def test_switch_on_but_no_backfill_was_running_before_the_run(app, status):
+    """Continue after runs is on, but nothing was stopped by the run: the
+    run must not start a backfill (and so must not skip its shutdown)."""
+    bf._save(bf.AUTO_RESUME_SETTING_KEY, True)
+    if status is not None:
+        bf._save(bf.BACKFILL_STATUS_KEY, status)
+    assert bf.auto_resume_enabled()
+    assert not bf.resume_wanted()
+    assert bf.get_control() == {}                                    # nothing for poll() to start
+    calls = []
+    with patch.object(bf, "run_backfill", side_effect=lambda order, **kw: calls.append(order)):
+        bf.poll(app)
+        if bf._thread:
+            bf._thread.join(5)
+    assert calls == []
