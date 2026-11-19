@@ -520,3 +520,145 @@ def test_non_ascii_token_does_not_raise_500(app_with_db):
 
         header_resp = client.get("/headlines.rss", headers={"Authorization": "Bearer t\u00e9"})
         assert header_resp.status_code == 302
+
+
+def test_headlines_feed_exports_entire_edition_without_pagination_limit(app_with_db):
+    from datetime import date
+    from aggregator import db
+    from aggregator.models import Edition, EditionStory, Story, Article, Outlet
+
+    with app_with_db.app_context():
+        outlet = Outlet.query.first()
+
+        # Create an edition with 15 stories (more than the 10 per_page limit)
+        edition = Edition(
+            date=date(2026, 11, 18),
+            edition_type="morning",
+            published=True,
+        )
+        db.session.add(edition)
+        db.session.flush()
+
+        outlet2 = Outlet.query.filter(Outlet.id != outlet.id).first()
+
+        for i in range(1, 16):
+            s = Story(
+                headline=f"Edition Story #{i:02d}",
+                title=f"Original Title #{i:02d}",
+                summary=f"Summary for story {i}",
+                created_at=datetime.now(timezone.utc),
+                headline_score=float(100 - i),
+            )
+            db.session.add(s)
+            db.session.flush()
+
+            a1 = Article(
+                story_id=s.id,
+                outlet_id=outlet.id,
+                title=f"Article 1 for Story {i}",
+                url=f"https://example.com/story-{i}-1",
+                scrape_status="success",
+            )
+            a2 = Article(
+                story_id=s.id,
+                outlet_id=outlet2.id if outlet2 else outlet.id,
+                title=f"Article 2 for Story {i}",
+                url=f"https://example.com/story-{i}-2",
+                scrape_status="success",
+            )
+            db.session.add_all([a1, a2])
+
+            es = EditionStory(
+                edition_id=edition.id,
+                story_id=s.id,
+                rank=i,
+            )
+            db.session.add(es)
+
+        db.session.commit()
+
+    client = app_with_db.test_client()
+
+    # Web (HTML) request should be paginated to per_page=10
+    html_resp = client.get("/headlines")
+    assert html_resp.status_code == 200
+    assert b"Edition Story #01" in html_resp.data
+    assert b"Edition Story #10" in html_resp.data
+    assert b"Edition Story #11" not in html_resp.data
+
+    # RSS feed request should include all 15 stories from the edition
+    rss_resp = client.get("/headlines.rss")
+    assert rss_resp.status_code == 200
+    root = ET.fromstring(rss_resp.data)
+    items = root.findall(".//item")
+    assert len(items) == 15
+    rss_titles = [it.find("title").text for it in items]
+    assert "Edition Story #01" in rss_titles
+    assert "Edition Story #15" in rss_titles
+
+    # JSON feed request should also include all 15 stories
+    json_resp = client.get("/headlines.json")
+    assert json_resp.status_code == 200
+    json_data = json_resp.get_json()
+    assert len(json_data["items"]) == 15
+    json_titles = [it["title"] for it in json_data["items"]]
+    assert "Edition Story #01" in json_titles
+    assert "Edition Story #15" in json_titles
+
+
+def test_headlines_feed_exports_all_fallback_stories_without_pagination_limit(app_with_db):
+    from aggregator import db
+    from aggregator.models import Story, Article, Outlet
+
+    with app_with_db.app_context():
+        outlet = Outlet.query.first()
+        outlet2 = Outlet.query.filter(Outlet.id != outlet.id).first()
+
+        # Create 15 multi-article stories (no Edition published)
+        for i in range(1, 16):
+            s = Story(
+                headline=f"Fallback Story #{i:02d}",
+                title=f"Fallback Title #{i:02d}",
+                summary=f"Summary for fallback story {i}",
+                created_at=datetime.now(timezone.utc),
+                headline_score=float(100 - i),
+            )
+            db.session.add(s)
+            db.session.flush()
+
+            a1 = Article(
+                story_id=s.id,
+                outlet_id=outlet.id,
+                title=f"Fallback Art 1 #{i}",
+                url=f"https://example.com/fb-{i}-1",
+                scrape_status="success",
+            )
+            a2 = Article(
+                story_id=s.id,
+                outlet_id=outlet2.id if outlet2 else outlet.id,
+                title=f"Fallback Art 2 #{i}",
+                url=f"https://example.com/fb-{i}-2",
+                scrape_status="success",
+            )
+            db.session.add_all([a1, a2])
+
+        db.session.commit()
+
+    client = app_with_db.test_client()
+
+    # Web (HTML) request paginated to 10
+    html_resp = client.get("/headlines")
+    assert html_resp.status_code == 200
+    assert b"Fallback Story #01" in html_resp.data
+    assert b"Fallback Story #10" in html_resp.data
+    assert b"Fallback Story #11" not in html_resp.data
+
+    # RSS feed gets all 15 fallback stories (+ existing fixture stories up to 20 limit)
+    rss_resp = client.get("/headlines.rss")
+    assert rss_resp.status_code == 200
+    root = ET.fromstring(rss_resp.data)
+    items = root.findall(".//item")
+    assert len(items) >= 15
+    rss_titles = [it.find("title").text for it in items]
+    assert "Fallback Story #01" in rss_titles
+    assert "Fallback Story #15" in rss_titles
