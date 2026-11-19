@@ -157,7 +157,8 @@ def llm_providers_page():
         _env_flag, analyze_all_stories_setting,
     )
     analyze_all_enabled, analyze_all_source = analyze_all_stories_setting()
-    from news_fetcher.backfill import needs_paid_ack
+    from news_fetcher.backfill import needs_paid_ack, auto_resume_setting
+    backfill_auto_resume, backfill_auto_resume_source = auto_resume_setting()
 
     tiers = {
         "quality": {
@@ -191,6 +192,9 @@ def llm_providers_page():
         analyze_all_source=analyze_all_source,
         analyze_all_env=_env_flag("ANALYZE_ALL_STORIES"),
         backfill_needs_ack=needs_paid_ack(tiers["quality"]["provider"]),
+        backfill_auto_resume=backfill_auto_resume,
+        backfill_auto_resume_source=backfill_auto_resume_source,
+        backfill_auto_resume_env=_env_flag("BACKFILL_AUTO_RESUME"),
     )
 
 
@@ -211,6 +215,25 @@ def toggle_analyze_all_stories():
         _save_json_setting(ANALYZE_ALL_STORIES_SETTING_KEY, enabled)
         logger.info(f"[Settings] analyze_all_stories set to {enabled}")
     return redirect(url_for("admin.llm_providers_page") + "#analyze-all")
+
+
+@admin.route("/settings/llm/backfill/auto-resume", methods=["POST"])
+@role_required(ROLE_ADMIN)
+def toggle_backfill_auto_resume():
+    """The continue-after-runs switch. "reset" forgets it, so
+    BACKFILL_AUTO_RESUME in .env decides again."""
+    from aggregator import db
+    from aggregator.models import AppSetting
+    from news_fetcher.backfill import AUTO_RESUME_SETTING_KEY
+    if request.form.get("reset") == "true":
+        AppSetting.query.filter_by(key=AUTO_RESUME_SETTING_KEY).delete()
+        db.session.commit()
+        logger.info("[Settings] backfill auto-resume reset to the .env value")
+    else:
+        enabled = request.form.get("enabled") == "true"
+        _save_json_setting(AUTO_RESUME_SETTING_KEY, enabled)
+        logger.info(f"[Settings] backfill auto-resume set to {enabled}")
+    return redirect(url_for("admin.llm_providers_page") + "#backfill")
 
 
 @admin.route("/settings/llm/backfill")

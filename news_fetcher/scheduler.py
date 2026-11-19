@@ -1149,7 +1149,17 @@ def run_all_fetches(run_full_pipeline=True):
         _notify_fetch_report(fetch_report)
 
         # Notify n8n pipeline is done — triggers Ollama machine suspend
-        _notify_n8n()
+        # A backfill this run stopped carries on when "continue after runs"
+        # is on; then the box must stay up, so the shutdown webhook is skipped.
+        try:
+            resume_backfill = backfill.resume_wanted()
+        except Exception as e:
+            logging.warning("  [Backfill] Could not check continue-after-runs (%s)", e)
+            resume_backfill = False
+        if resume_backfill:
+            logging.info("  [Backfill] Continuing the backfill this run stopped; not shutting the Ollama box down")
+        else:
+            _notify_n8n()
 
         _save_json_setting(FETCH_RUN_STATUS_KEY, {
             "status": "idle",
@@ -1157,6 +1167,12 @@ def run_all_fetches(run_full_pipeline=True):
             "run_full_pipeline": run_full_pipeline,
             "finished_at": run_metrics.get("finished_at"),
         })
+        # Only after the run is marked idle, or the backfill sees it and stops.
+        if resume_backfill:
+            ok, message = backfill.request_resume()
+            logging.info("  [Backfill] %s", message)
+            if not ok:
+                _notify_n8n()
 
     logging.info("=== Scheduled fetch run complete ===")
 
@@ -1168,6 +1184,8 @@ if __name__ == "__main__":
         db.create_all()
         # A backfill marked running died with the previous process.
         backfill.mark_interrupted_at_startup()
+        # A resumed backfill that runs out of work lets the box shut down.
+        backfill.SUSPEND_HOOK = _notify_n8n
         # Only fetch on startup if enough time has passed
         if should_fetch_now():
             run_all_fetches(

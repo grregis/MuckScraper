@@ -7,6 +7,13 @@ All notable changes to MuckScraper are documented here.
 ## [Unreleased]
 
 ### Added
+- Backfill: "Continue after runs" (Settings > LLM providers, or
+  `BACKFILL_AUTO_RESUME=true`; off by default). When a scheduled run stops the
+  backfill, it starts again when the run ends, in the same order, and the
+  end-of-run webhook that shuts the Ollama machine down (`N8N_WEBHOOK_URL`) is
+  skipped. Once the backfill has nothing left to do it sends that webhook
+  itself. A backfill you stop yourself stays stopped. Command line:
+  `python -m news_fetcher.backfill auto-resume on|off|reset`.
 - RSS 2.0 and JSON Feed 1.1 feeds for Headlines, All Stories and Grouped
   Stories (#46, thanks @parkfour): add `.rss` or `.json` to the page address,
   or `?format=rss`, and the feed keeps the page's topic, time range and search

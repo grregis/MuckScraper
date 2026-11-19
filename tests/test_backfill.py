@@ -106,7 +106,7 @@ def test_scheduler_restart_marks_running_backfill_stopped(app):
 def test_poll_consumes_the_request_once(app):
     bf._save(bf.BACKFILL_CONTROL_KEY, {"command": "start", "order": "oldest"})
     calls = []
-    with patch.object(bf, "run_backfill", side_effect=lambda order: calls.append(order)):
+    with patch.object(bf, "run_backfill", side_effect=lambda order, **kw: calls.append(order)):
         bf.poll(app)
         bf._thread.join(5)
         bf.poll(app)                                         # nothing left to start
@@ -136,7 +136,7 @@ def _story(day, n_articles=2, summarised=False, content="x" * 600):
     return story.id
 
 
-def _run(order, stop_after=None):
+def _run(order, stop_after=None, auto_resumed=False):
     """run_backfill with the summariser mocked; returns story ids in the order touched."""
     from news_fetcher import summarizer as sm
     touched = []
@@ -155,7 +155,7 @@ def _run(order, stop_after=None):
          patch.object(sm, "generate_deep_report", return_value="A report."), \
          patch("news_fetcher.llm_client.provider_for_tier", return_value="ollama"), \
          patch("news_fetcher.llm_client.model_for_tier", return_value="m"):
-        status = bf.run_backfill(order)
+        status = bf.run_backfill(order, auto_resumed=auto_resumed)
     return touched, status
 
 
@@ -266,3 +266,87 @@ def test_admin_routes_need_admin(app, role):
     assert _get(client).status_code in (302, 403)
     assert _post(client, {"action": "start"}).status_code in (302, 403)
     assert bf.get_control() == {}
+
+
+# ── continue after runs (BACKFILL_AUTO_RESUME, 2026-11-19) ──
+
+def test_stopped_by_run_only_for_run_stops():
+    before = {"status": "stopped", "stop_reason": f"{bf.STOP_BEFORE_RUN_MINUTES} minutes before the 7:00 AM ET run"}
+    assert bf.stopped_by_run(before)
+    assert bf.stopped_by_run({"status": "stopped", "stop_reason": "a pipeline run started"})
+    assert not bf.stopped_by_run({"status": "stopped", "stop_reason": "stop requested"})
+    assert not bf.stopped_by_run({"status": "stopped", "stop_reason": "the scheduler restarted"})
+    assert not bf.stopped_by_run({"status": "finished", "stop_reason": None})
+    assert not bf.stopped_by_run({"status": "running"})
+    assert not bf.stopped_by_run(None)
+    assert bf.should_resume(before, True) and not bf.should_resume(before, False)
+
+
+def test_auto_resume_setting_env_then_admin(app):
+    with patch.dict("os.environ", {"BACKFILL_AUTO_RESUME": ""}):
+        assert bf.auto_resume_setting() == (False, "env")          # off by default
+    with patch.dict("os.environ", {"BACKFILL_AUTO_RESUME": "true"}):
+        assert bf.auto_resume_setting() == (True, "env")
+        bf._save(bf.AUTO_RESUME_SETTING_KEY, False)                 # the switch wins
+        assert bf.auto_resume_setting() == (False, "admin")
+
+
+def test_resume_after_a_run_stop_keeps_order_and_ack(app):
+    bf._save(bf.BACKFILL_STATUS_KEY, {"status": "stopped", "order": "oldest", "paid_ack": True,
+                                      "stop_reason": "a pipeline run started"})
+    bf._save(bf.AUTO_RESUME_SETTING_KEY, True)
+    assert bf.resume_wanted()
+    with patch("news_fetcher.llm_client.provider_for_tier", return_value="ollama"), \
+         patch("news_fetcher.llm_client.is_configured", return_value=True):
+        ok, _ = bf.request_resume()
+    control = bf.get_control()
+    assert ok and control["command"] == "start" and control["order"] == "oldest"
+    assert control["auto_resumed"] is True and control["paid_ack"] is True
+    assert control["requested_by"] == "auto-resume"
+
+
+def test_no_resume_when_off_or_stopped_by_hand(app):
+    bf._save(bf.BACKFILL_STATUS_KEY, {"status": "stopped", "stop_reason": "a pipeline run started"})
+    assert not bf.resume_wanted()                                   # switch off (default)
+    bf._save(bf.AUTO_RESUME_SETTING_KEY, True)
+    bf._save(bf.BACKFILL_STATUS_KEY, {"status": "stopped", "stop_reason": "stop requested"})
+    assert not bf.resume_wanted()
+
+
+def test_poll_passes_the_resume_flags(app):
+    bf._save(bf.BACKFILL_CONTROL_KEY, {"command": "start", "order": "newest", "auto_resumed": True, "paid_ack": True})
+    calls = []
+    with patch.object(bf, "run_backfill", side_effect=lambda order, **kw: calls.append((order, kw))):
+        bf.poll(app)
+        bf._thread.join(5)
+    assert calls == [("newest", {"paid_ack": True, "auto_resumed": True})]
+
+
+def test_resumed_backfill_that_finishes_lets_the_box_shut_down(app):
+    _story(1)
+    hook = []
+    with patch.object(bf, "SUSPEND_HOOK", lambda: hook.append(1)):
+        _, status = _run("newest", auto_resumed=True)
+        assert status["status"] == "finished" and hook == [1]
+        _story(2)
+        _, status = _run("newest")                                   # started by hand: no shutdown
+        assert status["status"] == "finished" and hook == [1]
+
+
+def test_resumed_backfill_that_is_stopped_keeps_the_box_on(app):
+    _story(1)
+    _story(2)
+    hook = []
+    with patch.object(bf, "SUSPEND_HOOK", lambda: hook.append(1)):
+        _, status = _run("newest", stop_after=1, auto_resumed=True)
+    assert status["status"] == "stopped" and hook == []
+
+
+def test_admin_switch_for_continue_after_runs(app):
+    client = _client(app, "admin")
+    r = client.post("/admin/settings/llm/backfill/auto-resume", data={"enabled": "true"}, base_url="http://localhost")
+    assert r.status_code == 302 and bf.auto_resume_setting() == (True, "admin")
+    client.post("/admin/settings/llm/backfill/auto-resume", data={"reset": "true"}, base_url="http://localhost")
+    assert bf.auto_resume_setting()[1] == "env"
+    assert _client(app, "scraper").post("/admin/settings/llm/backfill/auto-resume",
+                                        data={"enabled": "true"}, base_url="http://localhost").status_code in (302, 403)

@@ -19,7 +19,12 @@ and the next start carries on from what is still missing.
 It runs inside the scheduler process, which owns the run schedule: it starts
 only when no run is in progress and the next one is more than
 STOP_BEFORE_RUN_MINUTES away, and it stops by itself that long before the
-next run (or when a run starts anyway). It does not start again afterwards.
+next run (or when a run starts anyway). It does not start again afterwards,
+unless "continue after runs" is on (BACKFILL_AUTO_RESUME, or the switch on the
+admin page; off by default): then a backfill that a run stopped is started
+again when that run ends, in the same order, and the end-of-run webhook that
+shuts the Ollama box down is skipped. When a resumed backfill runs out of
+work it fires that webhook itself (SUSPEND_HOOK, set by the scheduler).
 
 Control is through two AppSettings, so the admin page (Settings > LLM
 providers) and the command line work the same way:
@@ -48,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 BACKFILL_CONTROL_KEY = "backfill_control_v1"
 BACKFILL_STATUS_KEY = "backfill_status_v1"
+AUTO_RESUME_SETTING_KEY = "backfill_auto_resume_enabled"
 FETCH_RUN_STATUS_KEY = "fetch_run_status_v1"
 STOP_BEFORE_RUN_MINUTES = 10
 LLM_WAIT_SECONDS = 600
@@ -57,6 +63,11 @@ SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")   # = scheduler.TIMEZONE
 ORDERS = ("newest", "oldest")
 CONTENT_FLOOR = 500        # = summarizer.ARTICLE_DEEP_ANALYSIS_MIN_CHARS (on raw text here)
 READABLE_MIN_CHARS = 200   # summarize_story / generate_deep_report skip below this
+
+# Set by the scheduler at startup to its end-of-run webhook (_notify_n8n), so a
+# resumed backfill that runs out of work can let the Ollama box shut down.
+SUSPEND_HOOK = None
+_TRUE_WORDS = {"1", "true", "yes", "on"}
 
 # Providers whose calls cost nothing per call on a typical install. Anything
 # else (Gemini, Groq, an OpenAI-compatible endpoint) needs an explicit
@@ -109,6 +120,23 @@ def stop_reason(now, stop_at, upcoming, command, run_active):
     if stop_at and now >= stop_at:
         return f"{STOP_BEFORE_RUN_MINUTES} minutes before the {fmt_time(upcoming)} run"
     return None
+
+
+def stopped_by_run(status):
+    """True when the backfill described by `status` was stopped by a pipeline
+    run: one that started, or the stop STOP_BEFORE_RUN_MINUTES before it.
+    Not a backfill that finished, failed, was stopped by hand, or died with a
+    scheduler restart."""
+    if not isinstance(status, dict) or status.get("status") != "stopped":
+        return False
+    reason = status.get("stop_reason") or ""
+    return reason == "a pipeline run started" or reason.startswith(
+        f"{STOP_BEFORE_RUN_MINUTES} minutes before the ")
+
+
+def should_resume(status, enabled):
+    """Whether to start the backfill again when a run ends."""
+    return bool(enabled) and stopped_by_run(status)
 
 
 def fmt_time(dt):
@@ -187,12 +215,47 @@ def get_control():
     return _load(BACKFILL_CONTROL_KEY) or {}
 
 
+def auto_resume_setting():
+    """(enabled, source): source is "admin" when the switch on the admin page
+    has been used, else "env" (BACKFILL_AUTO_RESUME, default off)."""
+    from aggregator import db
+    from aggregator.models import AppSetting
+    row = AppSetting.query.filter_by(key=AUTO_RESUME_SETTING_KEY).first()
+    value = row.value if row else None
+    db.session.commit()
+    if value is not None:
+        try:
+            return bool(json.loads(value)), "admin"
+        except (TypeError, ValueError):
+            pass
+    return os.environ.get("BACKFILL_AUTO_RESUME", "").strip().lower() in _TRUE_WORDS, "env"
+
+
+def auto_resume_enabled():
+    return auto_resume_setting()[0]
+
+
+def resume_wanted():
+    """At the end of a run: should the backfill continue (and the box stay
+    on)? Checked before the end-of-run webhook."""
+    return should_resume(get_status(), auto_resume_enabled())
+
+
+def request_resume():
+    """Start the stopped backfill again, same order. Called after the run is
+    marked idle, so the backfill doesn't see the run and stop at once.
+    Returns (ok, message)."""
+    status = get_status()
+    return request_start(status.get("order"), "auto-resume",
+                         paid_ack=bool(status.get("paid_ack")), auto_resumed=True)
+
+
 def is_running(status=None):
     status = status or get_status()
     return status.get("status") in ("starting", "running")
 
 
-def request_start(order="newest", requested_by="cli", paid_ack=False):
+def request_start(order="newest", requested_by="cli", paid_ack=False, auto_resumed=False):
     """Ask the scheduler to start a backfill. Returns (ok, message)."""
     from news_fetcher import llm_client
     if is_running():
@@ -206,6 +269,7 @@ def request_start(order="newest", requested_by="cli", paid_ack=False):
     _save(BACKFILL_CONTROL_KEY, {
         "command": "start", "order": normalise_order(order),
         "requested_at": datetime.utcnow().isoformat(), "requested_by": requested_by,
+        "paid_ack": bool(paid_ack), "auto_resumed": bool(auto_resumed),
     })
     return True, "Requested; the scheduler picks it up within 15 seconds."
 
@@ -244,7 +308,7 @@ class _Stop(Exception):
 class _Reporter:
     """Keeps the status row current: counts, current story, last log lines."""
 
-    def __init__(self, order):
+    def __init__(self, order, paid_ack=False, auto_resumed=False):
         self.lines = deque(maxlen=LOG_LINES_KEPT)
         self.started = time.monotonic()
         self.status = {
@@ -252,6 +316,7 @@ class _Reporter:
             "started_at": datetime.utcnow().isoformat(), "finished_at": None,
             "stop_reason": None, "stop_at": None, "total": None, "done": 0,
             "current": None, "provider": None, "model": None,
+            "paid_ack": bool(paid_ack), "auto_resumed": bool(auto_resumed),
             "counts": {"article summaries": 0, "article analyses": 0, "story summaries": 0,
                        "deep reports": 0, "calls with no result": 0},
         }
@@ -377,7 +442,7 @@ def _short(text, n=70):
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
-def run_backfill(order="newest"):
+def run_backfill(order="newest", paid_ack=False, auto_resumed=False):
     """Run one backfill to completion or until it must stop. Needs an app
     context. Writes progress to BACKFILL_STATUS_KEY throughout."""
     from aggregator import db
@@ -386,8 +451,10 @@ def run_backfill(order="newest"):
     from news_fetcher import summarizer as sm
 
     order = normalise_order(order)
-    report = _Reporter(order)
+    report = _Reporter(order, paid_ack, auto_resumed)
     report.save()
+    if auto_resumed:
+        report.log("Continuing after the run (continue after runs is on).", save=False)
     upcoming = next_run_after(datetime.now(SCHEDULE_TIMEZONE), _schedule_hours())
     stop_at = stop_time(upcoming)
     report.status["stop_at"] = stop_at.isoformat() if stop_at else None
@@ -513,6 +580,13 @@ def run_backfill(order="newest"):
             _save(BACKFILL_CONTROL_KEY, {})
         report.save(status=final, stop_reason=reason, current=None,
                     finished_at=datetime.utcnow().isoformat())
+    if final == "finished" and auto_resumed and SUSPEND_HOOK is not None:
+        # The run skipped its shutdown for this backfill; nothing is left to do.
+        report.log("Nothing left to do; letting the Ollama box shut down.")
+        try:
+            SUSPEND_HOOK()
+        except Exception as e:
+            logger.warning("[Backfill] shutdown webhook failed: %s", e)
     return report.status
 
 
@@ -528,10 +602,12 @@ def poll(app):
                 return
             _save(BACKFILL_CONTROL_KEY, {})   # consumed: one start per request
             order = normalise_order(control.get("order"))
+            paid_ack = bool(control.get("paid_ack"))
+            auto_resumed = bool(control.get("auto_resumed"))
 
         def target():
             with app.app_context():
-                run_backfill(order)
+                run_backfill(order, paid_ack=paid_ack, auto_resumed=auto_resumed)
 
         _thread = threading.Thread(target=target, name="backfill", daemon=True)
         _thread.start()
@@ -615,7 +691,9 @@ def main(argv):
     import argparse
     parser = argparse.ArgumentParser(prog="python -m news_fetcher.backfill",
                                      description="Summarise and analyse every story in the database.")
-    parser.add_argument("command", choices=["start", "stop", "status", "attach"])
+    parser.add_argument("command", choices=["start", "stop", "status", "attach", "auto-resume"])
+    parser.add_argument("value", nargs="?", choices=["on", "off", "reset"],
+                        help="for auto-resume: on, off, or reset (back to BACKFILL_AUTO_RESUME)")
     parser.add_argument("--oldest", action="store_true", help="oldest stories first (default: newest first)")
     parser.add_argument("--yes", action="store_true", help="confirm when the main model is not Ollama")
     args = parser.parse_args(argv)
@@ -633,6 +711,17 @@ def main(argv):
         elif args.command == "stop":
             ok, message = request_stop("cli")
             print(message)
+        elif args.command == "auto-resume":
+            if args.value in ("on", "off"):
+                _save(AUTO_RESUME_SETTING_KEY, args.value == "on")
+            elif args.value == "reset":
+                from aggregator import db
+                from aggregator.models import AppSetting
+                AppSetting.query.filter_by(key=AUTO_RESUME_SETTING_KEY).delete()
+                db.session.commit()
+            enabled, source = auto_resume_setting()
+            print(f"Continue after runs: {'on' if enabled else 'off'} "
+                  f"({'set here' if source == 'admin' else 'from BACKFILL_AUTO_RESUME'})")
         elif args.command == "status":
             status = get_status()
             _print_status(status)

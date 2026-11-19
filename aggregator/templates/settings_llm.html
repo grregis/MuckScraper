@@ -172,7 +172,7 @@
     <div class="panel-head">
         <div>
             <h2>Backfill summaries and analysis</h2>
-            <p>Go through every story already in the database and write what is missing: article summaries and analyses, the story summary and the deep report (rewritten when the story has gained articles since). Runs in the scheduler between pipeline runs: it waits for the main model, stops by itself 10 minutes before the next run and does not start again afterwards. Stopping is safe at any point; the next start carries on from what is still missing.</p>
+            <p>Go through every story already in the database and write what is missing: article summaries and analyses, the story summary and the deep report (rewritten when the story has gained articles since). Runs in the scheduler between pipeline runs: it waits for the main model and stops by itself 10 minutes before the next run. Stopping is safe at any point; the next start carries on from what is still missing.</p>
         </div>
     </div>
     <div class="row">
@@ -185,6 +185,28 @@
             <label><input type="radio" name="backfill-order" value="oldest"> Oldest first</label>
         </span>
     </div>
+    <form class="row" id="backfill-auto-resume" method="POST" action="{{ url_for('admin.toggle_backfill_auto_resume') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="enabled" value="{{ 'false' if backfill_auto_resume else 'true' }}">
+        <span>
+            <span class="row-label">Continue after runs</span>
+            <span class="row-sub">When a run stops the backfill, start it again when the run ends, and keep the Ollama machine on instead of shutting it down. Once the backfill has nothing left to do, the machine shuts down as usual. A backfill you stop yourself stays stopped.
+                {%- if backfill_auto_resume_source == 'admin' %} Set here; <code>BACKFILL_AUTO_RESUME</code> in .env says {{ 'on' if backfill_auto_resume_env else 'off' }}.{% else %} From <code>BACKFILL_AUTO_RESUME</code> in .env.{% endif %}</span>
+        </span>
+        <label class="switch">
+            <span class="visually-hidden">Continue after runs</span>
+            <input type="checkbox" onchange="this.form.submit()"{% if backfill_auto_resume %} checked{% endif %}>
+            <span aria-hidden="true"></span>
+        </label>
+    </form>
+    {%- if backfill_auto_resume_source == 'admin' %}
+    <form class="row" method="POST" action="{{ url_for('admin.toggle_backfill_auto_resume') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reset" value="true">
+        <span class="row-sub">Go back to the .env setting ({{ 'on' if backfill_auto_resume_env else 'off' }}).</span>
+        <button type="submit" class="btn btn-quiet">Use .env setting</button>
+    </form>
+    {%- endif %}
     {%- if backfill_needs_ack %}
     <div class="row">
         <label class="row-sub backfill-ack"><input type="checkbox" id="backfill-ack"> Every call goes to {{ provider_labels.get(tiers.quality.provider, tiers.quality.provider) }}. A backfill makes several calls per story, which can cost money or use up a rate limit on a paid provider.</label>
