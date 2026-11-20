@@ -159,6 +159,9 @@
     text-decoration: none;
 }
 .ft-hit:hover, .ft-hit.is-active { background: var(--btn-muted-bg); }
+/* Many pages style `.topbar a` for links on the dark bar (light blue, bold);
+   the results panel sits inside the bar but on a light surface. */
+.ft-suggest a.ft-hit { color: var(--text); font-size: 14px; font-weight: 400; }
 .ft-thumb {
     flex: 0 0 auto;
     width: 56px;
@@ -209,8 +212,8 @@
     font-size: var(--fs-label);
     color: var(--text-muted);
 }
-.ft-suggest-foot a { color: var(--accent-text); font-weight: 700; text-decoration: none; }
-.ft-suggest-foot a:hover { text-decoration: underline; }
+.ft-suggest .ft-suggest-foot a { color: var(--accent-text); font-size: inherit; font-weight: 700; text-decoration: none; }
+.ft-suggest .ft-suggest-foot a:hover { text-decoration: underline; }
 
 /* Left / Center / Right: counts, then the bar at the far right. Shared with
    the compact story cards (story_card.css uses the same classes). */
@@ -415,6 +418,10 @@
 /* Wide screens: the section name never truncates; the search gives way. */
 @media (min-width: 901px) {
     .ft-left { min-width: max-content; }
+    /* A page's own bar (feed_topbar() with no section title) ends with its
+       controls; the search sits between the title and them. */
+    .ft-plain > .ft-center { order: 1; margin: 0 auto; }
+    .ft-plain > :last-child { order: 2; }
 }
 
 @media (max-width: 900px) {
